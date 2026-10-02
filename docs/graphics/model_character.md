@@ -87,9 +87,9 @@ Splatoon 3 v0의 모델(FRES v10)·텍스처(BNTX)·재질·팀 컬러·플레�
 - (해소) 팀색 Ink(9)/InkBright(10): 입력 = 활성 env DirectionalLight(DiffuseColor·Intensity) + 하늘 SH, SSS 기본 0.1/0.5 — [team_color.md §5.3](team_color.md). 값은 스테이지 조명 의존, MainLight 경로는 [추정].
 - (해소) BlitzUBO0 레이아웃(팀 세트 Ink/InkBright 등)·`blitz_calc_color` ID 대부분 — [shaders.md §3.9, §3.6.4](shaders.md). 남은 것: BlitzUBO1/2·Context·Env 블록.
 - (대부분 해소) ASB: 노드 종류 10/12/19 = Event/FrameController/InitialFrame, 끝 프레임 = FSKA FrameCount, 블렌드 곡선, 블랙보드 공급 — [anim_state_machine.md](anim_state_machine.md). 남은 것: Event 발화 구간, 다층 포즈 합성, 일부 블랙보드 출처.
-- 머리카락 천 물리: 형식(Havok TAG0 hclClothContainer)·구성만 확인, 상수 미해독. 모자 ManualBindSRT 행렬식(T·Rz·Ry·Rx·S) 해소, HairArrange 뼈 적용 코드 미확정 — [player_assembly.md §6.1](player_assembly.md).
-- (해소) 신발 미러(회전부 부호 반전 = X 미러), 하네스 선택식. 남은 것: GearAlphaMask 재질 슬롯.
-- LOD: 임계 표 선택·기록 판독([formats_bfres_bntx.md §7.1](formats_bfres_bntx.md)), 거리 계산 소비처 미확정.
+- (대부분 해소) 머리카락 천 물리 상수(입자·질량·중력·감쇠·링크 강성·실행 순서) — [hair_cloth.md](hair_cloth.md), 도구 `gfx4p_bphcl.py`. 남은 것: 게임 쪽 스텝 dt·컬링. 모자 ManualBindSRT 행렬식 해소, HairArrange(맵 = 모자 객체+0x360으로 정정) 뼈 적용식 미확정 — [player_assembly.md §6.1](player_assembly.md).
+- (해소) 신발 미러(회전부 부호 반전 = X 미러), 하네스 선택식. GearAlphaMask: 컨테이너 등록 구조·몸 셰이더 알파 테스트식 판독, 재질 슬롯 연결(0x7102b8c668) 미확정.
+- LOD: 임계 표 선택·기록 판독, 필드 순서 정정(기록 = [Start, 2Start−End, 1/(End−Start)]) — [formats_bfres_bntx.md §7.1](formats_bfres_bntx.md). 거리 계산 소비처 미확정.
 - (해소) 화면 모델 선택(사람/`_Hlf`/오징어/잉크레일)과 전환 프레임 — [player_assembly.md §5.4](player_assembly.md).
 
 각 항목의 근거와 필요한 추가 자료는 하위 문서 §미확정에 있습니다.

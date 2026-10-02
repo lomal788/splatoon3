@@ -79,7 +79,11 @@ setVelocity(out)
 진행 방향으로 회전 행렬을 만들어 물리 바디에 설정 (표시·충돌 방향용)
 ```
 
-age는 슬롯 18에서 이동 계산 전에 증가하므로 첫 갱신은 age 1 경로입니다. ShooterBase는 슬롯 73이 항상 0이라 age 0 경로를 지나지 않습니다 **[판독]**.
+> **정정 (2026-10-02, combat4 판독·메인 스레드 명령 재확인)**: 이전 판은 "age 초기값 0 → 첫 갱신이 age 1 경로"라고 적었으나 틀렸습니다. 생성 함수(`0x710174e644`)가 0을 쓴 뒤, 시작 처리(슬롯 15 → `0x7101762f68` → `0x7101645590`)가 `mov w23,#-1; str w23,[x19,#0x134]`(`0x7101645608`/`0x7101645610`)로 **age = −1**을 씁니다 **[판독]**.
+
+따라서 첫 갱신: 슬롯 18이 `age >= 0` 검사에서 이전 위치 저장을 건너뛰고(age −1), age++ → **0**, 슬롯 54는 `age == 0` 경로라 상태 머신은 한 칸 진행하지만 속도는 생성 속도 그대로입니다. 두 번째 갱신이 age **1**이고 이때 생성 속력으로 재정규화합니다. ShooterBase 슬롯 73은 항상 0이라 age 증가가 멈추는 일은 없습니다 **[판독]**.
+
+영향: age를 쓰는 판정(데미지 감쇠 `ReduceStartFrame/EndFrame`, 반경 lerp, FriendThroughFrame, 꼬리 시작 `DelayShotFrame`)은 "생성 후 갱신 회차 − 1"을 기준으로 계산해야 합니다.
 
 **holdFrames(+0x1b0)를 쓰는 곳** [판독] — 생성 시 -1(슬롯 15). 그 밖에는 충돌 콜백 두 개뿐입니다.
 
@@ -188,6 +192,7 @@ Ground, n.y <= 0.64144969            → 슬롯 59  (벽·천장)
 
 | 오프셋 | 타입 | 의미 | 근거 |
 |---|---|---|---|
+| +0x94, +0x98 | f32 | 부모 탄 속도의 x, z (스플래시 생성정보, weapon 구현 판독 — 이전 "분할 관련" 해석 정정) | 스플래시 생성 | 스플래시 도색 방향 |
 | +0x2c | s32 | 팀 번호(0~2, -1/3은 무효) | 슬롯 15·106에서 팀 배열 인덱스로 사용 **[추정]** |
 | +0x30 | vec3 | 발사 위치 | 슬롯 15에서 꼬리 위치 초기값 |
 | +0x3c | vec3 | 발사 방향(단위 벡터로 추정) | 슬롯 15에서 `dir × speed` |
@@ -382,7 +387,7 @@ v.z = d.z*speed + (p.z - pa.z)*A.XRate + pa.z*A.ZRate
 ```
 즉 조준 축 방향의 플레이어 속도는 ZRate배(스플래시슈터 2.0), 그 옆 성분은 XRate배(기본 0.4), 위로 움직이면 YPlusRate배(기본 1.0)로 더해집니다. 무기 표에 A가 없으면 코드가 만든 기본 객체(XRate 0.4, YMax 100, YMinusRate 0, YPlusRate 1.0, ZRate 2.0)를 씁니다 **[판독]**.
 
-`a`의 정확한 출처(어느 객체 +0x68 행렬의 몇 번째 열인지)와 muzzleExtra(+0xe4~0xec)의 의미는 **[미확정]**입니다. 조준 흔들림은 `d`에 이미 반영돼 들어옵니다([../camera/aim_swerve.md](../camera/aim_swerve.md)).
+정정(2026-10-02, weapon 구현 담당 판독·원본 실행): 이전 판의 "muzzleExtra(+0xe4~0xec)"는 플레이어 **최종 속도**(본체+0xe4)이고, 조준 축 `a` = normalize(카메라 주시점 − 카메라 위치)입니다. 발사 위치는 `0x7102552170`: 본체+0x58 + (0, 1.1, 0) + 총구 오프셋 (−0.24, 0, 0.18)을 피치 베지어 축(−70°/5°/75°)으로 돌린 값이며 원본 실행 17/17 비트 일치입니다([../impl/weapon.md](../impl/weapon.md)). 조준 흔들림은 `d`에 이미 반영돼 들어옵니다([../camera/aim_swerve.md](../camera/aim_swerve.md)).
 
 **age 1 재정규화와의 관계**: 생성 정보의 speed는 플레이어 속도 가산이 포함된 |v|입니다. 그러니 age 1 재정규화(§3.3)는 가산분을 없애지 않고, 크기를 발사 시점 값으로 다시 맞추기만 합니다 **[판독]**. (이전 판의 "가산분 제거" 추정은 틀려서 정정했습니다.)
 
@@ -399,7 +404,7 @@ interface MoveParam {                                       // 원본: spl::Bull
 }
 
 class ShooterBullet {
-  age = 0;                     // 원본 +0x134
+  age = -1;                    // 원본 +0x134 — 시작 처리가 −1을 씀(§3.3 정정)
   state: MoveState; stateFrame = 0;   // +0x198 / +0x19c
   holdFrames = -1;             // +0x1b0
   vel: Vec3; pos: Vec3; prevPos: Vec3;
@@ -411,14 +416,14 @@ class ShooterBullet {
   }
 
   update(p: MoveParam, spawnSpeed: number) {     // 원본 슬롯18 → 슬롯54
-    this.prevPos = this.pos;
+    if (this.age >= 0) this.prevPos = this.pos;   // 첫 갱신(age −1)은 저장 생략
     this.age++;
     if (this.holdFrames >= 1) { this.vel = ZERO; this.holdFrames--; return; }
     let v = this.vel;
     if (this.age === 1) v = setLength(v, spawnSpeed);
     const [out, done] = STEP[this.state](p, v, this.stateFrame);   // f32 연산 유지(Math.fround)
     if (done) { this.state++; this.stateFrame = 0; } else this.stateFrame++;
-    this.vel = out;
+    this.vel = this.age === 0 ? v : out;                           // age 0: 상태만 진행, 속도 유지
   }
 
   integrate() {                                          // 물리 단계 0x7103b0a2bc (충돌은 physics §7 BulletBody.step)
@@ -514,7 +519,6 @@ f32 정밀도는 `Math.fround`로 매 연산마다 맞춥니다. 재구현 `bull
 | ~~충돌 콜백 58/59 대상, 컴포넌트 0x20/0x28/0x38~~ | **해소**: §3.3 (58 바닥, 59 벽·천장, 60 Ground 외) [판독]. 0x28 = 소멸 요청은 [추정] |
 | 접촉 반응 시퀀서의 프레임 내 위치(첫 명중 age 1/2, 슬롯 19·21 순서, 바닥 탄 보관 도색 실행 여부) | 시퀀서 기반 `0x7103c7e4d8`의 실행 목록과 액터 계산 단계(슬롯 18/19/21 호출부) 순서 — physics §6.7 |
 | 슬롯 59의 재질의 구 질의 세부(방향·길이), 슬롯 68(바디 없음 경로)·자식 탄 0x7101648824의 액터 이름 | `0x7101764ff8` 전체 분석 기준 재디컴파일(`state_redecomp.sh`), `0x7101648824`·`0x7101648650` |
-| 조준 기준 축 a의 출처, muzzleExtra(+0xe4) | `0x71025823b0`의 param_2[0x55]+0x68, param_2[0x58]+0x108 객체 |
 | 분할 인덱스(생성 정보 +0x90)를 정하는 규칙 | 발사 함수 `0x71025817c8` 호출자의 `param_7` |
 | 꼬리 길이 제한(TailLengthParam의 나머지 필드) | 슬롯 55 이후 그리기 경로 |
 | OnlineVersusSetting 시드 → 대전 설정 객체 복사 경로 | BYML `RandomSeed0..3` 경유로 추정 ([network](../network/05_events_combat.md)) |

@@ -1,0 +1,1 @@
+{"GameParameters":{"CommonParam":{"$type":"spl__BulletWallDropCommonParam","InitVelocityRateYMinus":0.03500000014901161,"InitVelocityRateYPlus":0.014999999664723873,"PaintWallDropDistance":0.15000000596046448,"PaintWallSpanMaxFrame":60,"PaintWallSpanMinFrame":4}}}

@@ -17,7 +17,8 @@ Splatoon 3 v0의 셰이더 바이너리를 컨테이너 구조부터 풀고, Max
 | 임계값 | `cTeamAlphaTestThreshold = 0.3`(0x3e99999a), `cConvex = 0.99`(0x3f7d70a4) — 0x7102c188b4 상수 | [판독] |
 | MeterAction | 레이아웃 아카이브에 **원본 GLSL 소스**가 있음. 12시에서 시계 방향 채움, `__CUS_Float_1`=링 두께 비율, `__CUS_Float_2`=바깥 반지름(UV)(§5) | [판독: 원본 소스] |
 | BlitzUBO0(gsys_user0) | 1104 B 레이아웃 확정(원본 생성자 에뮬 실행), 팀 세트 0/1/2 의 Ink/InkBright 등 7색 + 중립 3색, InkUBOParam 재질값, 2cl 잉크 색 = mix(InkBright×InkRimIntensity, Ink, clamp(m×InkRimBlendCoef))(§3.9) | [판독]+[실행: 레이아웃] |
-| Ink(9)/InkBright(10) 값 | 셰이더에는 BlitzUBO0 data[3/4]·[10/11]·[62/63] 으로 들어감(§3.9). 값은 CPU 계산. 입력 = 활성 env `agl::env::DirectionalLight` 의 DiffuseColor(+0x128)·Intensity(+0x1a0) + 하늘 SH 위쪽 조도, InkBright 보정 0.1/0.5 — 계산식·입력 경로는 [team_color.md §5.3](team_color.md). 값은 스테이지 조명에 따라 달라짐 | [판독] (MainLight→DirectionalLight 경로는 [추정]) |
+| Ink(9)/InkBright(10) 값 | 셰이더에는 BlitzUBO0 data[3/4]·[10/11]·[62/63] 으로 들어감(§3.9). 값은 CPU 계산. 입력 = 활성 env `agl::env::DirectionalLight` 의 DiffuseColor(+0x128)·Intensity(+0x1a0) + 하늘 SH 위쪽 조도, InkBright 보정 0.1/0.5 — 계산식·입력 경로는 [team_color.md §5.3](team_color.md). 값은 스테이지 조명에 따라 달라짐 | [판독] (MainLight→DirectionalLight 경로도 [판독]: 0x7102b607c4/0x7102b60ea0 가 RenderingDay MainLight 를 직접 기록 — [stage_rendering.md §4](stage_rendering.md)) |
+| 맵(스테이지) 재질 | Fld_VSLobby 64재질 프로그램 확정, 베이크·도색·동적광·안개 식 — [stage_rendering.md §5~§8](stage_rendering.md) | [데이터]+[판독] |
 
 ## 2. 자료와 도구
 
@@ -97,7 +98,7 @@ $SD bnsh <x.bnsh> <출력폴더>
 | `gsys_*` 15개 | cGSysProjection0, cGSysShadowPrePass, cGSysStaticDepthShadow, cGSysDepthShadowCascade, cGSysRenderTargetColor/Depth 등 | | 엔진 공급 |
 | `gsys_user0`, `gsys_user3` | cBlitzPaint, cBlitzWallPaintGrid | | 지형 도색 텍스처(게임 공급) |
 
-역번역 프래그먼트에서 별도로 보이는 엔진 샘플러: `cEnvBRDFMap`, `cPrefilEnvMapArray`(큐브 배열, 거칠기→밉: `roundEven(cos(r·π)·−5.5+5.5)`) [판독].
+역번역 프래그먼트에서 별도로 보이는 엔진 샘플러: `cEnvBRDFMap`, `cPrefilEnvMapArray`(큐브 **배열**: 4번째 좌표 = 배열 층 `roundEven(5.5 − 5.5·cos(π·r))` ∈ 0..11, 잉크 분기는 층 12·lod 0) [판독]. 정정: 이전 판의 "거칠기→밉"은 틀림 — samplerCubeArray 의 4번째 좌표는 밉이 아니라 층이다(맵 재질 1714 역번역에서 잉크 분기가 `float(12)` 와 명시 lod 0.0 을 함께 쓰는 것으로 확인, [stage_rendering.md §5.4](stage_rendering.md)).
 
 ### 3.3 정점 속성·유니폼 블록 [데이터]
 
@@ -269,7 +270,7 @@ normal = texture(cTexNormal, uv2)        // 프래그먼트: in_attr0.zw
 1. **재질별 프로그램을 고정**: 위 절차(§3.5)로 프로그램 번호를 정하고, 그 프로그램의 역번역 GLSL을 참조 구현으로 둡니다. 우버 셰이더 전체를 옮길 필요 없이 플레이어에 쓰이는 프로그램 수십 개만 three.js `onBeforeCompile` 청크로 재현합니다.
 2. 팀색 청크(§3.6.1/3.6.2)와 UV 선택(§3.7)은 원본 식 그대로 씁니다. 텍스처는 PNG로 풀었으므로 `_su0`의 R 채널을 그대로 샘플합니다.
 3. `Mat` uniform 값은 bfres 재질 `params`(없으면 §3.3 기본값), 팀색은 [team_color.md](team_color.md) 계산 결과.
-4. 조명(Env/Context/BlitzUBO1·2)은 블록 구조가 미해독이므로 PBR 근사를 유지합니다. BlitzUBO0 은 §3.9 대로 팀 세트 색(Ink/InkBright 포함)·InkUBOParam 으로 채우면 2cl 잉크 분기를 원본 식으로 돌릴 수 있습니다. 팀색·마스크·UV처럼 **색이 정해지는 부분만** 원본 식이고, 최종 셰이딩은 근사라는 점을 구분해 두세요.
+4. 조명(Env/Context/BlitzUBO1·2)은 CPU 쪽 칸 대응이 미해독이므로 PBR 근사를 유지합니다(셰이더 쪽 사용 칸과 식은 맵 재질 기준으로 [stage_rendering.md §5.4·§5.5·§8](stage_rendering.md)에 정리). BlitzUBO0 은 §3.9 대로 팀 세트 색(Ink/InkBright 포함)·InkUBOParam 으로 채우면 2cl 잉크 분기를 원본 식으로 돌릴 수 있습니다. 팀색·마스크·UV처럼 **색이 정해지는 부분만** 원본 식이고, 최종 셰이딩은 근사라는 점을 구분해 두세요.
 
 ## 4. 도색 GPU 스탬프 (Hoian_Proc.sharcb)
 

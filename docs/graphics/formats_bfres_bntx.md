@@ -157,8 +157,8 @@ glb 규칙은 mpj 변환기와 같습니다: 노드 0 `<모델>__model`, 뼈 = �
 ### 7.1 LOD 임계 선택 [데이터 + 판독]
 
 - RSDB `LODThreshold` 36행(플레이어 전용 행 없음). 대표 Start/End: Default 20/50, SuffixFar 500/2000, PrefixFld 30/60, PrefixFldBG 100/100, PrefixKbi 50/80, 나머지는 Fld/Obj 개별 행 [데이터].
-- 선택 0x71010fe270(모델 생성 콜백 0x710110f8cc 가 호출): ① 모델 이름별 표(+0x30 트리) → ② 없으면 이름 끝 `_Far` = SuffixFar, 앞 `Fld_` = PrefixFld, `FldBG_` = PrefixFldBG, `Kbi_` = PrefixKbi, 그 밖 Default. 행 +8 = Start, +0xc = End 를 읽어 유닛마다(vt+0x228 개수, +0x38 배열 0x50 B 간격) **[End, 2·End − Start, 1/(Start − End)]** 를 기록(Start == End 면 세 번째 값 1) [판독].
-- 플레이어 모델은 Default(20/50)를 받는 것으로 본다 [추정]. 이 세 값을 읽는 거리 계산과 셰이프 LOD 3단의 연결은 [미확정] — 웹은 당분간 LOD0 고정 또는 three.js `LOD` 에 위 임계를 그대로 넣는 근사.
+- 선택 0x71010fe270(모델 생성 콜백 0x710110f8cc 가 호출): ① 모델 이름별 표(+0x30 트리) → ② 없으면 이름 끝 `_Far` = SuffixFar, 앞 `Fld_` = PrefixFld, `FldBG_` = PrefixFldBG, `Kbi_` = PrefixKbi, 그 밖 Default. 행 +8 = **End**, +0xc = **Start** 를 읽어 유닛마다(vt+0x228 개수, +0x38 배열 0x50 B 간격) **[Start, 2·Start − End, 1/(End − Start)]** 를 기록(Start == End 면 세 번째 값 1) [판독]. 정정(gfx4): 이전 판은 +8 = Start 로 보아 [End, 2End−Start, 1/(Start−End)] 라 적었으나, RSDB 행 적재 0x71013de244~0x71013de28c 가 `EndDistFromBounding` → 행+8, `StartDistFromBounding` → 행+0xc 에 쓰고(16 B 행 = 이름 8 B + End + Start), 리플렉션 0x71011bb6a0 도 End +0x30 / Start +0x34 로 같은 순서다 [판독]. 조회 0x71013df5e4 가 돌려주는 포인터가 이 행(또는 객체+0x28)이라는 것은 [추정: 두 배치 모두 +8=End 로 일치]. 예: Default(Start 20, End 50) → [20, −10, 1/30], SuffixFar(500/2000) → [500, −1000, 1/1500]. 필드 이름 `…DistFromBounding` 으로 보아 거리는 바운딩(구) 표면 기준으로 본다 [추정].
+- 플레이어 모델은 Default(20/50)를 받는 것으로 본다 [추정]. 이 세 값을 읽는 거리 계산과 셰이프 LOD 3단의 연결은 [미확정] (gfx4 조사: 유닛 클래스 vtable 미식별 — 0x710110f8cc 는 모델 생성 리스너 보조 vtable 0x7105560e38 슬롯 0x58 이고, 같은 슬롯 호출이 *0x7105812710 의 리스너에도 있음. main 문자열에 `SLOD_TYPE`·`FROM_SLOD_TYPE`·`TO_SLOD_TYPE`·`SLOD_TRANSITION_TYPE`·`PERFORM_LOD_CHECK`, Hoian_UBER 옵션에 `fade_dither_alpha`·`enable_model_dither_*` 가 있어 디더 페이드 경로 후보 [데이터]) — 웹은 당분간 LOD0 고정 또는 three.js `LOD` 에 위 임계를 그대로 넣는 근사.
 
 ## 8. 미확정과 필요한 근거
 
@@ -167,4 +167,4 @@ glb 규칙은 mpj 변환기와 같습니다: 노드 0 `<모델>__model`, 뼈 = �
 | ~~셰이더 옵션 기본값·슬롯 의미~~ | 해소: 옵션 기본값·샘플러 심볼·Mat 오프셋 [데이터], 팀색·2cl 사용 [판독] — [shaders.md](shaders.md) | `_MAi`/`_Fxm`/`_MltA` 채널별 쓰임은 해당 재질 프로그램(`analysis/shader/hoian_uber/*.frag`)에서 읽으면 됨 |
 | ~~`texcoord_select_*` 값 의미~~ | 해소: 0→`_u0`+tex_mtx0, 2→`_u2`+tex_mtx1 [판독], 3은 [추정] | 값 3 재질 역번역 |
 | Maya 스케일 보정 영향 | 클립별 스케일 커브 미조사 | 덤프 `--keys`로 스케일 키 ≠1 클립 집계 |
-| LOD 전환식 | 부분 판독: 표 선택·기록까지(아래). 거리 계산 소비처 [미확정] | 유닛 레코드(+0x38 배열, 0x50 B)의 [0]/[8] 을 읽는 gsys 셰이프 그리기 코드(vt+0x228 클래스 vtable 부터) |
+| LOD 전환식 | 부분 판독: 표 선택·기록까지(§7.1, 필드 순서 정정됨). 거리 계산 소비처 [미확정] | 유닛 레코드(+0x38 배열, 0x50 B)의 [0]/[8] 을 읽는 gsys 셰이프 그리기 코드(vt+0x228 클래스 vtable 부터) |

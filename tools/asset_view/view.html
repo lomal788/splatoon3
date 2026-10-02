@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>asset view</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/examples/jsm/":"/node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// 에셋 검증용 렌더(웹 구현 아님): visual.glb + collision 와이어 + 표적·캐릭터를 배치 좌표에 놓고 찍는다.
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+const q = new URLSearchParams(location.search);
+const A = "/games/splatoon3/assets/";
+const report = { warnings: [] };
+window.__report = report;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(960, 600);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8899aa);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.position.set(-0.3, 0.7, 0.6); scene.add(sun);
+const ktx2 = new KTX2Loader().setTranscoderPath(A + "common/lib/basis/").detectSupport(renderer);
+const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
+const j = (p) => fetch(A + p).then((r) => r.json());
+const placement = await j("maps/Lby_Lobby00/placement.json");
+const visual = await loader.loadAsync(A + "maps/Lby_Lobby00/visual.glb");
+scene.add(visual.scene);
+let texCount = 0; visual.scene.traverse((o) => { if (o.isMesh && o.material.map) texCount++; });
+report.visualMeshesWithMap = texCount;
+if (q.get("col") !== "0") {
+  const meta = await j("maps/Lby_Lobby00/collision.json");
+  const bin = await (await fetch(A + "maps/Lby_Lobby00/collision.bin")).arrayBuffer();
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(bin, meta.layout.positions.offset, meta.layout.positions.count * 3), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bin, meta.layout.indices.offset, meta.layout.indices.count), 1));
+  scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(g), new THREE.LineBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.35 })));
+}
+const tgt = await loader.loadAsync(A + "maps/Lby_Lobby00/parts/SighterTarget.glb");
+const tmpl = tgt.scene.getObjectByName("Obj_SighterTarget");
+const euler = (r) => new THREE.Euler(r[0], r[1], r[2], "ZYX");
+let n = 0;
+for (const a of placement.actors) {
+  if (!a.gyml.startsWith("SighterTarget") || a.gyml.includes("Move") || a.gyml.includes("TipsTrial")) continue;
+  const o = (await import("/node_modules/three/examples/jsm/utils/SkeletonUtils.js")).clone(tmpl);
+  o.position.fromArray(a.pos); o.rotation.copy(euler(a.rot)); o.scale.fromArray(a.scale);
+  scene.add(o); n++;
+}
+report.targets = n;
+// 캐릭터(몸 + 파츠, 바인드 포즈) — 크기 확인용
+const start = placement.actors.find((a) => a.gyml === "StartPosTipsTrial" && a.params?.spl__StartPosForTipsTrialParam?.Name === "Front10m");
+const body = await loader.loadAsync(A + "characters/Player00/body.glb");
+body.scene.position.fromArray(start.pos); body.scene.rotation.copy(euler(start.rot));
+scene.add(body.scene);
+const cam = new THREE.PerspectiveCamera(55, 960 / 600, 0.1, 500);
+const view = q.get("view") || "range";
+if (view === "range") { cam.position.set(start.pos[0] + 1.5, start.pos[1] + 2.2, start.pos[2] - 4); cam.lookAt(start.pos[0], 1.5, start.pos[2] + 20); }
+else { cam.position.set(-40, 60, -60); cam.lookAt(5, 0, 5); }
+renderer.render(scene, cam);
+report.done = true;
+window.__done = true;
+</script></body></html>

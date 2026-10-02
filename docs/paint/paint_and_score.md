@@ -3,6 +3,8 @@
 Splatoon 3 v0 원본에서 "어디에 무엇이 칠해지는가", "칠한 결과가 어떻게 점수(p, %)·스페셜로 이어지는가"를 웹으로 옮기기 위한 명세입니다. 작업 지침은 [../../분석.txt](../../분석.txt), 표기 규칙은 [../README.md](../README.md#확정-수준-표기)를 따릅니다.
 
 - 하위 문서: [paint_shape.md](paint_shape.md) — 슈터·스플래시·벽 낙하 방울의 도색 모양(폭, 깊이 비율, 패턴, 중심 이동, 지연 도색)
+- 하위 문서: [colpaint_atlas.md](colpaint_atlas.md) — 지형 도색 아틀라스(ColPaint) 생성 규칙·텍셀 밀도·패킹 (4차)
+- 하위 문서: [turf_result.md](turf_result.md) — 나와바리 결과 확정 순서·승패·동률 (4차)
 - 하위 문서: [special_gauge.md](special_gauge.md) — 플레이어별 칠 텍셀 집계, 스페셜 게이지 가산·비율·사망 보존·넷 %, PaintPermille, 결과 미터
 - 관련 문서: [weapon/shooter_bullet.md](../weapon/shooter_bullet.md)(탄 이동), [network/network.md](../network/network.md)(도색 이벤트 동기화), [ui/ui_hud.md](../ui/ui_hud.md)(HUD 표시)
 
@@ -108,7 +110,7 @@ bool 인자가 참이면 추가 텍스처(포맷 9, 0x10000 플래그) 생성
   | 오브젝트 대상 vtable 0x710567fae0/0x710567fc98/0x710567fe98/0x7105680050 | vt+0xd8 = 0x7102c3a194(AABB) | 세 변 길이 중 (ceil(최대), ceil(중간)), 최소 1 |
   | 오브젝트 대상 vtable 0x7105680208 | 0x7102c3c25c | (1.0, 1.0) |
   
-  AABB 변 길이는 월드 단위이고 `ceil`(fcvtzs 후 소수부 있으면 +1, 최소 1) → `×8 ×0.125`로 다시 정수 단위가 됩니다. 따라서 **size = 월드 단위(올림), 텍스처 = 월드 1 단위당 8 텍셀**입니다. 점수식 `count/64/3.3`(§4.2)의 64 = 8×8과 맞습니다. ColPaint(지형, kind 2) 아틀라스의 밀도도 8 텍셀/단위인지는 ColPaint 빌더를 보지 않아 **[추정]**입니다.
+  AABB 변 길이는 월드 단위이고 `ceil`(fcvtzs 후 소수부 있으면 +1, 최소 1) → `×8 ×0.125`로 다시 정수 단위가 됩니다. 따라서 **size = 월드 단위(올림), 텍스처 = 월드 1 단위당 8 텍셀**입니다. 점수식 `count/64/3.3`(§4.2)의 64 = 8×8과 맞습니다. ColPaint(지형, kind 2) 아틀라스도 **패널 평면 좌표 1 단위 = 8 텍셀, 아틀라스 400 단위 = 3200×3200**입니다 **[판독]** (2026-10-02 [paint4] 정정, 이전 [추정]) — [colpaint_atlas.md](colpaint_atlas.md) §6. 단 지형 텍셀 수는 실제 면적이 아니라 42개 대표 방향 평면에 투영한 면적 기준입니다.
 - **포맷 [판독]+[추정]**: agl 포맷 번호 → 스위즐 표 `0x7104abef40`(16 B/항목, NVN 스위즐 0=ZERO 1=ONE 2=R 3=G 4=B 5=A)와 NVN 포맷 표 `0x7104abfc54`(u32):
   | 텍스처 | agl 포맷 | 스위즐(R,G,B,A) | NVN 포맷 값 | 해석 |
   |---|---|---|---|---|
@@ -127,7 +129,7 @@ bool 인자가 참이면 추가 텍스처(포맷 9, 0x10000 플래그) 생성
 
 `ColPaintBuilder::build / buildOriginal_ / buildReplica_ / setupPanel_ / setupMapModel_ / setupPaintUV_ / setupGraffiti_ / setupChangePaintableArea_ / setupColMeshTable_`, `ColPaintPanelExtractor::extractPanel / mergeInsidePanel_ / aggregatePrismInFace_`, `ColPaintPrismExtractor::extractPrisms`, `ColPaintPanelConnector::connectPanel / fixConnection`, `ColPaintPanelPatternRecognizer::*`, `ColPaintUVMapper::map / mapUVWithGroup_`, `ColPaintPixelAreaBuilder::buildPixelAreaWithDir`, `ColPaintPixelAreaGroupHolder::calcAreaNumInGroup`, `SimpleColMgr<ColPaintHorizontal,8> / <ColPaintVertical,7>::buildOctree`, 스레드 이름 `ColPaintThread`.
 
-즉 충돌 삼각형 → 패널(평면 묶음) 추출 → 연결·패턴 인식 → UV 아틀라스 배치 → 픽셀 영역 그룹 → 수평/수직 옥트리입니다. 각 단계의 알고리즘은 이번에 판독하지 않았습니다 **[미확정]**. 웹은 §6에서 독자 아틀라스를 쓰고, 동등성은 "면적(텍셀 수) 보존"으로 맞춥니다.
+즉 충돌 삼각형 → 패널(평면 묶음) 추출 → 연결·패턴 인식 → UV 아틀라스 배치 → 픽셀 영역 그룹 → 수평/수직 옥트리입니다. (2026-10-02 [paint4] 갱신, 이전 "알고리즘 미판독 [미확정]") 프리즘 42방향 분류·기저·깊이 슬랩·패널 추출(옥트리 이웃 + 정점 공유)·병합·텍셀 밀도(8/단위, 올림, 여백 3)·기요틴 패킹을 판독하고 원본 실행으로 확인했습니다 → **[colpaint_atlas.md](colpaint_atlas.md)**. 연결(띠)·패턴 인식·시각 메시 매핑은 아직 [미확정]입니다.
 
 ### 3.3 칠 가능 여부 데이터
 
@@ -445,7 +447,7 @@ const playerP = (n: number) => Math.trunc(Math.fround(n / Math.fround(211.2)));
   6. 팀 면적 = 스텐실 == 팀비트 개수, 전체 = 칠 가능 텍셀 수.
   `g.team[t]`(웹 소유 배열)은 원본의 스텐실과 같은 것입니다. 재구현·합성 테스트: `web/tools/paintgpu_frame_sim.py`(위 1~6을 한 텍셀로 실행), 셰이더 식 `web/tools/shader_paint_overpaint.py`.
 - `player.paintTexels`에 더할 값 = 2단계에서 센 수(새로 내 팀이 된 텍셀, 자기 땅 덧칠 0) **[판독]** — 이전 판의 "원본 미확정, 설정값" 메모를 대체합니다. 요청이 AnimationFrame번 다시 그려지면 매번 2단계를 다시 합니다.
-- 아틀라스 밀도는 원본 PaintTextureData 와 같은 "월드 1 단위당 8 텍셀"(§3.1, 오브젝트 대상 [판독])로 두면 p 환산식(÷64÷3.3)을 그대로 쓸 수 있습니다.
+- 아틀라스 밀도는 원본 PaintTextureData 와 같은 "월드 1 단위당 8 텍셀"(§3.1, 오브젝트 대상 [판독])로 두면 p 환산식(÷64÷3.3)을 그대로 쓸 수 있습니다. 지형은 **실제 면적이 아니라 대표 방향 평면 투영 면적**으로 텍셀을 배정해야 원본 텍셀 수와 같아집니다(정정 [paint4], [colpaint_atlas.md](colpaint_atlas.md) §8).
 - 웹에서 GPU를 쓰지 않으므로 원본의 1~2프레임 카운터 지연(이중 버퍼 읽기)은 따로 흉내 내야 같은 시점이 됩니다. 지연 프레임 수는 **[미확정]**(GPU 완료 시점 의존).
 
 ### 6.4 에셋 변환
@@ -503,5 +505,6 @@ const playerP = (n: number) => Math.trunc(Math.fround(n / Math.fround(211.2)));
 | ~~플레이어 paintCount 가산 경로~~ | 해소(§4.4). 남은 것: 칠 카운터 엔트리의 GPU 값 의미(`0x7101043cdc`) |
 | ~~PaintPermille 계산식~~ | 해소(§4.2, `0x710303bd80`) |
 | ~~스페셜 게이지 가산식~~ | 해소([special_gauge.md](special_gauge.md)). ~~요청 레코드 +0x6c 세팅~~·~~스페셜 시작(G+0x1c/+0x20)~~ 해소([paintgpu]). 남은 것: G+0xc/G+0x24 writer |
-| ColPaint UV 생성 알고리즘 | ColPaintBuilder 계열 함수(단언 문자열 xref) |
+| ~~ColPaint UV 생성 알고리즘~~ | 대부분 해소([colpaint_atlas.md](colpaint_atlas.md), [paint4]). 남은 것: 연결·띠·패턴 인식, 200 단위 씬, 물 평면 포함 여부 — 같은 문서 §10 |
+| 나와바리 승패·동률 | 해소 [판독] — [turf_result.md](turf_result.md): PaintPermille 보정 뒤 `A.p < B.p ? Bravo : Alpha`, 무승부 없음 |
 | 우세 판정 호출 주기, 화면 효과 | VersusRefereePaint 다른 슬롯, [ui] |

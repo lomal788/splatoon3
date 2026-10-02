@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- graphics_bfres2gltf 의 복사본 + 에셋 변환용 옵션(model 선택 옵션). BfresLibrary 는 graphics_bfres2gltf/oss 를 그대로 참조 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RollForward>Major</RollForward>
+    <BaseOutputPath>C:\dev\splatoon3\analysis\assets_work\build\bin\</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\graphics_bfres2gltf\oss\BfresLibrary\BfresLibrary\BfresLibrary.csproj" />
+    <Reference Include="Syroot.BinaryData"><HintPath>..\graphics_bfres2gltf\oss\BfresLibrary\Libraries\Syroot.BinaryData.dll</HintPath></Reference>
+    <Reference Include="Syroot.Maths"><HintPath>..\graphics_bfres2gltf\oss\BfresLibrary\Libraries\Syroot.Maths.dll</HintPath></Reference>
+    <Reference Include="Syroot.NintenTools.NSW.Bntx"><HintPath>..\graphics_bfres2gltf\oss\BfresLibrary\Libraries\Syroot.NintenTools.NSW.Bntx.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

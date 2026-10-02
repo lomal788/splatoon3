@@ -1,0 +1,386 @@
+{
+"globalSeed": 10,
+"frame": 100,
+"bullets": [
+{
+"idx": 0,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x3f808235",
+"f11fc": 1,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 3,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x410322ec"
+],
+"dir": [
+"0xbf7150f3",
+"0x3e6eaa97",
+"0x3e74b331"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+}
+]
+},
+{
+"idx": 1,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x4009dab4",
+"f11fc": 1,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 3,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x40e1790e"
+],
+"dir": [
+"0xbf7150f3",
+"0x3e6eaa97",
+"0x3e74b331"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+}
+]
+},
+{
+"idx": 2,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x4053744e",
+"f11fc": 1,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 2,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x40bcac3e"
+],
+"dir": [
+"0xbf7150f3",
+"0x3e6eaa97",
+"0x3e74b331"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+}
+]
+},
+{
+"idx": 3,
+"schedule": {
+"isLast": false,
+"forced": true,
+"f1208": "0x411198c7",
+"f11f8": "0x3f13e522",
+"f11f4": "0x4082fbf8",
+"f11fc": 1,
+"f120c": "0x409a0fc7"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 0,
+"near": true,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x3dcd3625"
+],
+"dir": [
+"0xbf7150f3",
+"0x3e6eaa97",
+"0x3e74b331"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+},
+{
+"age": 2,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x40a36a6e"
+],
+"dir": [
+"0xbf7150f3",
+"0x3e6eaa97",
+"0x3e74b331"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+}
+]
+},
+{
+"idx": 4,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x40b353c0",
+"f11fc": 2,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 1,
+"near": false,
+"seed": 112,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x4066254e"
+],
+"dir": [
+"0xbf65f8f0",
+"0xbe9c2cb8",
+"0x3ea1e08e"
+],
+"speed": "0x3d3866a9",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+},
+{
+"age": 16,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0xc0193ec3",
+"0x414cbc86"
+],
+"dir": [
+"0xbf7150f3",
+"0xbd5fccd7",
+"0x3ea89aa4"
+],
+"speed": "0x3d370d63",
+"paintDir": [
+0.0,
+0.1966993659734726
+]
+}
+]
+},
+{
+"idx": 5,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x40d8208d",
+"f11fc": 2,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 1,
+"near": false,
+"seed": 112,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x401c8bb2"
+],
+"dir": [
+"0xbf65f8f0",
+"0xbe9c2cb8",
+"0x3ea1e08e"
+],
+"speed": "0x3d3866a9",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+},
+{
+"age": 11,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0xbf89311f",
+"0x413a561f"
+],
+"dir": [
+"0xbf7150f4",
+"0x3a49fd1e",
+"0x3eaae89f"
+],
+"speed": "0x3d370d62",
+"paintDir": [
+0.0,
+0.21760685741901398
+]
+}
+]
+},
+{
+"idx": 6,
+"schedule": {
+"isLast": false,
+"forced": false,
+"f1208": null,
+"f11f8": null,
+"f11f4": "0x40fced59",
+"f11fc": 2,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 0,
+"near": false,
+"seed": 112,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x3fa5e432"
+],
+"dir": [
+"0xbf65f8f0",
+"0xbe9c2cb8",
+"0x3ea1e08e"
+],
+"speed": "0x3d3866a9",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+},
+{
+"age": 6,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0xbe806093",
+"0x4127efb9"
+],
+"dir": [
+"0xbf7150f4",
+"0x3e08d7cc",
+"0x3e9c9d96"
+],
+"speed": "0x3d370d62",
+"paintDir": [
+0.0,
+0.3799777030944824
+]
+}
+]
+},
+{
+"idx": 7,
+"schedule": {
+"isLast": true,
+"forced": false,
+"f1208": null,
+"f11f8": "0x3f6a9fab",
+"f11f4": "0x411198c7",
+"f11fc": 2,
+"f120c": "0x407269e2"
+},
+"lastAge": 37,
+"spawns": [
+{
+"age": 0,
+"near": true,
+"seed": 112,
+"pos": [
+"0x00000000",
+"0x00000000",
+"0x3dcd3625"
+],
+"dir": [
+"0xbf65f8f0",
+"0xbe9c2cb8",
+"0x3ea1e08e"
+],
+"speed": "0x3d3866a9",
+"paintDir": [
+0.0,
+2.200000047683716
+]
+},
+{
+"age": 4,
+"near": false,
+"seed": 111,
+"pos": [
+"0x00000000",
+"0xbd28c2dd",
+"0x41158952"
+],
+"dir": [
+"0xbf7150f4",
+"0x3e5b93ec",
+"0x3e82fb6f"
+],
+"speed": "0x3d370d62",
+"paintDir": [
+0.0,
+0.9276799559593201
+]
+}
+]
+}
+]
+}

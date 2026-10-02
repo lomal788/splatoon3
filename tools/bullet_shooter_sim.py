@@ -113,9 +113,13 @@ def simulate(p, v0, frames, spawn_speed=None, pos0=(0, 0, 0)):
     spawn_speed = F(p["SpawnSpeed"] if spawn_speed is None else spawn_speed)
     state, sframe = initial_state(p), 0
     v = np.array(v0, F)
+    l0 = sqrt32(F(v @ v))
+    if F(0) < l0:
+        v = (v * F(spawn_speed / l0)).astype(F)  # 생성 정보 dir × speed (슬롯 15 초기 속도)
     pos = np.array(pos0, F)
     rows = []
-    for age in range(1, frames + 1):
+    for tick in range(1, frames + 1):
+        age = tick - 1  # 원본 age(+0x134): 시작 처리가 −1을 쓰고 갱신마다 먼저 ++ (shooter_bullet.md §3.3 정정)
         if age == 1:
             l = sqrt32(F(v @ v))
             if F(0) < l:
@@ -125,9 +129,10 @@ def simulate(p, v0, frames, spawn_speed=None, pos0=(0, 0, 0)):
             state, sframe = state + 1, 0
         else:
             sframe += 1
-        v = out
+        if age != 0:
+            v = out
         pos = (pos + v).astype(F)
-        rows.append({"age": age, "state": ["GoStraight", "Brake", "Free"][state], "stateFrame": sframe,
+        rows.append({"age": tick, "bulletAge": age, "state": ["GoStraight", "Brake", "Free"][state], "stateFrame": sframe,
                      "vel": [float(c) for c in v], "pos": [float(c) for c in pos]})
     return rows
 
