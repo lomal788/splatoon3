@@ -55,7 +55,7 @@
 **placement.json**
 ```
 { version:1, map, source, units,
-  actors: [{ hash:"<u64 10진 문자열>", instanceId, name, gyml, className|null, pos:[x,y,z], rot:[rx,ry,rz](rad), scale:[..],
+  actors: [{ hash:"<u64 10진 문자열>", instanceId, name, gyml, className|null, pos:[x,y,z], rot:[rx,ry,rz] (rad), scale:[..],
              team, layers:[..], bakeable, params:{원본(spl__*, game__*)}, links:[{dst:"<해시>", name}] }],
   actorTypes: { <gyml>: { className, actorChain[], models[](fmdb 이름), gameParameterTable, phive?:{ shapes{이름:{file,...ShapeParam 원본}}, rigidBodies{이름:{file,...RigidBodyEntityParam 원본}} } } },
   rails: [ Banc Rails 원본(Hash→hash 문자열, Points[].hash) ], aiGroups: [ 원본 ] }

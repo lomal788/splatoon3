@@ -78,7 +78,13 @@ pose' = pose (this+0x144 사본) ; pose'.pos += sum                         // p
 ```
 
 - 쉐이크는 **카메라 위치만 월드 축으로 평행이동**합니다. 회전(쿼터니언)은 바꾸지 않으므로 시선 방향은 그대로이고 화면 전체가 Axis 방향으로 흔들립니다. Axis 기본 (0,1,0) = 월드 위아래 [판독].
-- 플레이어 카메라(spl:PlayerCamera) 출력이 이 모듈의 활성 포저 포즈로 들어가는 연결(PlayerCamera `this+0x60` 출력 포인터의 대상)은 확인하지 않았습니다 [추정 — 대전 카메라도 이 모듈을 거침].
+- 플레이어 카메라(spl:PlayerCamera) 출력이 이 모듈의 활성 포저 포즈로 들어가는 연결은 [미확정]입니다(대전 카메라도 이 모듈을 거친다는 것은 [추정]). 2026-10-03 진행 [판독]: 활성 포저 설정 함수는 0x7101010de0(`this+0x120 = 포저`, 포저 vt+0x20 호출 뒤 vt+0x30(&this+0xd4)로 포즈 복사)입니다. PlayerCamera의 `+0x60`은 자기 `+0x30`을 가리키는 내부 출력이라([player_camera.md](player_camera.md) §4.2) 모듈과의 연결은 별도 포저 객체를 거칩니다. 플레이어 쪽 호출 0x710233dbd4·0x710233e050·0x710233e270(꼬리 분기 `b 0x7101010de0`)이 소유 객체+0x160의 포저를 넘기며, 이 포저는 0x710233c414가 할당합니다. 다음 근거: +0x160 포저의 클래스·vt+0x30이 PlayerCamera의 +0x30/+0x70/+0x7c를 읽는지.
+- 정정(2026-10-03 6차, [r6 camweapon]) [판독]: 위의 0x710233dbd4·0x710233e050·0x710233e270과 +0x160 포저(할당 0x710233c414)는 플레이어 카메라 경로가 아닙니다. 소유 객체의 초기화 0x710233c414가 상태 `State::Control`, `State::SelfTimer`, `State::Capture`, `State::Amiibo`를 등록하므로, 이것은 촬영(사진·amiibo) 컨트롤러입니다(`analysis/decomp/r6_camweapon/poser.c`). 이전 판의 "플레이어 쪽 호출"은 주소 범위만 보고 붙인 이름이라 철회합니다.
+- 모듈+0x120(활성 포저) writer 전수 [판독] (`web/tools/bl_callers.py 0x7101010de0`, 모듈 경로 자료 흐름 스캔):
+  - setPoser 직접 호출은 bl/b 36곳입니다. 이 가운데 `0x7102d1f8a4`·`0x7102d1fae0`은 `Coop_Result_Default`/`Coop_FinalResult` CameraPoserFixedParam 포저(생성 0x7102d1e8b0/0x7102d1e8e0)를 넘깁니다.
+  - 인라인 쓰기는 4곳입니다. `0x7100fc76ac`(요청 객체+0x28 포저, +0x40 보간 이름 → `0x7101012fac`/`0x7101017ba8` 보간, 직접 호출자 없음 = 가상 함수), `0x7102121bcc`, `0x710221e1c8`(SupplyPoint 포저), `0x71022221dc`입니다.
+  - PlayerCamera vtable(0x7105633960)은 포저 인터페이스(vt+0x20 활성, vt+0x28 갱신, vt+0x30 포즈 복사)와 슬롯 의미가 다릅니다(슬롯5·6 = 소멸자). 따라서 PlayerCamera 자체가 포저로 들어가지는 않습니다.
+- 다음 근거: 0x7100fc7654의 vtable과 그 요청을 만드는 쪽, 0x7102121034. PlayerCamera 포즈(this+0x88, 0x7101016d0c가 만드는 위치·쿼터니언·거리)를 읽는 포저 클래스를 찾아야 합니다.
 
 ### 3.2c gain 출처 [판독]
 
@@ -122,7 +128,7 @@ ELink 처리 함수는 시스템 파라미터 인덱스 표(`*x28 + 0x3b0..`)로
 | ZigZagLoop | Linear ±0.5 교대 | 16 | 0.1 | ○ | 기본 | 0.05 | 1 |
 | ZigZagStrongLoop | Linear ±0.5 교대 | 20 | 0.2 | ○ | (0,1,0) | 0.1 | 1 |
 | SpinnerShooting | Sin (0.18 주기/프레임, 진폭 1) | 20 | 0.02 | ○ | 기본 | 0.02 | 1 |
-| FootPaintEnemy | Hermit 9키 | 50 | 0.12 | ○ | (0,1,0) | 0.0825 | 0 (코드 직접 호출 [추정]) |
+| FootPaintEnemy | Hermit 9키 | 50 | 0.12 | ○ | (0,1,0) | 0.0825 | 0 (코드 직접 호출: HUD 관리자 0x710275c1ac, §3.2c [판독]) |
 
 Fuwa 계열 Hermit 데이터는 (값, 접선) 쌍이 전부 값 0이고 접선만 있어, 키 사이에서 부호가 바뀌는 감쇠 진동이 됩니다. FuwaStrong은 첫 접선이 1.58로 Fuwa(4.58)보다 작아서, Scale이 0.3으로 더 큰데도 gain 1 기준 최대치(0.1228)가 Fuwa(0.2422)보다 작습니다. 이름과 반대이지만 데이터 그대로입니다 [데이터+재구현 계산]. 실제 세기는 gain에 따라 달라집니다.
 
@@ -162,7 +168,7 @@ Fuwa 계열 Hermit 데이터는 (값, 접선) 쌍이 전부 값 0이고 접선�
 - 로더: 문자열 `CameraAnimation/%s.camera.bfres`를 0x71010193b4가 참조합니다(game::CameraAnim 계열) [판독-부분]. 애니 재생 갱신 0x7101014770은 bfres 카메라 애니(위치·회전 행렬)와 DOF 값(+0x38..+0x50, 기본 0.4/5/5/10)을 함께 보간합니다 [판독-부분].
 - 대전 시작/결과 데모는 `Model/DemoCamera.bfres` 안 `Work/Model/Etc/DemoCamera/output/StageInDemo00_%sL/R.camera.fsnb`, `StartCam00_VS.camera.fsnb`, `Result_Win00.camera.fsnb` 같은 장면 이름을 씁니다 [데이터 — 문자열].
 - 고정 카메라 포즈: `Gyml/*.game__CameraPoserFixedParam.bgyml` 9개(Vss_* 스테이지 뷰 등).
-- bfres 카메라 애니(FSCN) 변환은 [graphics]의 BfresLibrary로 가능한지 확인하지 않았습니다 [미확정].
+- bfres 카메라 애니(FSCN) 변환은 [graphics]의 BfresLibrary로 가능한지 확인하지 않았습니다. **범위 밖(2026-10-03)** [데이터]: 위 25개 파일은 히어로 모드 데모·보스·광장·스태프롤·플레이어 생성용이고, 사격장(Lby_Lobby00)과 대전에는 카메라 애니 파일이 없습니다.
 
 ## 6. 히트 피드백 연결점
 
@@ -172,21 +178,36 @@ Fuwa 계열 Hermit 데이터는 (값, 접선) 쌍이 전부 값 0이고 접선�
 
 ## 7. 컨트롤러 진동 파형 (.bnvib)
 
-### 7.1 구조 [데이터], 해석 [추정]
+### 7.1 구조와 디코드 — 확정(2026-10-03, [r5 camweapon]) [실행]+[판독]+[데이터]
+
+디코더는 SDK 모듈 `extracted/exefs/sdk.img`의 `nn::hid::detail::ParseVibrationFile`(sdk+0x24aa70)과 `nn::hid::detail::RetrieveVibrationValue`(sdk+0x24ab90)입니다(동적 심볼). 두 함수 모두 다른 함수를 부르지 않는 리프입니다.
 
 ```
-u32 metaSize      // 4 또는 0xC (115개 중 루프 15개가 0xC)
-u16 format        // 전부 3
-u16 sampleRate    // 전부 200 (Hz)
-[metaSize==0xC] u32 loopStart, u32 loopEnd     // 샘플 인덱스 [추정]
-u32 dataSize
-dataSize/4 × { u8 ampLow, u8 freqLow, u8 ampHigh, u8 freqHigh }   // 순서 [추정]
+// ParseVibrationFile(info, ctx, file, size)  [판독]
+u32 metaSize   @0   → info+0      // < 4 이면 오류
+u16 format     @4   → info+4      // != 3 이면 오류
+u16 sampleRate @6   → info+6      // != 200 이면 오류
+if metaSize >= 0xC:  isLoop(info+0x10) = 1, loopStart(+0x14) = u32 @8, loopEnd(+0x18) = u32 @0xC   // loopStart > loopEnd 이면 오류
+                     loopInterval(+0x1C) = metaSize >= 0x10 ? s32 @0x10 (음수면 오류) : 0
+else:                isLoop = 0, loopStart = 0, loopEnd = 샘플 수, loopInterval = 0
+u32 dataSize @ metaSize+4 → info+8 ; 샘플 수 = dataSize >> 2 → info+0xC   // 루프면 loopEnd > 샘플 수 오류
+ctx+0 = file + metaSize + 8 (샘플 시작), ctx+0xC = 샘플 수 ; 8 + metaSize + dataSize > size 이면 오류
+
+// RetrieveVibrationValue(value, i, ctx)  [판독]
+b = ctx.samples + 4*i
+value.amplitudeLow  = f32(b[0]) / 255f
+value.frequencyLow  = T[b[1] & 31] * f32(10 << (b[1] >> 5))
+value.amplitudeHigh = f32(b[2]) / 255f
+value.frequencyHigh = T[b[3] & 31] * f32(10 << (b[3] >> 5))
+// T = sdk+0xaceb9c, f32 32개 = 2^(k/32) 를 소수 6~7자리로 적은 값(정확한 2^(k/32) f32 와는 3개만 같음, 최대 차 4.9e-7) [데이터]
 ```
 
-- 115개 전부 `8(+8) + 4 + dataSize = 파일 크기`가 맞습니다 [데이터].
-- 주파수 코드 `f = 10·2^(code/32) Hz`로 보면 0x80=160Hz, 0xA0=320Hz(HD 진동 기본 저역/고역), `Simple240Hz`의 0x93=241Hz가 맞아떨어집니다 [추정 — 강함].
-- 진폭 코드 0~255의 선형/로그 여부 [미확정]. 3차 확인: bnvib 디코드는 SDK `VibrationPlayer::Load`/`OnNextSampleRequired`(main 밖 동적 라이브러리)가 하므로 **게임 코드로는 판독할 수 없습니다**. 게임은 디코드된 샘플에 위 변조(이득·주파수 배율)만 겁니다.
-- 길이: 15ms(ARMS_CmnShort*) ~ 7.89s(보스 비명). 요약 `analysis/camera/bnvib_summary.json`.
+- 루프 칸은 **샘플 인덱스**이고, 샘플은 **{저역 진폭, 저역 주파수, 고역 진폭, 고역 주파수}** 순서이며, 진폭은 **선형(바이트/255)**입니다. 주파수는 `10·2^(code/32)`에 가깝지만 비트 일치를 위해서는 SDK 표 T를 그대로 써야 합니다. 0x80 → 160Hz, 0xA0 → 320Hz, 0x93 → 10·2·T[19] ≈ 241.83Hz.
+- 원본 실행 `PY web/tools/r5_camweapon_bnvib_emu.py`: `analysis/camera/rumble_bnvib/` 115개 파일의 헤더 정보 115/115, 전 샘플 **30,240/30,240** 이 독립 디코더(위 식 + 표 T)와 비트 일치했습니다. 스텁 없음. 결과 `analysis/completion/r5/camweapon_bnvib_emu.json`. 루프 파일 15개는 모두 metaSize 0xC(loopInterval 0)입니다(예: PresetGataGataLv 7..801, Simple240HzLoop 1..5).
+- 115개 전부 `8(+8) + 4 + dataSize = 파일 크기`가 맞습니다 [데이터]. 길이: 15ms(ARMS_CmnShort*) ~ 7.89s(보스 비명). 요약 `analysis/camera/bnvib_summary.json`.
+- 정정(2026-10-03): 같은 날 앞 판은 "디코드가 main 밖 SDK라 판독할 수 없다 → [확정 불가]"로 적었습니다. SDK NSO 해제본(`sdk.img`)의 동적 심볼로 디코더를 찾아 실행할 수 있으므로 틀린 근거였습니다. 그보다 앞의 추정 기록: "루프 칸 = 샘플 인덱스 [추정]", "순서 [추정]", "주파수 `f = 10·2^(code/32)` [추정 — 강함]", "진폭 선형/로그 [미확정]" — 모두 위로 확정했고, 주파수는 표 기반으로 정정했습니다.
+
+**재생(VibrationPlayer::OnNextSampleRequired, sdk+0x251908) [판독]**: 생성자(sdk+0x251338)가 재생 속도 +0x58 = 1.0, 누산기 +0x5c = 1.0을 둡니다. `SetPlaySpeed`(sdk+0x2518a4)는 음수가 아니면 +0x58에 씁니다. 매 요청마다 정지(+0x39 = 0)이거나 지연 카운터 +0x54 > 0이면 무음 `{0, 160, 0, 320}`을 내고 지연을 1 줄입니다. 그렇지 않으면 누산기 < 1이면 `누산기 += 속도`만 하고 출력은 바꾸지 않으며(직전 값 유지), 누산기 ≥ 1이면 `누산기 −= 1`마다 현재 위치 +0x40의 샘플을 꺼내고 위치를 1 늘립니다(속도 > 1이면 한 요청에 여러 샘플을 건너뛰고 마지막 값이 남음). 루프(+0x3b)면 loopEnd(+0x48) 이상에서 loopStart(+0x44)로 돌아가고(간격 +0x4c 처리 포함), 루프가 아니면 위치 ≥ 샘플 수(+0x6c)에서 재생 끝(+0x3a = 0)·무음입니다. 따라서 게임의 `SetPlaySpeed(1/Stretch)`는 샘플을 Stretch배 길게 유지합니다.
 
 ### 7.2 ELink 진동 파라미터 적용 [판독, 3차 — effect_sound]
 
@@ -224,7 +245,7 @@ for 각 연결 i:  c = 컨트롤러별 이득 표[i], m = 노드 기본 변조 {
 |---|---|
 | `SeadCurve` | Linear/Hermit/Step/Sin/Cos/SinPow2 (camera_feel.md §4.4) |
 | `CameraShake` | 인스턴스 {param, frame, elapsed, gain, frameLimit, owner}, 매 프레임 `out = Axis·curve·gain·Scale`, 루프/종료/소유자 소멸. 살아 있는 인스턴스 out 합을 **카메라 위치(월드)**에 더하고 회전은 그대로(§3.2b). gain은 §3.2c |
-| `RumblePlayer` | bnvib 디코드 → Gamepad API `vibrationActuator.playEffect('dual-rumble', {strongMagnitude=ampLow/255·Gain, weakMagnitude=ampHigh/255·Gain, duration = 원래 길이 × Stretch})`. Gain은 매 프레임 다시 평가(곡선 Gain), Pitch는 주파수 배율이라 브라우저에서는 버림. 진폭 코드의 선형 해석(/255)은 [추정]. `CameraRumble`·`CtrlRumblePattern`은 무시(§3.2d) |
+| `RumblePlayer` | bnvib 디코드(§7.1 식, 진폭 = 바이트/255 [실행]) → Gamepad API `vibrationActuator.playEffect('dual-rumble', {strongMagnitude=ampLow·Gain, weakMagnitude=ampHigh·Gain, duration = 원래 길이 × Stretch})`. 원본 재생은 200Hz 샘플을 속도 1/Stretch 누산기로 유지·건너뜀(§7.1 재생) [판독]. Gain은 매 프레임 다시 평가(곡선 Gain), Pitch는 주파수 배율이라 브라우저에서는 버림(웹 선택). 저역/고역을 strong/weak에 대응시키는 것은 웹 선택입니다. `CameraRumble`·`CtrlRumblePattern`은 무시(§3.2d) |
 | ELink 연결 | `rumble_map.json`을 ELink 재생 이벤트에 붙여 쉐이크·진동 동시 시작 |
 
 웹에서 바뀌는 점: 브라우저 진동은 저/고역 세기와 길이만 지정할 수 있어 HD 진동의 주파수·피치·스트레치는 재현할 수 없습니다. 200Hz 샘플을 16.7ms 단위로 평균해 프레임마다 다시 걸면 진폭 엔벨로프는 따라갈 수 있습니다.
@@ -244,7 +265,9 @@ for 각 연결 i:  c = 컨트롤러별 이득 표[i], m = 노드 기본 변조 {
 | (해소) 쉐이크 적용 위치·좌표계, gain 출처, CameraRumbleFrame | §3.2b~3.2d. 남은 것: 카메라 모듈 +0x1c8(청자 위치) 정체 확인, PlayerCamera 출력 → 모듈 포저 연결 |
 | ELink `CameraRumble`(정수 0~5) 의미 | **해소** [판독]: 런타임이 읽지 않음(§3.2d). `CtrlRumblePattern`도 같음 |
 | 스피너 0x71025c7e98 반환값 의미 | 스피너 잉크액션 판독 |
-| bnvib 진폭 해석 | [미확정]: SDK 내부(VibrationPlayer)라 main 판독 불가. 실기 측정 또는 SDK 문서 필요 |
+| ~~bnvib 진폭 해석~~ | **해소**(2026-10-03 [실행]): 선형 바이트/255, SDK RetrieveVibrationValue 원본 실행 30,240샘플 일치(§7.1). 정정: 앞 판 "확정 불가"는 틀림 |
 | Pitch/Stretch/Gain 적용 | **해소** [판독] §7.2(주파수 배율·재생 속도 1/Stretch·진폭 배율). 핸들→보이스 칸 복사 경로만 남음 |
 | (해소) 슈터 발사 진동 — 직접 호출 없음(§4). 명중 진동 ELink 에셋은 여전히 못 찾음 | 피격자 쪽 진동은 SplPlayer `敵塗り踏み振動` 등 ELink |
-| `spl::RumbleAgent`, `RumbleModuleParam.LimiterParams` 동작 | 클래스 vtable 판독 |
+| `spl::RumbleAgent`, `RumbleModuleParam.LimiterParams` 동작 | 클래스 vtable 판독 (2026-10-03 미착수) |
+| ~~bnvib 루프·샘플 순서·주파수·진폭 해석~~ | **해소**(2026-10-03 [실행]+[판독]): §7.1. 남은 것: 게임 진동 관리자가 VibrationPlayer를 호출하는 주기(샘플 요청 간격)와 Mixer 압축기(sdk+0x2504dc) 적용 여부 |
+| PlayerCamera → 모듈 포저 연결 | 진행(§3.2b): setPoser 0x7101010de0. 6차 정정: 0x710233dbd4 계열·0x710233c414는 촬영(사진·amiibo) 컨트롤러 포저. 다음: 인라인 writer 0x7100fc7654(가상, 요청+0x28 포저)·0x7102121034, PlayerCamera+0x88 포즈를 읽는 포저 |

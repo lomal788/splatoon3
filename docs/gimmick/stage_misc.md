@@ -182,6 +182,17 @@ tangent(s) = R1 · R0ᵀ · normalize(dp/du)                 // +0xa8
 - 사용처: Yagara Vlf 12개(야구라 경로 주변, 예: (-11.9,2.5,11.25) 크기 3×6×4.5), Yunohana Vlf 20, Temple00 Vlf 16 + **Cmn PlayerDead 10개**(Y=51, 크기 12×3×18 — 맵 위 높은 곳), Scrap00 Vlf 16, Kaisou03 Vlf 10, District00 Vlf 8, Carousel Vlf 2 [데이터].
 - `PlayerUnsafe`/`PlayerDead` 태그를 플레이어가 어떻게 해석하는지(즉사, 안전 위치 기록 제외 등)는 [player]/[combat] 소관 **[미확정]**.
 
+**`Obj_LobbyKeepOutPlayerInSpecial`(로비, 2026-10-03 6차 [r6 assets])** — 형상은 위와 같은 단위 박스(ShapeParam `Box` 1개, HalfExtents 없음 → AutoCalc Min/Max = ±0.5 [데이터]), 프리셋 `SplKeepOutPlayer`·`PlayerUnsafe`, 몸 레이어 Ground·`EnableLayerHitMask SplKeepOutPlayer` [데이터]. 동작 클래스 `spl::ObjLobbyKeepOutPlayerInSpecial`(vt `0x71055fa488`, 생성 `0x7101f6a71c`) [판독]:
+
+| 슬롯 | 주소 | 내용 |
+|---|---|---|
+| 8 | `0x7101f6a868` | 강체 핸들 +0x108 = `0x7103a102f0(+0x110, 0)` |
+| 18 | `0x7101f6a898` | 매 프레임: 플레이어 관리자(`*0x7105791bd0` +0xd470 인덱스)에서 메인 플레이어를 찾아, 그 상태 +0x24 가 7~11 이 아니면 `0x7101701040`이 준 플레이어 객체의 [+0x108]+0xbf0 을 읽어 `v = (그 값 < 1)`, 그 밖(플레이어 없음·상태 7~11)은 `v = 1`. 끝에서 `0x7103ae4c48(강체, v)` |
+
+- `+0xbf0`은 본체 기준이면 `specialFramesLeft`(스페셜 남은 프레임, [../paint/special_gauge.md](../paint/special_gauge.md) §표 +0xbf0)입니다. 여기서 읽는 객체가 본체(D)인지는 `0x7101701040` 반환값의 +0x108 이 본체라는 가정입니다 **[추정]**.
+- `0x7103ae4c48(바디, bool)`은 바디 +0x88 비트11(0x800)을 켜고 끕니다([../combat/hitbox.md](../combat/hitbox.md) — 비트 의미 [미확정]). 같은 함수를 리스폰 무적이 끝나는 프레임에 (…, 0)으로, 슈퍼훅 cAttack 진입에 (ColBullet, 0)으로 부르므로 **1 = 판정 끔**으로 읽는 것이 일관됩니다 **[추정]**.
+- 따라서 이 벽은 **스페셜을 쓰는 동안(남은 프레임 ≥ 1)만 켜지고 평소에는 꺼져 있다**는 것이 이름과 일치하는 해석입니다 — 조건식은 [판독], 비트11 의미와 객체 정체는 [추정]. 웹 에셋은 이 박스를 정적 충돌에서 뺐습니다(평소 상태와 같음).
+
 ### 3.2 지형 충돌 재질 [데이터]
 
 지형(`Fld_<스테이지>`)의 충돌은 액터 팩 안 `Phive/Shape/Dcc/Fld_*.Nin_NX_NVN.bphsh` 하나입니다. 파일 끝의 재질표를 `web/tools/gimmick_phive.py`로 읽었습니다(결과 `analysis/gimmick/fld_phive_materials.txt`).
@@ -207,6 +218,9 @@ tangent(s) = R1 · R0ᵀ · normalize(dp/du)                 // +0xa8
 
 - `ChangePaintableArea`(Locator, 팀·Scale 박스): Yagara 78개(레이어별). 소비는 `spl::paint::ColPaintBuilder::setupChangePaintableArea_`(문자열 확인) → [paint] 소관 [데이터].
 - 지형 재질 태그 `ForceColPaint*`(§3.2)도 칠 가능 여부를 정합니다.
+  - 2026-10-03 6차 정리(원본 판독은 도색 문서 근거): 지형 아틀라스 생성 단계 `0x7102c0725c`는 MaterialCollection 21(Fence)·22(RopeNet) 삼각형과 UserShapeTag bit50(`ForceColPaintNotPaintable`) 삼각형을 버리고, bit48(`YPlus`)은 위 방향으로 강제하며, **bit49(`ForceColPaintPaintable`)는 보지 않습니다** [판독]+[실행] ([../paint/colpaint_atlas.md](../paint/colpaint_atlas.md) §4.1). 이 단계는 레이어(Ground/KeepOut 등)로 거르지 않습니다. 어떤 충돌(강체)이 대상 목록에 들어가는지(강체 +0x230 도색 대상 정보)는 [r6 paint] 진행 중이며 **[미확정]**입니다.
+  - 요청 단계: 접촉 재질 UserShapeTag bit29 `KebaInkCore`·bit30 `KebaInk`가 있으면 그 탄은 칠하지 않습니다 [판독] ([../paint/paint_and_score.md](../paint/paint_and_score.md) §3.3).
+  - 로비 `Lby_Lobby00` 충돌(웹 collision.json 52재질, 삼각형 6329)에는 `ForceColPaint*`·`KebaInk*` 태그가 하나도 없습니다 [데이터]. 로비에서 원본 규칙과 웹 `paintable`(layer == Ground)이 갈리는 곳은 Fence(재질 Fence, 460삼각형 — 둘 다 칠 불가)가 아니라 **KeepOut·PlayerThrough·CameraThrough·KeepOutBullet·Other 레이어 삼각형(합 902)** 쪽입니다. 원본 아틀라스 단계는 레이어로 거르지 않으므로 이 삼각형의 칠 여부는 대상 강체 목록에 달려 있습니다 [미확정].
 - `PaintTargetArea_Cube`(Var 레이어, 예 Yagara (0,4,0) 크기 22×5×17)는 가치에리어 영역 [데이터, 소관: 모드 규칙].
 
 ### 4.3 충돌 메시 [판독+데이터 — 해소]
@@ -220,7 +234,32 @@ tangent(s) = R1 · R0ᵀ · normalize(dp/du)                 // +0xa8
 | `LocatorVersusStart` | 경기 시작 위치(팀별) | `LocalLocator` StartPos0~3 |
 | `LocatorSpawner` | 리스폰 지점(팀별) | `spl__LocatorSpawnerBancParam.ToTarget_Cube` → `LocatorSpawnerTargetCube`(Scale 박스, 슈퍼점프 착지·방향 영역 [추정]) |
 
-`StartPos0..3` 국소 오프셋: (2.4,0,0.3), (0.8,0,-0.3), (-0.8,0,-0.3), (-2.4,0,0.3) — 4인 배치 [데이터]. 월드 위치 = Translate + R(Rotate)·오프셋. 레일 `Rotation`은 R = Rz·Ry·Rx(라디안)로 판독했고(§1.5), 액터 `Rotate`도 같은 규약으로 둡니다 **[추정 — 같은 Banc 형식, 액터 행렬 생성 함수는 미판독]**. (π,0,π)·(0,0,0) 배치에서는 순서와 무관합니다.
+`StartPos0..3` 국소 오프셋: (2.4,0,0.3), (0.8,0,-0.3), (-0.8,0,-0.3), (-2.4,0,0.3) — 4인 배치 [데이터]. 월드 위치 = Translate + R(Rotate)·오프셋. 레일 `Rotation`은 R = Rz·Ry·Rx(라디안)로 판독했고(§1.5), 액터 `Rotate`도 같은 규약으로 둡니다 ~~[추정 — 같은 Banc 형식, 액터 행렬 생성 함수는 미판독]~~. (π,0,π)·(0,0,0) 배치에서는 순서와 무관합니다.
+
+정정(2026-10-03, 6차 [r6 assets]): 액터 행렬 생성 함수를 찾아 원본 실행으로 확인했습니다. 액터 `Rotate`도 **R = Rz·Ry·Rx(라디안, x = Rotate[0])**이고 3×3은 **행 우선**으로 저장됩니다 **[실행]+[판독]** — §5.1.
+
+### 5.1 Banc 액터 배치 → 생성 정보 → 액터 [실행]+[판독 — 2026-10-03 6차]
+
+| 단계 | 주소 | 내용 |
+|---|---|---|
+| Banc 엔트리 파서 | `0x7103d03768`(호출 `0x7103cfdcd4`, 함수 `0x7103cfd608` 안) | BYML 키를 엔트리(스택 sp+0xa0)에 그대로 옮김: +0x00 `Translate` f32×3, +0x0c `Rotate` f32×3(라디안 원값), +0x18 `Scale` f32×3, +0x28 `Gyaml` 문자열, +0x38 `Hash`, +0x74 `Gyaml`이 "Work/"로 시작하지 않음, +0x75 유효(시작 시 0). 각 성분은 BYML 형식 0xd2(f32)일 때만 씀 [판독] |
+| 생성 정보 채우기 | `0x7103d03f4c(엔트리, 생성 정보, 부모 3×4)` — 람다 vt `0x710575cdf0` 슬롯0 `0x7103d01298`이 부름 | 엔트리 +0x75 == 0 이면 0 반환. 아니면 생성 정보 +0x40 위치 = P·T + P.t, +0x4c 3×3 = P.R · R(Rotate), +0x70 Scale = 엔트리 +0x18 그대로(곱하지 않음), +0x98/+0xa0/+0xb0~+0xcf 등 나머지 복사 [판독] |
+| 부모 3×4 P | 씬 섹션 객체(배열 관리자 +0x150, 0x2f0 B 간격) +0x260, 행 우선 3×4(평행이동 = [3],[7],[11]) | 섹션 생성 `0x7103cfa6bc~0x7103cfa6d0`이 단위 행렬(`0x7104a98200`)로 초기화. `0x7103cfc140(…, x6=행렬)`이 x6 이 있으면 그 값, 없으면 단위로 다시 씀. 호출자 `0x7100fcdda8`은 x6 = 0(단위), `0x71030e1290`(SplVersusResult / NewsStudio / SplCoopStartDemo 데모 씬)만 스택 행렬을 넘김 [판독]. 0x7103cc0000~0x7103d10000 범위에서 섹션 +0x260 의 다른 writer 는 없음 [판독, 범위 검색] → **로비·대전 맵의 P = 단위** |
+| 액터 초기화 | `0x7103cc30c4`(액터 [+0x348] = 생성 정보) | 액터 +0x28c 위치, +0x298..+0x2b8 회전 3×3(행 우선), +0x2bc 스케일, 초기값 사본 +0x25c 위치·+0x268..+0x288 회전 [판독] |
+
+```
+// 0x7103d03f4c — 행렬은 행 우선. sx = sinf(Rotate.x) … (SDK sinf/cosf, PLT 0x7103e9be40/0x7103e9be30)
+R = | cy·cz   (sx·sy)·cz − sz·cx   sx·sz + sy·(cx·cz) |       = Rz(z)·Ry(y)·Rx(x)
+    | sz·cy   (sx·sy)·sz + cx·cz   sy·(sz·cx) − sx·cz |
+    | −sy     sx·cy                 cx·cy             |
+pos  = P[:, :3]·T + P[:, 3]           // ((p0·Tx + Ty·p1) + Tz·p2) + p3 순서, FMA 없음
+rot  = P[:, :3]·R                     // 원소별 곱·덧셈 순서는 r6_assets_actor_mtx_emu.py reimpl() 그대로
+scale = Scale                          // 행렬에 곱하지 않고 따로 보관
+```
+
+- **검증** `PY web/tools/r6_assets_actor_mtx_emu.py` → `analysis/completion/r6/assets_actor_mtx_emu.json`: 원본 `0x7103d03f4c`를 unicorn으로 실행했습니다. 표본 4257건(로비 placement 257액터 실제 값 + 무작위 3000 + 단위가 아닌 부모 1000). 6가지 오일러 순서 × 행/열 우선 후보 중 **Rz·Ry·Rx · 행 우선이 4257/4257 최적**(최대 오차 1.3e-7), 명령 순서를 그대로 옮긴 f32 독립 재구현과 **위치 3·회전 9 원소 4257/4257 비트 일치**, 스케일 복사 4257/4257, 위치 불일치 0 [실행]. 순진한 f32 식(곱 순서 다름)은 2199/3257만 비트 일치합니다. 스텁: sinf/cosf 는 SDK(`extracted/exefs/sdk.img`) 원본 함수를 unicorn 으로 실행해 돌려줌(이름 기준 연결), 그 밖 PLT 호출 없음, 생성 정보를 0 으로 채워 `0x7103515cfc` 경로(+0xa8 bit7·+0xf8)는 타지 않음.
+- 레일 `Rotation`(§1.5 `0x71012fecec`)과 같은 규약입니다. 로케이터 판정이 읽는 생성 정보 +0xc..+0x2c([../range/shooting_range.md](../range/shooting_range.md) §6.6의 "생성 정보")는 이 표의 +0x4c..+0x6c(위치 +0x40 기준 +0xc)와 같은 칸이고, 행 우선 R 입니다.
+- **배치 행렬 T·R·S의 S 위치는 [미확정]**: 생성 정보·액터는 T, R(3×3), S 를 따로 보관하고 이 단계에서 S 를 곱하지 않습니다 [판독]. 액터 스케일이 바뀌면 `0x7100f76f78`(액터 갱신, `0x7100f78038~0x7100f780e8`)이 +0x2bc 를 쓰고 컴포넌트 목록(+0x208, 개수 +0x200)의 vt+0x50(이전, 새 스케일)을 부릅니다 [판독]. 모델 쪽 루트 행렬 설정 `0x7100f735b0`은 3×4의 열 길이를 축 스케일로 분해하므로 모델 행렬 = [R·diag(S) | T] 형태입니다([../graphics/player_assembly.md](../graphics/player_assembly.md) §6.1, [실행]). 액터 S 가 모델 유닛 스케일·Phive 형상에 어떻게 들어가는지(vt+0x50 수신자)는 추적하지 않았습니다 — 다음: 컴포넌트 vt+0x50 구현 중 모델 유닛 +0x268..+0x270 을 쓰는 것.
 
 리스폰 지점 **선택 규칙**(여러 Spawner 중 무엇을 쓰는지, 슈퍼점프 착지 박스 처리)은 [respawn] 담당 소관입니다. 이 문서는 배치 데이터만 제공하며, 조율 내용은 `analysis/notes/SHARED.md`([stage] 2026-10-02 3차 항목)에 올렸습니다.
 
@@ -317,3 +356,13 @@ if 아직 발사 안 함(this+0x31==0) and n < JumpGndFrm:
     this+0x31 = 1; 점프대 액터에 메시지
 ```
 `this+0x3c..+0x50`(점프대 속도 성분)의 출처와 `pre`(본체+0x730)의 정확한 의미, JumpDisableFrm 사용처는 **[미확정]**. v0 대전 배치가 없으므로 웹 대전 구현 대상이 아닙니다.
+
+## 8. 미확정 (2026-10-03 6차 [r6 assets] 갱신)
+
+| 항목 | 상태 | 다음에 볼 곳 |
+|---|---|---|
+| 액터 `Rotate` 순서·저장 | **해소** [실행]+[판독]: Rz·Ry·Rx(라디안), 행 우선, 부모 P = 단위(로비·대전) — §5.1 | — |
+| 배치 행렬의 S 합성 위치(T·R·S) | [미확정]: 생성 정보·액터는 S 를 따로 보관 [판독], 모델은 [R·diag(S)\|T] [실행, r5 gfx_char] | 액터 갱신 `0x7100f780e8`이 부르는 컴포넌트 vt+0x50 구현(모델 유닛 +0x268..+0x270, Phive 형상 스케일) |
+| Box `OffsetRotation`/`Center` 합성 순서 | [미확정]: 형상 파라미터 오프셋은 판독(기본 `OffsetRotation` +0x64·플래그 +0x7e, `OffsetTranslation` +0x70·+0x7f, Box `Center` +0x84·+0xa0, `ConvexRadius` +0x90·+0xa2, `HalfExtents` +0x94·+0xa1 — 방문 함수 `0x7103bcec10`·`0x7103bc8748` 뒤쪽). 설정 플래그+값 근접 패턴 전수 검색으로는 Box 형상 빌더를 못 찾음. 데이터 대조(`PY web/tools/r6_assets_box_autocalc.py [--compound]`, AutoCalc AABB 와 후보식)는 단일 Box 740개 중 OffsetRotation≠0 이 0개, 회전이 있는 복합 형상 42개는 후보 A/B 가 같은 7개만 맞아 판별 불가 | `phive__ShapeUnitBoxParam` 등록부(`0x7103bc2b68`, `0x7103bc93a0`)의 타입 객체를 쓰는 형상 생성 코드, 또는 hknpConvexPolytopeShape 생성 호출자 |
+| `Obj_LobbyKeepOutPlayerInSpecial` 켜짐 조건 | [판독] 조건식(§3.1), 비트11 = 판정 끔·+0x108 = 본체는 [추정] | 바디 +0x88 비트11 소비자(`0x7103b08540`~), `0x7101701040` 반환 객체 |
+| 칠 대상 강체 목록(레이어 KeepOut 등 포함 여부) | [미확정] — [r6 paint] 진행 중 | 강체 +0x230 writer, ColPaint TargetCollisionList |

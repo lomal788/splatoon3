@@ -39,7 +39,7 @@
  vt50 0x71025874b0  PreDelayFrame_SquidShot − SquidShotShorteningFrame 반환
 ```
 
-vt40이 실제로 "점프 시작"에서 불리는지는 호출자를 읽지 않았습니다 [추정 — 필드 이름 Jump_*와 대입값으로 판단]. 0x7102583008을 부르는 상위 상태 기계는 [player] 범위입니다.
+vt40이 실제로 "점프 시작"에서 불리는지는 [미확정]입니다(필드 이름 Jump_*와 대입값으로 본 [추정]). 0x7102583008을 부르는 상위 경로는 플레이어 슬롯 19 0x7102483134 → 0x7102486a40입니다([../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §3.5). 2026-10-03 시도 [r5 camweapon]: 플레이어 코드 0x7102300000~0x7102700000의 `ldr x8,[x8,#0x140]; blr` 가상 호출 22곳을 전수 확인했으나 대부분 본체+0xa670(GrindRail) 대상이고, 잉크액션 포인터(본체+0x588/+0x678)로 vt+0x140을 부르는 곳은 없었습니다(`analysis/r5_camweapon/scan_vt140.py`, `scan_vt140b.py`). 다음 근거: 점프 상태 진입(0x7102475a54 부근)에서 잉크액션 목록을 도는 공용 호출, 또는 PlayerInkAction 기반 클래스 vt+0x140의 다른 호출 형태([player]에 요청). 2026-10-03 6차 시도 [r6 camweapon]: 범위를 0x7102200000~0x7102a00000으로 넓혀 `ldr xN,[xM,#0x140]; blr xN`을 다시 스캔했습니다. GrindRail이 아닌 후보는 0x710248680c(플레이어 슬롯19 0x7102483134 안) 한 곳이었습니다. 이곳은 대상이 [sp+0x158] = x26(0x71024839b0 저장) 객체이고 반환값을 bool로 씁니다(`tbz w0`). vt40 0x7102580c4c는 +0x88에 카운터를 쓰고 반환값을 정하지 않는 함수라(0x7102580e08 저장 → 0x7102580e24 ret), 이 호출과 맞지 않습니다 [판독]. vt40의 vtable 참조는 PlayerInkActionShooter vtable 0x71056376a0 슬롯40 한 곳뿐이고, 썽크도 없습니다. 호출자는 여전히 [미확정]입니다.
 
 ## 4. 구조체·필드
 
@@ -125,7 +125,7 @@ else:
 ### 6.2 발사 방향 (0x71025839a8~0x7102583c64) [판독]
 
 ```
-rad = debugFlag(*(0x71058bbb78)+0x15) ? 0 : swerve * 0.017453292
+rad = debugFlag(*(0x71058bbb78)+0x15) ? 0 : swerve * 0.017453292   // 플래그 = 0 고정 [판독], 아래
 rng = seedRandom(frame, a, b, c, d)          // camera_feel.md §4.1
 r   = rng.getF32()
 u   = (r + r) + (−1.0)                       // [-1, 1)
@@ -138,8 +138,10 @@ dir = rotateY(aim, ang):  x' = x·cos + z·sin,  y' = y,  z' = z·cos − x·sin
 ```
 
 - 회전 축은 월드 (0,1,0) 고정입니다. 조준이 위/아래를 향해도 수평면에서 돕니다 [판독].
+- 디버그 플래그 — 해소(2026-10-03) [판독]: `0x71058bbb78` 블록은 정적 초기화 0x7102455db0이 채우고, `0x7102455f4c strh wzr,[x8,#0x14]`가 +0x14·+0x15를 0으로 둡니다. GOT 0x7105795dd8 경유 참조 223곳에서 +0x15 저장은 0건(`analysis/r5_camweapon/scan_got_direct.py`), 직접 참조는 정적 초기화와 이동 메인 읽기뿐입니다. 따라서 v0 제품판에서 흔들림 각은 항상 `swerve × π/180`입니다.
+- 시드 입력의 정체(2026-10-03) [판독, network 재사용]: F = GameFrame 싱글턴 +0x148, a..d = 대전 설정 RandomSeed0..3([camera_feel.md](camera_feel.md) §4.1). 사격장 실제 값은 [미확정].
 - 기대 분포: |u'| = |u|^e, e = −log2 b → E|각| = swerve/(e+1). bias 0.01이면 e=6.64(대부분 중앙), 0.25면 e=2, 0.5면 균등.
-- `aim`은 카메라 시선(+0x1a4) 또는 플레이어 +0x54c를 바탕으로 0x7102551fe0이 만듭니다. 이 계산은 [bullet]과 겹치므로 여기서 더 들어가지 않았습니다 [미확정].
+- 정정·추가(2026-10-03): aim 벡터 식·Shooter 파라미터 기본값은 [../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §5.5 [판독]/기존 [실행]으로 해소. 이전 조사 범위 기록: `aim`은 카메라 시선(+0x1a4) 또는 플레이어 +0x54c를 바탕으로 0x7102551fe0이 만듭니다. 이 계산은 [bullet]과 겹치므로 여기서 더 들어가지 않았습니다 [미확정].
 
 ### 6.3 연사 타이머 (0x7102551530, 구조체 기준 = PlayerInkActionShooter+0x68) [판독]
 
@@ -158,14 +160,16 @@ phase −= 1; return true
 - 대기 상태(트리거 안 누름, 0x710258295c): `phase = min(phase + inc, 1 − inc)`, `rem = (1−phase)/inc` → 대기가 길면 rem=1. 다음 프레임에 누르면 phase가 1에 닿아 **바로 발사**합니다.
 - `rem == 1`(±0.001)이 bias 감쇠 조건이므로, 연사를 멈춘 뒤 타이머가 대기 상태로 돌아와야 bias가 줄기 시작합니다.
 
-### 6.4 PreDelay [판독 — 값], 소비처 [미확정]
+### 6.4 PreDelay [판독 — 값·소비처]
+
+정정(2026-10-03): 아래 "상태 기계 미판독" 기록은 기존 weapon 구현 분석의 원본 근거를 본문에 반영하지 않은 상태였습니다. 실제 게이트는 H=`B+4d4≥2+PreDelay_Human` 및 `B+a90≥6+(PreDelay_Squid−Shortening)`이고, PostDelay=4는 자세 타이머/오징어 잠금에 사용됩니다. 원본 주소·필드와 기존 실행 범위는 [../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §3.5(검증 기록 [../weapon/solo_shooter.md](../weapon/solo_shooter.md)). 입력 writer와 정확 상태 집합은 별개 [미확정].
 
 | 함수 | 반환 | 스플래시슈터 |
 |---|---|---|
 | vt49 0x71025872a4 | PreDelayFrame_HumanShot | 0 |
 | vt50 0x71025874b0 | PreDelayFrame_SquidShot − SquidShotShorteningFrame | 4−1 = 3 |
 
-이름으로 보아 "인간 상태에서 ZR → 첫 발", "오징어 상태에서 ZR → 인간 변신 후 첫 발" 지연 프레임입니다 [추정]. 이 값을 쓰는 플레이어 상태 기계는 읽지 않았습니다. PostDelayFrame(4)은 0x7102583008 안에서 읽히지만 용도는 확인하지 않았습니다 [미확정].
+소비처 [판독]: vt49 값은 `B+0x4d4 ≥ 2 + PreDelay_Human`, vt50 값은 `B+0xa90 ≥ 6 + (PreDelay_Squid − SquidShotShortening)` 게이트에 쓰입니다(0x7102483134 안). PostDelayFrame(4)은 자세 타이머 0x71024b28b0과 0x7102583008의 ac4/ab8 갱신에 쓰입니다([../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §3.5). 정정(2026-10-03): 이전 "상태 기계는 읽지 않았습니다 / PostDelay 용도 [미확정]"을 해소로 바꿉니다. 이름 해석("오징어에서 ZR → 변신 후 첫 발")은 동작 명세에 필요하지 않습니다.
 
 ## 7. 표현·에셋 연결
 
@@ -190,7 +194,7 @@ phase −= 1; return true
   - 무기(WeaponShooter) 상태: +0x5d0 마지막 발사 프레임, +0x5d4 누적 회전각, +0x5d8 목록 인덱스(s8), +0x5d9 회전 방향, +0x5da 플래그.
   - 흐름: 먼저 일반 탄 1발을 같은 정보로 생성. 그 뒤 GameFrame(+0x148) f로 `f − last ≥ DegreeResetFrame`이거나 처음이면 last=f, 누적각=0, 인덱스 = sead::Random(f) 정수 % 목록 길이. 인덱스로 `DefaultDegree[idx]`를 읽고 idx++, 누적각 += (방향 ? +1 : −1)·AdditionDegreePerFrame·(f − last). 조준 방향을 축 A(0x71012500d4가 조준과 고정 벡터 `*0x7105791978`로 만든 축) 둘레로 **−CenterDegree** 기울이고(반각 쿼터니언), 그 벡터를 조준축 둘레로 **(누적각 + DefaultDegree[idx])°** 돌립니다 → 조준 둘레 반각 CenterDegree 원뿔 위를 프레임마다 도는 방향. 그 결과를 조준의 수평 직교축(aim.z, 0, −aim.x) 둘레 ±1° 회전으로 만든 두 경계 벡터와 내적해 음수면 그 성분을 빼고 재정규화(수직 방향 퍼짐을 약 ±1°로 제한)한 뒤 두 번째 탄을 SpawnSpeed로 생성합니다.
   - **CenterDegreeBias·CenterDegreeSwerve는 v0 코드에서 결과에 영향이 없습니다** — 2026-10-02 [camrest], 전체 분석 재디컴파일 `analysis/decomp/camrest/cam_main_full.c`(0x7102897640 = 6298~7362행)와 asm(0x7102898700~0x7102898930) 판독 [판독]:
-    - CenterDegreeBias(+0x60, 설정 플래그 +0x75): `|b − 0.5| > 0.001`이면 프레임 시드로 r를 뽑아 u = 2r−1, `e = ln|u|·ln b·(−1.442695)`를 계산하고, e가 범위(≤ 88, ≥ −103) **밖일 때만** `expf`(0x7103e9be20)를 부릅니다. 0x7102898824의 `bl expf` 다음 명령은 s0을 읽지 않고(x8 재적재 → 0x7102898834 `fcvtzs w19, s9`), 범위 안이면 expf 호출조차 건너뜁니다. 시드 상태는 지역 변수라 다른 난수에도 영향이 없습니다. 즉 bias 곡선 값은 계산되다 버려지는 죽은 코드입니다(libm 호출의 부작용 때문에 호출만 남은 형태로 봅니다 [추정]).
+    - CenterDegreeBias(+0x60, 설정 플래그 +0x75): `|b − 0.5| > 0.001`이면 프레임 시드로 r를 뽑아 u = 2r−1, `e = ln|u|·ln b·(−1.442695)`를 계산하고, e가 범위(≤ 88, ≥ −103) **밖일 때만** `expf`(0x7103e9be20)를 부릅니다. 0x7102898824의 `bl expf` 다음 명령은 s0을 읽지 않고(x8 재적재 → 0x7102898834 `fcvtzs w19, s9`), 범위 안이면 expf 호출조차 건너뜁니다. 시드 상태는 지역 변수라 다른 난수에도 영향이 없습니다. 즉 bias 곡선 값은 계산되다 버려집니다 [판독]. 정정(2026-10-03): 이전 판의 "libm 호출의 부작용 때문에 호출만 남은 형태 [추정]"은 원인 해석이라 명세에서 뺍니다. 웹은 이 계산 전체를 생략해도 결과·난수열이 같습니다(Diffusion은 사격장 대상 무기가 아님).
     - CenterDegreeSwerve(+0x64, 플래그 +0x74): 0x7102898838·0x71028988dc에서 플래그 +0x74로 **부모 체인만 걷고**, 함수 전체 asm에서 `[x, #0x64]` 읽기가 0건입니다(같은 함수의 파라미터 읽기는 +0x58 두 번, +0x5c, +0x60, +0x68, +0x6c뿐) [판독: asm 전수].
     - 따라서 웹 구현은 두 필드를 무시해도 원본과 같습니다. 난수 소비도 없으므로 생략해도 다른 난수열이 어긋나지 않습니다 [판독].
   - 대전 무기에는 쓰이지 않으므로 웹 1차 구현에서는 생략 가능합니다.
@@ -269,12 +273,12 @@ f 12 swerve=6.000 bias=0.0300 r=0.613704 u=+0.227408 ub=+0.000557 angle=+0.0033�
 
 | 항목 | 이유 | 다음 단계 |
 |---|---|---|
-| 시드 전역 F(+0x148)와 a..d(+0x124~0x130)의 정체 | 쓰는 쪽 미추적 | 0x7105850620 객체의 writer 검색, [network] 세션 시드와 대조 |
+| ~~시드 전역 F(+0x148)와 a..d(+0x124~0x130)의 정체~~ | 해소(2026-10-03 [판독, network 재사용]): F = GameFrame, a..d = 대전 설정 RandomSeed0..3(§6.2) | 사격장 런타임 값은 [../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §5.3 미확정 행 |
 | (해소) 점프 카운터 감소 조건 Q | 본체+0xc0 = 공중 프레임, 상수 4 | §5 — 남은 것: airFrames 증감 writer는 [player] 범위 |
-| vt40 호출 시점 | 호출자 미판독 | 플레이어 점프 상태 진입 코드 |
-| PreDelay/PostDelay 소비처 | 상태 기계 미판독 | vt49/vt50 호출자 |
-| 디버그 플래그 0x71058bbb78+0x15 | 쓰는 쪽 미확인 | — |
+| vt40 호출 시점 | vt+0x140 가상 호출 전수 스캔(플레이어 코드) 0건(§3). 6차: 0x7102200000~0x7102a00000 재스캔, 비GrindRail 후보 0x710248680c 는 반환값을 쓰는 다른 객체(x26) 호출이라 불일치 | 점프 상태 진입 0x7102475a54 부근 공용 잉크액션 호출, [player] 요청 |
+| ~~PreDelay/PostDelay 소비처~~ | 해소(2026-10-03): [../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §3.5, 2483134/24b28b0 [판독] | 입력 writer·상태 집합은 별개 미확정 |
+| ~~디버그 플래그 0x71058bbb78+0x15~~ | 해소(2026-10-03 [판독]): 정적 초기화 0, 저장 0건 → 항상 꺼짐(§6.2) | — |
 | 블래스터 전용 분기 유무 | §8 참고(경로·흐름은 해소) | 0x7102583008 무기 종류 판별 호출 전수 |
 | ~~Diffusion의 CenterDegreeBias/Swerve 사용처~~ | 해소(2026-10-02 [camrest]): 둘 다 결과에 영향 없음(asm 전수, §8) | — |
 | 듀얼 흔들림 각 출처·점프 흔들림, 스피너 발사 흔들림, VariableShot 상하 흔들림 | SpChariot는 슈터와 같은 계산으로 해소(§8) | 0x710254d018 디컴파일, 0x71025c0568/0x71025c154c, PitchDegSwerve(+0x50) 리더 |
-| logf/expf 비트 일치 | libm 구현 차이 | 실제 기기 값 필요 |
+| ~~logf/expf 비트 일치~~ | 해소(2026-10-03 [실행]): SDK sdk.img logf/expf 원본 실행. 흔들림 bias 29,971건 중 97건(각 94건) 웹 Math 근사와 다름, 최대 14ulp([camera_feel.md](camera_feel.md) §4.2). 정정: 앞 판 "확정 불가"는 틀림 | 비트 일치가 필요하면 SDK logf/expf 이식 |

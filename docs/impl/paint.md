@@ -63,7 +63,7 @@
 
 - 페이지 텍스처 = 코어 `Page.color`(같은 버퍼, 복사 없음), Linear 필터, 밉맵 없음.
 - 오버레이 = 칠 가능 충돌 삼각형, 법선 방향 0.02 띄움 + polygonOffset(−1, −4). 셰이더(MeshStandardMaterial onBeforeCompile): `m = max(R,G,B)`, `m < 0.3` 이면 discard, 아니면 최대 채널 팀의 Ink 색.
-- 팀 색: `team_color.json` `OrangeBlue` 행(render 와 같은 행) → `buildTeamSets(row, false, parseEnv(env.json).light)` 의 colors[9](Ink). 로비 env 는 render 와 같은 해석(lobby MainLight 색·세기).
+- 팀 색: `team_color.json` `OrangeBlue` 행(render 와 같은 행) → `buildTeamSets(row, false, parseEnv(env.json).light)` 의 colors[9] (Ink). 로비 env 는 render 와 같은 해석(lobby MainLight 색·세기).
 
 ## 2. 원본과 다른 점
 

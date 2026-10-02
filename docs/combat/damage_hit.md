@@ -6,7 +6,7 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 - 탄 이동(GoStraight/Brake/Free)과 탄 나이(age) 증가 순서: [weapon/shooter_bullet.md](../weapon/shooter_bullet.md) ([bullet] 담당). 여기서는 그 결과(age, 속도)를 입력으로만 씁니다.
 - 공용 사실 게시판: `analysis/notes/SHARED.md`, 함수 의미 표: `analysis/notes/FUNCS.tsv`(이 문서의 함수는 area=`combat`).
 
-상태: **분석 진행 중**. 탄 쪽 계산(데미지 감쇠, 충돌 반경, 넉백, 크리티컬 누적)과 수신 쪽 배율 적용은 판독을 마쳤습니다. 수신 이후의 **플레이어 HP 감소·자연 회복·적 잉크 지속 데미지·아머·사망 판정과 피해 적용 기기**는 [player_life.md](player_life.md)로 분리했습니다(HP 홀더는 원본 실행 일치). 남은 것은 §11. 웹 구현은 없습니다.
+상태: **분석 진행 중**. 탄 쪽 계산(데미지 감쇠, 충돌 반경, 넉백, 크리티컬 누적)과 수신 쪽 배율 적용은 판독을 마쳤습니다. 2026-10-03 [r5 combat]: 데미지 감쇠·반경·넉백·크리티컬 링·수신 결과 판정(이력 모드 1~6·시간 창 포함)·이력 나이·히트마커 플래그를 **원본 함수 실행(unicorn)으로 재구현과 비트 대조**했습니다(불일치 0, §10). 조준 히트마커 조건을 새로 판독했습니다(§6.7). 수신 이후의 **플레이어 HP 감소·자연 회복·적 잉크 지속 데미지·아머·사망 판정과 피해 적용 기기**는 [player_life.md](player_life.md)로 분리했습니다(HP 홀더는 원본 실행 일치). 남은 것은 §11. 웹 구현은 없습니다.
 
 ---
 
@@ -18,7 +18,8 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 4. 같은 팀 탄은 같은 팀 플레이어를 통과합니다(충돌 레이어 `SplInkBullet_FriendThrough`). 같은 팀 탄이 리시버에 닿더라도 결과는 `Through`이고 데미지는 0이 됩니다.
 5. 한 발(같은 샷 ID)의 탄 여러 개가 한 대상에게 합계 1000(100.0) 이상 맞으면 그 히트는 `CriticalHit`로 표시됩니다.
 6. 맞은 대상에게는 탄 진행 방향의 수평 넉백 벡터가 전달됩니다. 크기는 데미지에 따라 95에서 280까지 변합니다.
-7. 히트 결과(`Damaged`, `Armored`, `Invincible`, `Through` 등)와 무기 종류에 따라 `HitEffectConfig` 표에서 이펙트(E1/E2)와 사운드(S1/S2)를 고릅니다.
+7. 히트 결과(`Damaged`, `Armored`, `Invincible`, `Through` 등)와 무기 종류에 따라 `HitEffectConfig` 표에서 이펙트(E1/E2)와 사운드(S1/S2)를 고릅니다. 결과가 `Through`(0)이면 히트 이펙트 자체가 생기지 않습니다(§3.2).
+8. 조준 표시의 히트마커는 "지금 쏘면 맞을 대상"을 미리 보여 주는 표시입니다. 탄 궤적을 예측해 상대 팀 리시버에 닿으면 `WpShtrHitMarker`, 지형 등 리시버 없는 곳이면 `WpShtrFieldHitMarker`, 아무것도 없으면 히트마커 없이 가운데 점만 보입니다(§6.7).
 
 ## 2. 분석 대상 원본·버전·자료 위치
 
@@ -32,8 +33,8 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | 수신 측 파라미터 | 같은 폴더 `SplPlayer`, `Bullet*`의 `spl__DamageParam`(DamageReceiverArray / HitPointHolderArray / DamageSenderArray) |
 | 탄 형상 | Bootup 팩 `Phive/ShapeParam/BulletShooterBase.phive__ShapeParam.bgyml` → `analysis/combat/BulletShooterBase.phive__ShapeParam.json` |
 | 충돌 레이어 표 | [gimmick] 산출물 `analysis/gimmick/PhiveConfig.json` → 탄 행만 `analysis/combat/layer_filter_bullet.json` |
-| 디컴파일 | `analysis/decomp/combat/batch1~4.c`, 탄 vtable 전체 `analysis/decomp/bullet/BulletShooterBase_vt.c` |
-| 도구 | `web/tools/combat_damage.py`(재구현·검증), `combat_param_reader_scan.py`(파라미터 리더 위치 스캔), `combat_callers.py`(BL 호출자), `combat_vtname.py`(vtable 이름 반환 함수), `combat_layers.py`(레이어 표 추출) |
+| 디컴파일 | `analysis/decomp/combat/batch1~4.c`, 탄 vtable 전체 `analysis/decomp/bullet/BulletShooterBase_vt.c`, 조준 예측·PlayerCollision `analysis/decomp/r5_combat/b1~b3.c` |
+| 도구 | `web/tools/r5_combat_emu.py`(원본 함수 unicorn 실행 대조 A~F, 2026-10-03), `web/tools/combat_damage.py`(재구현·검증), `combat_param_reader_scan.py`(파라미터 리더 위치 스캔), `combat_callers.py`(BL 호출자), `combat_vtname.py`(vtable 이름 반환 함수), `combat_layers.py`(레이어 표 추출) |
 
 ## 3. 진입점과 전체 호출 흐름
 
@@ -53,7 +54,7 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 
 ### 3.2 접촉 시 (탄 쪽 → 수신 쪽)
 
-물리 접촉 콜백이 슬롯22를 부릅니다. 접촉 콜백을 부르는 시점(탄 갱신 전인지 후인지)은 확인하지 못했습니다 **[미확정]**.
+물리 접촉 콜백이 슬롯22를 부릅니다. 접촉 콜백을 부르는 시점(탄 갱신 전인지 후인지)은 확인하지 못했습니다 **[미확정]**. → 정정(2026-10-03 [r5 combat]): **[판독]**. 슬롯22는 물리 스텝 안이 아니라 `PhysicsContactReactionSequencer(Entity)`가 단계1 그룹0에서 큐를 비울 때 불리며, 이는 같은 프레임의 모든 액터 슬롯18과 Phive 월드 갱신 뒤, 슬롯19·20·21 앞입니다([physics/phive_controller.md §6.7](../physics/phive_controller.md), [r5 physics]). 그래서 이동 접촉의 첫 명중 age는 0입니다([hitbox.md §1](hitbox.md)).
 
 ```
 슬롯22 0x71017504f4  OnHit(this, contact)
@@ -74,10 +75,12 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
        슬롯100(no-op)(this, res)
        if BulletHitEffect(+0x158) && 슬롯72(=슬롯71 위임) 통과:
            슬롯97, 히트 방향 = normalize((1-k)*접촉법선 - k*속도방향), k=슬롯103=0.5
-           (*(this+0x1190))[0](…)        콜백 객체, 기본 vtable 0x710559c250 슬롯0 = ret
+           (*(this+0x1190))[0] (…)        콜백 객체, 기본 vtable 0x710559c250 슬롯0 = ret
            0x71016d99f4(BulletHitEffect, contact, 방향, &info) → 0x71016d9c60 히트이펙트 넷이벤트
   4. 0x7101646910(this, contact)         대상 종류에 따라 슬롯58/59/60 (바닥/벽/기타 착탄 처리, [bullet]/[paint])
 ```
+
+**히트 이펙트 발생 조건 [판독]** (2026-10-03 [r5 combat], `0x7101763310` 뒷부분·`0x71016d99f4`·`0x71016d9c60`): OnHit은 3단계의 `res`(리시버 결과의 최댓값)로 info 첫 칸을 덮어쓰고(`info[0] = res`, `info[1] = −1`) 히트 방향을 info+0x10..+0x18에 넣은 뒤 `0x71016d99f4`를 부릅니다. `0x71016d99f4`와 `0x71016d9c60`은 둘 다 **첫 칸(결과)이 0(Through)이면 바로 돌아갑니다**. 따라서 같은 팀 탄(결과 Through)이나 리시버가 없는 대상(막는 접촉이 없으면 결과 0)에는 히트 이펙트 이벤트가 생기지 않고, 지형처럼 리시버 없이 막는 접촉이면 결과 1(Constant)로 이벤트가 생깁니다. 이벤트는 `0x71027b4704(*0x7105798618, &event)`로 넘어갑니다(소비 쪽 [미확정], [effect_sound]). 이벤트 위치는 접촉 목록에서 첫 막는 접촉(+0x68 비트1, 없으면 첫 접촉)의 점이고, 쌍 방향 바이트 조건에 따라 그 접촉의 +0x30 값 × +0x10 벡터만큼 옮깁니다. 방향은 info+0x10이 NaN이 아니면 그 값, NaN이면 `0x71012d4f8c`가 접촉에서 구한 벡터입니다. 그 밖에 접촉 재질 값(+0x38/+0x48 중 쌍 방향으로 고른 u32)과 `0x71012d68cc` 결과 1비트를 넘깁니다 **[판독]**.
 
 ### 3.3 수신 쪽
 
@@ -160,8 +163,9 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | +0x0c..+0x14 | f32×3 | 넉백 벡터 | 0x7101e66c4c 결과. 리시버가 +0x1e0 배율을 곱함 |
 | +0x20.. | obj | 무기 식별(카테고리, 0, ID) | 0x7101a81a68 |
 | +0x58 | char* | DamageRateInfoRow 이름(버퍼 +0x64, 용량 0x40) | 0x7101a88920(카테고리, ID, ExtraInfo) |
-| +0xa8 | u8 | 리시버의 '반복 히트 제한' 무시 플래그 | 기본 1. 정확한 의미 **[미확정]** |
-| +0xac..+0xb8 | f32 | 높이 범위 판정용 | 리시버 +0x1ed 조건에서 사용 **[미확정]** |
+| +0xa8 | u8 | 리시버 **시간 창(R+0x1fc) 판정을 건너뜀**(0이 아니면 §6.4의 시간 창 블록을 실행하지 않음) **[판독 + 실행]**. 정정(2026-10-03 [r5 combat]): 이전 판의 "'반복 히트 제한' 무시 플래그, 의미 [미확정]"을 바로잡음(근거 `0x7101a876a4` `ldrb w8,[x20,#0xa8]; cbz → 시간 창`) | 기본 1 |
+| +0xa9 | u8 | 대상 상태·높이 검사 사용(§6.4 첫 줄) **[판독]** (2026-10-03 [r5 combat]) | |
+| +0xac / +0xb0 / +0xb4 / +0xb8 | f32 / f32 / f32 / u32 | 기준 높이 / 하한 / 상한 / 0이 아니면 높이 검사 생략. `h = 기준점.y − (+0xac)`, 기준점 = R+0x1f0(NaN이 아니면) 또는 리시버 액터(R+0x180)+0x28c 위치, `h < +0xb0` 또는 `h > +0xb4`면 결과 0 **[판독]** (`0x7101a87018`~`0x7101a87048`, 2026-10-03 [r5 combat]; 이전 "리시버 +0x1ed 조건에서 사용 [미확정]"). 이 값을 채우는 송신 쪽은 [미확정] | |
 
 ### 4.5 DamageReceiver (vtable `0x71055c96f8`, 생성 `0x7101a860f0`)
 
@@ -176,6 +180,7 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | +0x1b0 | 이력 최대 개수 | 데이터 `DamageHistMaxSize`(전부 64) |
 | +0x1b8 | 팀 판정 모드 | 1 (1=같은 팀 무시, 2=같은 팀이면 Cure) |
 | +0x1bc | 소속 팀 | 3(=없음) |
+| +0x1c0..+0x1c3 | u8×4 **팀별 히트마커 플래그**(팀 0~3). 조준 예측이 이 리시버에 닿을 때 `HitEffective`(1)인지 `HitConstant`(0)인지 결정 — §6.7 | 매 프레임 `0x7101a86be8`이 다시 계산 **[판독 + 실행]** |
 | +0x1c4 / +0x1cc | 추가 배율 / 사용 여부 | 0 / 0 |
 | +0x1c8 | 추가 배율 사용 시 결과 덮어쓰기(8=안 함) | 8 |
 | +0x1d0 | 판정 대상 아님일 때 결과 | 0 (Through) |
@@ -184,10 +189,13 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | +0x1dc | 중복 히트로 거부될 때 결과(결과>4일 때만 적용) | 0 |
 | +0x1e0 | 넉백 배율(NaN=안 곱함) | NaN |
 | +0x1e8 | 송신자 필터 모드 | 2 |
-| +0x1fc/+0x200/+0x204 | 시간 창 기반 데미지 허용(전역 카운터 비교) | 1 / 8 / 0. 의미 **[미확정]** |
+| +0x1fc/+0x200/+0x204 | 시간 창: 켜짐(u8) / 간격 겸 배수(s32) / 마지막 허용 카운터(부호로 상태 표시) — §6.4 시간 창 의사코드 **[판독 + 실행]** (2026-10-03 [r5 combat], 이전 "의미 [미확정]") | 1 / 8 / 0 (생성자 `0x7101a86344`~`0x7101a86360` [판독]) |
+| +0x208 | 히트마커 플래그 모드: 0 = 팀·추가 결과로 계산, 1 = 네 팀 모두 켬, 2 = 모두 끔, 그 밖 = 바꾸지 않음 | 0 (생성자가 +0x204와 함께 8바이트 0을 씀 `0x7101a86360` [판독]). 다른 writer는 못 찾음 [미확정] |
 | +0x20c | 무시할 팀 비트 마스크 | 0 |
 
 이 초기값 일부(+0x1b8, +0x1bc, +0x1d4 등)는 액터 쪽에서 나중에 덮어쓸 수 있습니다. 플레이어 리시버의 실제 팀 설정 값은 확인하지 못했습니다 **[미확정]**.
+
+**플레이어 리시버 설정 [판독]** (2026-10-03 [r5 combat], 이전 [미확정] 해소): 생성자 `0x7101a86314`~`0x7101a86320`이 +0x1b8 = 1(팀 모드 1), +0x1bc = 3(없음)을 쓰고, 플레이어 초기화 `0x71024719d4`(PlayerBehavior 함수 `0x71023538f0`이 꼬리 호출, 인자 본체+0xa5fc/+0xaf0/+0xa8d0/+0x9218/+0xa658)가 DamageHelper 리시버 목록(+0x50/+0x58)의 0번·1번 항목 리시버(데이터 순서로 보아 `Main`·`Chariot` [추정])에 **+0x1bc = 액터+0x668(팀), +0x1e8 = 0(송신자 필터 없음), +0x1fc = 0(시간 창 끔)** 을 씁니다(`0x7102471ad0`~`0x7102471ae4`, `0x7102471b94`~`0x7102471ba8`). 따라서 같은 팀 탄은 팀 모드 1 판정으로 결과 R+0x1d4(기본 0 = Through), 데미지 0입니다. 코옵 좀비가 되면 리스폰 리셋 `0x710249cb60`(`0x710249d2d8`~)이 +0x1bc = 1로, 좀비 해제 `0x71024b270c`(`0x71024b2804`~)가 다시 액터 팀으로 씁니다. `SighterTarget` 리시버는 `0x71021ef704`가 +0x1bc = (로컬 플레이어 팀 == 1 ? 0 : 1)을 씁니다.
 
 ### 4.6 DamageRateInfo 표 [데이터]+[판독]
 
@@ -234,7 +242,7 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | SplInkBullet_FriendThrough × SplInkShield / SplGreatBarrier / SplBluntWeapon | 2 | 2 | 0 |
 | SplInkBullet_FriendThrough × Ground / Water / SplObject | 2 | 2 | 2 |
 
-Same/Other 선택 규칙은 Havok 래퍼 쪽이라 코드로 확인하지 않았습니다 **[추정]**. 전체 행은 `analysis/combat/layer_filter_bullet.json`에 있습니다.
+Same/Other 선택 규칙은 Havok 래퍼 쪽이라 코드로 확인하지 않았습니다 **[추정]**. 전체 행은 `analysis/combat/layer_filter_bullet.json`에 있습니다. → 정정(2026-10-02 [combat4], 2026-10-03 확인): 쌍 판정 `0x7103af44e8`이 두 강체의 필터 객체(강체+0x180) +0x30(u16)을 비교해 하나라도 0이면 Default, 같으면 Same, 다르면 Other 표를 고릅니다 **[판독]** — [hitbox.md §3](hitbox.md). 단 탄 바디 래퍼의 필터 객체는 내부 바디+0x138에 있고(위 레이어 setter), 이 경로가 강체+0x180을 읽는 `0x7103af44e8`을 타는지, 탄 바디의 +0x30 값은 [미확정]입니다(hitbox §3 표).
 
 **`FriendThroughFrameForPlayer`(FTF)가 레이어를 바꿉니다 [판독]** (Phive `LayerEntityCollection` 순번 8 = `SplInkBullet`, 9 = `SplInkBullet_FriendThrough` [데이터]):
 
@@ -245,7 +253,7 @@ Same/Other 선택 규칙은 Havok 래퍼 쪽이라 코드로 확인하지 않았
     if 바디 레이어 == 9 && FTF >= 1 && FTF == age(+0x134): 바디.vt+0xb0(8)  // 0x7101763f4c~0x7101763f6c
 ```
 
-즉 데이터(`BulletBodyEntityParam`)가 `SplInkBullet_FriendThrough`여도 **FTF가 0이면 시작하자마자 `SplInkBullet`(8)로 바뀌고**, FTF>0이면 그 나이가 될 때까지만 FriendThrough입니다. vt+0xc0/+0xb0을 "레이어 읽기/설정"으로 본 것은 값 8/9가 레이어 순번과 맞는 데서 나온 **[추정]**입니다. 데이터 분포: FTF 0이 60개, 2가 28개, 3이 39개, 4가 5개, 1000이 13개, 1200이 1개(GameParameterTable 전수, 슈터 `WeaponShooter*`는 0). 같은 팀 탄이 `SplInkBullet`(8) 상태로 같은 팀 플레이어에 닿아도 리시버 결과는 Through·데미지 0입니다(§6.4). 물리적으로 막히는지는 Same 표 해석(위 [추정])에 달려 있습니다. 위 표의 '탄 레이어 = FriendThrough'는 데이터 기준이며 실행 중 레이어는 이 규칙을 따릅니다(정정).
+즉 데이터(`BulletBodyEntityParam`)가 `SplInkBullet_FriendThrough`여도 **FTF가 0이면 시작하자마자 `SplInkBullet`(8)로 바뀌고**, FTF>0이면 그 나이가 될 때까지만 FriendThrough입니다. vt+0xc0/+0xb0을 "레이어 읽기/설정"으로 본 것은 값 8/9가 레이어 순번과 맞는 데서 나온 **[추정]**입니다. → 정정(2026-10-03 [r5 combat]): **[판독]**. 탄 바디 래퍼(vtable `0x710559f3f8`/`0x710559f698`, 슬롯4 `0x71016caf20`·슬롯5 `0x71016cafc0`과 같은 표)의 vt+0xb0 = `0x71016cb4c0`이 내부 바디(vt+0x90)의 필터 객체(+0x138)+8 **비트0~5에 값을 넣고**(`bfxil w9, w19, #0, #6`), vt+0xc0 = `0x71016cb538`이 같은 비트를 읽습니다(`and x0, x8, #0x3f`). 바로 다음 슬롯 `0x71016cb4fc`는 비트6~11(하위 층)을 씁니다. 데이터 분포: FTF 0이 60개, 2가 28개, 3이 39개, 4가 5개, 1000이 13개, 1200이 1개(GameParameterTable 전수, 슈터 `WeaponShooter*`는 0). 같은 팀 탄이 `SplInkBullet`(8) 상태로 같은 팀 플레이어에 닿아도 리시버 결과는 Through·데미지 0입니다(§6.4). 물리적으로 막히는지는 Same 표 해석(위 [추정])에 달려 있습니다. 위 표의 '탄 레이어 = FriendThrough'는 데이터 기준이며 실행 중 레이어는 이 규칙을 따릅니다(정정).
 
 ### 4.9 기어 파라미터(피격 관련) [판독 — 생성자 기본값, 데이터 파일에는 값 없음]
 
@@ -286,7 +294,7 @@ HitPointHolder가 데미지를 HP에서 빼는 코드: `spl:DamageHelper`가 대
 
 ## 6. 계산식·조건·상세 의사코드
 
-### 6.1 슈터 데미지 감쇠 — `0x71017506d0` [판독]
+### 6.1 슈터 데미지 감쇠 — `0x71017506d0` [판독 + 실행]
 
 `ldr w20,[x25,#0x38]` / `ldr w28,[#0x3c]` / `ldr w27,[#0x34]` / `ldr w8,[#0x30]` 다음 꼬리 명령(0x7101750c14~0x7101750c64)을 그대로 옮겼습니다.
 
@@ -301,11 +309,12 @@ function shooterDamage(age, Max, Min, Start, End):   // 모두 s32
     return trunc_toward_zero(d)              // fcvtzs
 ```
 
+- **원본 실행 [실행]** (2026-10-03 [r5 combat]): `0x71017506d0`을 unicorn으로 그대로 실행해 위 재구현과 3,216건 비트 일치(실제 표본 7종 + 무작위 60종 × age −1~44·100·1000, DamageParam `$parent` 체인 1~3단·필드별 '설정됨' 플래그 무작위). 따라서 **필드별 `$parent` 해석 규칙**도 실행으로 확인됨: 자식부터 그 필드의 설정 플래그가 선 첫 노드의 값을 쓰고, 부모가 없거나 부모 핸들 세대가 맞지 않으면 그 노드의 값(생성자 기본값)을 씁니다. 명령 `web/tools/r5_combat_emu.py`, 결과 `analysis/combat/r5_emu_combat.txt`.
 - `+1` 때문에 age == Start에서 이미 1/denom만큼 줄어듭니다. 최솟값에는 age == End-1에서 도달합니다.
 - Max == Min이면 상수입니다. 블래스터 데이터가 이 경우입니다(Start -1, End 99).
 - 결과는 OnHit 시점의 age를 씁니다. **정정(2026-10-02 [combat4])**: age는 생성 시 0이 아니라 시작(`0x7101645590`, 명령 `0x7101645610`)이 **−1**을 써서 **첫 갱신이 age 0**입니다(이전 판의 "첫 갱신 뒤 age=1"은 틀림). 이동으로 생긴 첫 접촉은 age 0, 생성 위치 겹침은 age −1일 수 있으나 감쇠 시작 최솟값이 4라 첫 명중 데미지는 같습니다. 같은 비행 프레임에서 age가 이전 가정보다 1 작으므로 감쇠 곡선은 한 프레임 늦게 적용됩니다. 근거·프레임 순서 가정은 [hitbox.md §1](hitbox.md#1-탄-age는-1에서-시작한다-판독-명령-직접--정정).
 
-### 6.2 충돌 반경 — `0x71018a6b68`(Field), `0x71018a6fe4`(Player) [판독]
+### 6.2 충돌 반경 — `0x71018a6b68`(Field), `0x71018a6fe4`(Player) [판독 + 실행]
 
 ```
 function bulletRadius(age, Init, End, ChangeFrame):
@@ -314,7 +323,9 @@ function bulletRadius(age, Init, End, ChangeFrame):
     return max(Init + t*(End - Init), 0.02)    // fmax, 0x3ca3d70a
 ```
 
-### 6.3 크리티컬 누적 — `0x71016e6260` [판독]
+**원본 실행 [실행]** (2026-10-03 [r5 combat]): 두 함수를 CollisionParam 체인 1~3단(필드별 플래그 무작위), ChangeFrame 0·음수·양수, age −2~29·100으로 5,280건 실행해 재구현과 비트 일치. ChangeFrame이 음수면 `t = age/Change`가 음수 → 0이 되어 Init 쪽 값(0.02 하한)이 됩니다.
+
+### 6.3 크리티컬 누적 — `0x71016e6260` [판독 + 실행]
 
 ```
 function critAccumulate(mgr, contact, pIdx, shotKey, dmg, need=1000, needCount):
@@ -332,13 +343,22 @@ function critAccumulate(mgr, contact, pIdx, shotKey, dmg, need=1000, needCount):
 - `0x7101649a18`이 참이어야 합니다. 대상 쪽 객체를 형 검사합니다.
 - 공격자 ID가 플레이어 계열이고, 접촉 목록에 플래그 +0x8 bit4가 없어야 합니다.
 
+**원본 실행 [실행]** (2026-10-03 [r5 combat]): 같은 관리자 메모리에 3,000번 연속 호출(대상 3개 + 널, 쌍 방향 바이트 4조합, 플레이어 번호 0/1/2/9/10, key −1·증가, 필요 개수 1~3)해 반환값과 링 8칸 내용 모두 재구현과 일치. 실행으로 확인한 세부:
+- 빈 칸이 없을 때 교체 칸 = key를 **u32로 비교한 최솟값, 같으면 앞 칸**.
+- 대상 = 접촉 쌍 `C+0x38 → [0] → [0]` 객체의 +0x70(쌍 바이트 +8 == +9이고 비트0 = 1, 또는 다르고 비트0 = 0일 때; 단 +0x69 비트4면 0) 또는 +0x78. 대상이 널이면 칸에는 기록하되 결과는 거짓(need 1000 > 0).
+
 인자는 dmg=탄 원 데미지(+0x11f0, 배율 적용 전), needCount=생성정보+0x92 byte, shotKey=생성정보+0x94입니다. 어떤 무기가 needCount를 1보다 크게 주는지는 무기 쪽 코드를 봐야 합니다 **[미확정]**.
 
-### 6.4 수신 배율 — `0x7101a86ec0` (DamageReceiver 슬롯7) [판독]
+### 6.4 수신 배율 — `0x7101a86ec0` (DamageReceiver 슬롯7) [판독 + 실행]
 
 ```
 function computeResult(R, info, sender):
-    if info.flagA9 && (높이/필터 조건 실패): return reset(info, 0)
+    if info.flagA9:                                      // [판독] 0x7101a86ef0~0x7101a87048, 실행 안 함(+0xa9 = 0으로만 실행)
+        if R+0x1ed: 통과 조건 = R+0x1ec ≠ 0
+        else: comp = (R+0x180 액터)+0x510; comp 없으면 통과, comp+0x69 ≠ 0이면 comp+0x68 ≠ 0일 때 통과,
+              comp+0x69 == 0이면 [[[comp+0x18]+0x10]+8]+0x40 상태 표의 현재 항목 +8 == 0일 때 통과
+        통과 못 하면 return reset(info, 0)
+        if info+0xb8 == 0 && 높이 h가 [info+0xb0, info+0xb4] 밖: return reset(info, 0)   // §4.4
     // 송신자 필터 (R+0x1e8, 기본 2)
     if R.mode1e8 == 2: ok = sender.vt30()
     elif R.mode1e8 == 1: ok = sender.vt38() ? sender.vt30() : R.flag1e4
@@ -359,15 +379,25 @@ function computeResult(R, info, sender):
     if !isnan(R.kbRate): info.knockback *= R.kbRate
     switch sender.vt20():                                // 이력 모드 1~6, §6.4.1
        거부되면 result = (result > 4) ? R.res1dc : result 이고 데미지·넉백 0
-    if R.timeWindowOn && !info.flagA8: … 전역 카운터 기반 배수(0 또는 +0x200 값) [미확정]
+    if R.tw(+0x1fc) && !info.flagA8:                     // 시간 창 [판독 + 실행], 아래 설명
+        cur = max(*(*0x7105790610)+0x148, 0)             // 전역 카운터(정체 [미확정])
+        if |R.tw204| == cur: R.tw204 = −cur; mult = R.tw200
+        else:
+            if R.tw204 < 0: R.tw204 = R.tw200 − R.tw204  // = 마지막 허용 + 간격
+            if R.tw204 <= cur: R.tw204 = −cur; mult = R.tw200 else mult = 0
+        info.damage = fcvtzs(f32(mult) * f32(info.damage))
+        if mult == 0: info.knockback = 0                 // 결과는 그대로, 이력에도 데미지 0으로 들어감
     if info.damage > 99999: info.damage = 99998
-    이력에 {sender 참조, damage, key} 추가 (최대 R.histMax)
+    handle = sender.vt18(); if handle 없음 || handle.id == −1: return result   // 이력 기록 없음
+    if mode == 5: 같은 key(≥0) 항목 하나 삭제
+    if 개수 >= R.histMax: 가장 오래된 항목 삭제
+    이력 맨 앞에 {age 0, handle, info.damage, key(모드 5면 vt48, 아니면 −1)} 추가
     return result
 
 reset(info, r): info.damage = 0; info.knockback = 0; return r
 ```
 
-#### 6.4.1 수신 이력과 이력 모드 case 1~6 [판독] (2026-10-02 [respawn], 이전 [미확정])
+#### 6.4.1 수신 이력과 이력 모드 case 1~6 [판독 + 실행] (2026-10-02 [respawn], 이전 [미확정]; 실행 2026-10-03 [r5 combat])
 
 기준: DamageReceiver R. 이력은 R+0x170을 보초로 하는 이중 연결 목록입니다(+0x188 끝, +0x190 처음, +0x198 개수, +0x1a0 빈 항목 목록, +0x1b0 최대 개수). 항목(노드−0x18 기준) = `+0 f32 age(초)`, `+8 송신자 핸들(참조 카운트, 핸들+0x28 = id, −1이면 무효)`, `+0x10 데미지`, `+0x14 key`(모드 5일 때 vt48, 그 밖 −1).
 
@@ -384,11 +414,23 @@ reset(info, r): info.damage = 0; info.knockback = 0; return r
 | 6 | 1과 같은 판정, 거부되면 대신 모드 2 판정(간격 안이면 초과분만, 밖이면 전부) | vt18, vt28 |
 | 그 밖 | 이력 판정 없음 | |
 
-송신자(접촉 상대 액터+0x238) 쪽 구현 — 어느 클래스가 어떤 모드·간격·상한·key를 돌려주는지 — 는 찾지 못했습니다 **[미확정]**. 데이터 `DamageSenderArray`는 이름·강체뿐이라 값은 코드에 있습니다. 후보 vtable 자동 스캔(`web/tools/respawn_sender_vt.py`)은 조건을 만족하는 표가 6천 개를 넘어 결론에 쓰지 않았습니다.
+**원본 실행 [실행]** (2026-10-03 [r5 combat], `web/tools/r5_combat_emu.py` E): `0x7101a86ec0`(모드 2는 `0x7101a87edc`, 모드 3 사본은 `0x71017db2d4`까지 원본 실행)과 이력 나이 `0x7101a86dc8`을 무작위 리시버 60개 × 최대 40히트로 연속 실행해 결과·최종 데미지·넉백·시간 창 상태(+0x204)·이력 목록 전체(순서·나이·핸들·데미지·key)를 재구현과 비교, 3,823건 **불일치 0**. 모드별 거부 경로(1: 6, 2: 25, 3: 29, 4: 1, 5: 4, 6: 6회)와 시간 창 배수 0/1/8 경로를 모두 지났습니다. 실행으로 확인한 세부:
+- 이력은 R+0x188을 보초로 하는 이중 연결 목록이고 **새 항목은 맨 앞**(R+0x190), 가득 차면 **맨 뒤(가장 오래된 것)** 를 지웁니다.
+- 거부된 히트는 이력에 들어가지 않습니다(결과 = 결과 > 4면 R+0x1dc, 아니면 그대로; 데미지·넉백 0).
+- 모드 4·5의 "이번 프레임" = 항목 나이 `−FLT_EPSILON ≤ age ≤ FLT_EPSILON`. key 비교는 정수.
+- 모드 3 상한 계산은 info 사본으로 배율(같은 표 조회)·ObjectEffect_Up·R 추가 배율을 다시 곱합니다.
+- 송신자 필터 모드 1: `vt38()`이 참이면 `vt30()`, 거짓이면 R+0x1e4 바이트로 통과 여부를 정합니다.
+- **시간 창**: R+0x200 하나가 **간격**과 **배수**로 함께 쓰입니다(같은 레지스터 값으로 `sub`와 `scvtf` — `0x7101a87844`, `0x7101a87868`). 같은 카운터 값에서 다시 맞으면 계속 허용되고, 다른 카운터 값이면 마지막 허용 + 간격에 도달해야 허용, 그 전에는 배수 0(데미지 0, 넉백 0, 결과는 Damaged 그대로, 이력에는 0으로 기록). 탄 DamageInfo는 +0xa8이 기본 1이라 이 블록을 건너뜁니다. 어떤 info가 +0xa8 = 0을 쓰는지, 카운터 `*0x7105790610`(= 변수 `0x710580e758`)+0x148의 정체는 [미확정].
+
+스텁 범위(E): DamageRateInfo 조회 `0x7101a856e8`은 시나리오가 정한 배율을 돌려주는 스텁(표 조회 자체는 §4.6 판독), ObjectEffect_Up `0x7101a87aa0`은 아무것도 안 하는 스텁(기어 없음과 같음), 송신자 객체는 가짜 vtable, info+0xa9(높이 필터) = 0 고정이라 그 분기는 실행하지 않았습니다.
+
+**해소(2026-10-03 [r6 combat]) [판독]**: 송신자 클래스(vtable `0x71055bdfd0`)와 기본값(모드 0)·클래스별 functor 52개 표는 [hitbox.md §4](hitbox.md). **슈터 탄 = 모드 0(이력 판정 없음)**, 시간 창도 info+0xa8 = 1이라 건너뜀. 시간 창 카운터 `*0x7105790610` = 변수 `0x710580e758`(GOT 판독) = GameFrame 싱글턴, +0x148 = 게임 프레임 [판독, network 문서의 원본 실행 근거]. 리시버 +0x208 writer(DamageHelper 목록+0x58 경로 스캔): ShelterCanopyBase `0x710172f380`·BulletShield `0x71017458f4`와 연어런·미션 적(SakeBigMouth, Sakediver, Sakedozer, SakelienBomber/CupTwins/Shield, Sakerocket, EnemyRock 등)이 모두 2(히트마커 끔), EnemyCleaner는 1 또는 2. 플레이어·SighterTarget은 쓰지 않음 → 0 [판독].
+
+이전 기록: 송신자(접촉 상대 액터+0x238) 쪽 구현 — 어느 클래스가 어떤 모드·간격·상한·key를 돌려주는지 — 는 찾지 못했습니다 **[미확정]**. 데이터 `DamageSenderArray`는 이름·강체뿐이라 값은 코드에 있습니다. 후보 vtable 자동 스캔(`web/tools/respawn_sender_vt.py`)은 조건을 만족하는 표가 6천 개를 넘어 결론에 쓰지 않았습니다.
 
 `fcvtzs((rate+1e-5)*dmg)`에서 엡실론이 결과를 바꾸는 예가 있습니다. rate 0.344, dmg 843 → **290**(엡실론이 없으면 289) [재구현 계산].
 
-### 6.5 넉백 — `0x7101e66c4c` [판독]
+### 6.5 넉백 — `0x7101e66c4c` [판독 + 실행]
 
 인자는 `s0..s2`=up=(0,1,0), `w1`=info.damage, `x2`=속도, `x3`=`{f32 95.0, s32 300, f32 280.0, s32 2000, f32 0.0}`입니다(0x7101763368, 슬롯96은 빈 함수).
 
@@ -403,6 +445,8 @@ if up != 0 and dot(up, v) != 0:
 return v
 ```
 
+**원본 실행 [실행]** (2026-10-03 [r5 combat]): `0x7101e66c4c`를 슈터 파라미터 9건 + 무작위 400건(up 0·수평·임의, 속도 0 포함, blend 0/1/0.5/임의)으로 실행해 재구현과 409건 비트 일치. 슈터 값(up (0,1,0), 진행 방향 +Z) 크기: dmg 360 → 101.5294, 1150 → 187.5, 2500 → 280.0. 호출부 `0x71017633a8`~`0x71017633c8`에서 up = (0,1,0)(s0..s2 = 0, 1, 0), 속도 = 슬롯49(vt+0x188), dmg = info.damage, 파라미터 = 스택 {95.0, 300, 280.0, 2000, 0.0}(슬롯96 vt+0x300이 바꿀 기회)임을 명령으로 확인 [판독]. 속도가 0이면 넉백도 0입니다.
+
 플레이어가 받으면 리스너 0x71024632ec가 `v = 넉백 × (1/3600)`, `|v| ≤ 0.48`로 바꾼 뒤(×8.0 조건 = Chariot 사용 중·야구라 탑승 등, [hitbox.md §5.2](hitbox.md)) 0x71024c8318이 `v × 60 × 60`을 플레이어 물리 쪽 메시지로 보냅니다 **[판독]**(즉 95~280은 크기를 3600배로 표현한 값). 물리 쪽에서 이 메시지를 속도에 어떻게 더하는지는 **[미확정]**입니다.
 
 ### 6.6 히트 이펙트 선택 [데이터 — 선택 코드는 미판독]
@@ -411,10 +455,64 @@ return v
 
 행은 `WeaponInfoMain.DefaultHitEffectorType`(`Shooter`)과 ExtraInfo에서 정해지는 것으로 봅니다(CriticalHit → `Shooter_CriticalHit`) **[추정]**. 실제 재생은 `0x71016d9c60`이 만드는 `spl::HitEffectNetEvent`를 거칩니다([effect_sound], [network]).
 
+**행 선택 정정(2026-10-03 [r6 combat]): [추정] → [실행]**. OnHit이 sp+0x38 이벤트 정보를 {+0 결과, +4/+8/+0xc}로 만들고 슬롯97 `0x7101765a94`가 +4 = 생성정보+8(카테고리), +8 = 생성정보+0xc(무기 ID), +0xc = 슬롯95(ExtraInfo, 크리티컬이면 17)를 씁니다. `0x71016d9c60`이 `0x71028fed18(카테고리, 무기 ID, ExtraInfo)`로 HitEffectorType 번호(`spl::HitEffectorType` 순서)를 얻어 이벤트+0x34에 넣습니다. 규칙: 무기 ID < 0 → ExtraInfo 3이면 Bomb(26) 아니면 0, 5xxxx → MultiMissile(ExtraInfo 19면 40, 아니면 41; 카테고리 1·ID 50010은 26), 4xxxx → 카테고리 1·ID 40000이면 26, 카테고리 0·ID 42000이면 Charger 계열(ExtraInfo 5→7, 1→6, 그 밖 5), 그 밖 ExtraInfo 5면 33; 카테고리 0/1/2는 무기 정보 표(*`0x710599b420`+0x18 목록 10/11/12, 트리 +0x118/+0xd8)의 ID 노드+0x28[ExtraInfo](ExtraInfo ≥ 26이면 [0]), 노드 없으면 0; 그 밖 카테고리는 ExtraInfo 25면 47. 노드 배열은 행 빌더 `0x7101413a60`이 26칸 모두 행+0x50(DefaultHitEffectorType, `0x7101416108`)으로 채운 뒤 ExtraHitEffectorInfoSet 칸만 덮어씁니다(`0x7101414154`) [판독]. 원본 실행 `PY web/tools/r6_combat_hiteffect_emu.py` 36,900건 불일치 0(WeaponInfoMain 실제 데이터, 카테고리 1/2는 합성 트리, 스텁 없음). 결과: **스플래시슈터 등 대부분 슈터는 크리티컬이어도 `Shooter` 행**, `Shooter_CriticalHit`는 ExtraHitEffectorInfoSet에 CriticalHit가 있는 7행(TripleMiddle 계열)만 [실행 + 데이터].
+
+참고 [데이터]: `Shooter_CriticalHit___Damaged_Default` = E1 `HitMiddleCritical`, E2 `Hit`, S1 `3連ヒット`, S2 `インク被弾`(일반 `Shooter___Damaged_Default`는 E1 `HitEffective`, S1 `ヒット`). 즉 E1은 아래 §6.7의 `HitEffectType` 열거형이 아니라 이펙트 이름입니다. 크리티컬(ExtraInfo 17)이 이 행으로 가는 코드는 [미확정]이고(이벤트 구성 `0x71016d9c60` 안 `0x71028fed18(info[1], info[2], info[3])`가 후보), 스플래시슈터의 `ExtraDamageRateInfoRowSet`은 비어 있어 DamageRateInfo 행은 크리티컬이어도 `Shooter`입니다 [데이터].
+
+### 6.7 조준 히트마커(ShotGuide) — 발생·종료 조건 [판독, 플래그·예측 함수는 실행] (2026-10-03 [r5 combat] 신규)
+
+사격장에서 보이는 슈터 조준 표시(가운데 점·좌우 바이어스·히트마커)는 UI 레이아웃이 아니라 **xlink 이펙트**입니다. ELink 사용자 `PlayerShotGuide`(`analysis/effect_sound/elink2_users.json`)의 콜 테이블 키를 `"<기본 이름>_<HitEffectType 이름>"`으로 찾아 내보냅니다. **히트마커는 "맞힌 뒤" 표시가 아니라 "지금 쏘면 맞을 대상"의 예측 표시**입니다. 실제로 맞힌 뒤의 이펙트·소리는 §6.6 HitEffect 이벤트입니다.
+
+```
+spl::PlayerInkActionFree(vtable 0x71056362d8) 슬롯33 0x7102548bec(this, show, predict):   // 슬롯59 0x7102549b38은 this−0x30 썽크
+    if !show: +0x88(가운데·히트마커) 이펙트 정지 0x710267739c, +0xb8(바이어스) 정지 0x710267ceb4; return
+    if predict: 0x7102548c3c   // 궤적 예측 → this+0x68 = 종류, this+0x50 = 예측 착탄점
+    else:       0x71025495e4   // this+0x68 = 0(NoHit), 위치 = 기준점 − 0x710287b104 값 × 방향 × (무기+0x3c8 핸들 파라미터 +0x50 int)
+    0x71025498d4               // 이펙트 이름 갱신·위치 설정
+
+0x7102548c3c:
+    q.team = 액터+0x668 ([[this+0x120]+0x108]+8]+0x668), q.out = this+0x50, q.steps = (this+0x40 핸들 파라미터)+0x30 int
+    q.collision = CollisionParam(무기 +0x3d8 핸들), q.spawn = [this+0x128]+0x18
+    this+0x68 = 0x710175779c(*0x71057988b0, &q)
+    종류 ≠ 0 && this+0xf0 == 같은 대상 id → this+0xf8 += 1, 아니면 0     // 연속 조준 프레임 [판독, 소비처 미확정]
+
+0x710175779c (예측):                                   // 탄 한 발을 실제 탄과 같은 규칙으로 흉내
+    필터: 레이어 = FriendThroughFrameForPlayer > 0 ? 9 : 8, 그룹(+0x30) = (team ∈ {−1,3}) ? 0 : team+1,
+          +0x14 = q.spawn+0xc8, 비트12 = (q.spawn+0xcc ≠ 0)
+    매 단계: 탄 이동 0x71017697f8로 다음 위치, 반경 = 0x71018a6b68/0x71018a6fe4(param, 단계) → 쓸어 넘기기 질의 0x7101758c94
+    첫 접촉 대상 강체 B: B+0x240(리시버 수) == 0 → 1(HitConstant)
+                         아니면 B+0x248[0].vt+0x48(&team) = 0x7101a87e8c
+    접촉 없이 단계 끝 → 0(NoHit)
+
+0x7101a87e8c(R, &team):  team == −1 → 1;  f = R+0x1c0[team < 4 ? team : 0];  f ? 2(HitEffective) : 1(HitConstant)
+
+0x7101a86be8(R)  — spl:DamageHelper 슬롯20(0x7101e421a4) 끝에서 매 프레임 리시버마다 호출:
+    R+0x208 == 2 → 네 칸 0;  == 1 → 네 칸 1;  0이 아니면 그대로
+    e = R+0x1cc(추가 배율 사용) ? (R+0x1c8 > 4) : 1
+    t = 0..3: R+0x1c0[t] = e && !(R+0x20c >> t & 1) && !(R+0x1b8 == 1 && R+0x1bc ∉ {−1,3} && R+0x1bc == t)
+```
+
+이펙트 이름 [데이터 + 판독]: 형식 문자열 `0x710495eb81` = `"%s_%s"`, 뒷부분 = `0x710267e51c`가 열거형 문자열 `"NoHit , HitConstant , HitEffective , HitBombDead , HitKebaInkCore , ChargeKeep"`에서 고른 이름(종류 < 6). 키가 없으면 핸들이 0이 되어 아무것도 나오지 않습니다(`0x7102677578`의 `searchAndEmit`).
+
+| 종류 | `Shooter_Center_*` | `Shooter_HitMarker_*` | `Shooter_BiasLeft_*` / `Shooter_BiasRight_*` |
+|---|---|---|---|
+| 0 NoHit | `WpShtrSite` | (키 없음 → 표시 없음) | `WpShtrSiteSide` |
+| 1 HitConstant | `WpShtrSiteHit` | `WpShtrFieldHitMarker` | `WpShtrSiteSide`(RGBA 0.5) |
+| 2 HitEffective | `WpShtrSiteHit` | `WpShtrHitMarker` | `WpShtrHitMarkerSide` |
+
+**사격장에서 보이는 것**: 표적 `SighterTarget`은 리시버 팀을 "로컬 플레이어 팀 == 1 ? 0 : 1"로 두므로([range/shooting_range.md](../range/shooting_range.md)), 기본 팀 모드 1에서 로컬 팀 칸이 1 → 예측이 표적 몸에 닿으면 **HitEffective(`WpShtrHitMarker`)**. Burst 중 리시버 무적 모드(+0x1cc = 1, +0x1c8 = 4)면 e = 거짓 → 0 → 몸에 닿아도 **HitConstant(`WpShtrFieldHitMarker`)**. 지형·리시버 없는 강체에 닿으면 HitConstant, 아무것도 닿지 않으면 NoHit(가운데 점만). Burst 중 표적 몸 강체가 꺼져 질의에 닿지 않는지는 [range] 쪽 판독(몸 끔)에 따릅니다.
+
+**원본 실행 [실행]**: `0x7101a86be8`(모드 0/1/2/3, 팀 모드 0/1/2, 팀 −1~3, 무시 마스크 0~15, 추가 결과 on/off)과 `0x7101a87e8c`(팀 −1/0~3/4/7) 12,000건 재구현과 일치(`web/tools/r5_combat_emu.py` F). 예측 함수 `0x710175779c`·`0x7102548c3c` 자체는 판독만 했습니다.
+
+**호출 조건 (2026-10-03 [r6 combat]) [판독, 의미 일부 미확정]**: 인터페이스(PlayerInkActionFree+0x30, 보조 vtable `0x7105636450`)의 vt+0x60이 슬롯59 `0x7102549b38`(this−0x30 후 슬롯33과 같은 본문)입니다. 0x7102400000~0x7102700000의 vt+0x60 호출 17곳 중 16곳은 (0, 0)(무기 교체 `0x71024901c4` 등 끄기)이고, 값을 계산하는 곳은 `0x71024c0fbc`(호출 `0x710243ade0`, 인자 x0 = 본체+0xa5f9, x1 = 본체+0x588, x2 = 본체+0x678, 스택 = T(본체+0xd58), [본체+0xa650], [본체+0xa898], [본체+0xa6c0], [본체+0xa778]) 하나입니다. 여기서 **show = predict = 같은 값**이라 이 경로에서 예측 없는 표시(`0x71025495e4`만)는 생기지 않습니다. 값 = (A(0x1a) Chariot 사용 중 ∨ ¬h) ∧ ¬b ∧ [본체+0xa898]+0x30. b(가림)는 T+8 > 0, [본체+0xa650]+0x34 == 0, [본체+0xa818]+0x38 ≠ 0 또는 +0xb0 ≠ 0, 스폰 관리자 *`0x7105863d00` 리스폰 단계 조건, [본체+0xa6d8] 연결 대상 상태, [본체+0xa6d0]+0x38 ≠ 0(PlayerPipeline) 중 하나. h는 공격 입력 B(본체+0x4e0 묶음: +0, +0x12, +0x52, +0x53, 본체+0xab8)·C(본체+0x518 묶음)·특수 0x12/0x13 상태로 정해지고 [*(본체+0x588)].vt+0x158이 참이면 뒤집힙니다(명령 `analysis/decomp/r6_combat/c0fbc_part.asm`, 디컴파일 `c1.c`). h·b 각 항의 게임상 의미는 [미확정]. 예측 단계 수 = (this+0x40 핸들, 형 `0x710555cdc0`) 파라미터 +0x30 int(설정 플래그 +0x34) — 파라미터 이름 [미확정], 다음: `0x710555cdc0`을 참조하는 팩토리 `0x71010aa70c`.
+
+**미확정**: 슬롯33을 부르는 쪽의 show/predict 조건(오징어 상태·발사 중 등), 예측 단계 수 파라미터(this+0x40 핸들의 +0x30 int — 이름 [미확정]), 무기 +0x3c8 핸들 파라미터, `0x7101758c94` 질의의 형상, this+0xf8 소비처.
+
 ## 7. 애니메이션·이펙트·소리·카메라·에셋 연결
 
 - 히트 이펙트·사운드: §6.6. 이펙트 이름(E2 `Hit`, `Splash`, `SplashWater`, `HitBlowerInhole`)이 실제 ELink 이벤트로 어떻게 이어지는지는 [effect_sound] 문서를 참고하세요.
 - 히트 방향 = `normalize(0.5*접촉법선 − 0.5*진행방향)`(슬롯103 = 0.5, 0x71017504f4 뒷부분) **[판독]**.
+- 조준 표시(가운데 점·바이어스·히트마커) 이펙트 이름과 선택 조건: §6.7(ELink 사용자 `PlayerShotGuide`).
 - 플레이어 피격 연출 문자열 `PlayerDamage`, `PlayerDamageSmall`, `PlayerDamageSmallKnockBack`(참조 0x71019389fc, 0x710193a230 등)과 `PlayerKnockBack`(0x7101927104)은 위치만 확인했습니다 **[미확정]**.
 
 ## 8. 다른 기능과의 상호작용
@@ -454,7 +552,7 @@ interface Receiver { colName: string; teamMode: 1|2; team: number; ignoreTeamMas
 
 1. 표 로드(이미 JSON으로 뽑아 둠) + `rate()` + `$parent` 해석.
 2. `shooterDamage`, `bulletRadius`.
-3. 수신 `computeResult`. 우선 팀 판정, 배율, 상한만 넣고, 이력(case 1~6)은 [미확정] 부분을 뺀 형태로.
+3. 수신 `computeResult`. 팀 판정, 배율, 상한, 이력 모드 1~6, 시간 창까지 §6.4/§6.4.1 그대로(원본 실행 E와 일치, 2026-10-03 정정: 이전 판은 "이력은 [미확정] 부분을 뺀 형태로"). 슈터 탄의 송신자 모드 값만 [미확정]이라 모드 0(이력 판정 없음)으로 두고 표시합니다. 테스트 기대값은 `web/tools/r5_combat_emu.py`의 `ref_result`와 같은 입력으로 만듭니다.
 4. 넉백 벡터 계산(적용은 player 문서 확정 후).
 5. 크리티컬 링(이펙트 행 선택에만 영향).
 6. 히트 이펙트 표 조회.
@@ -475,7 +573,7 @@ interface Receiver { colName: string; teamMode: 1|2; team: number; ignoreTeamMas
 
 ## 10. 검증 코드·실행 결과·기대값
 
-모두 **재구현 계산**이며 원본 실행이 아닙니다. 원본 명령을 판독해 같은 순서로 옮긴 것을 실제 데이터로 돌렸습니다.
+아래 표의 위 네 줄은 **재구현 계산**입니다(원본 명령을 판독해 같은 순서로 옮긴 것을 실제 데이터로 돌림). 2026-10-03 [r5 combat]에 추가한 아래 여섯 줄은 **원본 함수 실행**(unicorn, 원본 명령 무수정)과 독립 재구현(`r5_combat_emu.py`의 `ref_*` 함수, 이 문서 의사코드를 f32로 옮긴 것)의 비트 대조입니다. 정정(2026-10-03): 이전 판의 "모두 재구현 계산이며 원본 실행이 아닙니다"는 r5 실행 추가로 더 이상 맞지 않아 바꿨습니다.
 
 | 검사 | 명령 | 결과 |
 |---|---|---|
@@ -483,18 +581,26 @@ interface Receiver { colName: string; teamMode: 1|2; team: number; ignoreTeamMas
 | 스플래시슈터 실제 데이터 | `PY web/tools/combat_damage.py weapon Shooter_Normal_00` | 360(age 0~7) → 354, 348, 343, … → 180(age 39~) |
 | 전 무기 감쇠 표 | `… falloff` → `analysis/combat/shooter_damage_falloff.txt` | 59종. 예: Heavy 620→350(9~25), Precision 280→140(4~20), 블래스터 상수 |
 | 수신 배율·상한·넉백 | `analysis/combat/verify_receive_knockback.txt` | Shooter→Default 360, 우산 0.7 → 252, 0.344×843 → 290(엡실론 없으면 289), 200000 → 99998, 넉백 dmg 360 → 크기 101.529, 1150 → 187.5, 2500 → 280(클램프) |
+| **원본 실행 A** 데미지 감쇠 `0x71017506d0` | `PYTHONIOENCODING=utf-8 PY web/tools/r5_combat_emu.py` | 3,216건 불일치 0 (표본 67종 × age −1~44·100·1000, `$parent` 1~3단) |
+| **원본 실행 B** 반경 `0x71018a6b68`/`0x71018a6fe4` | 같음 | 5,280건 불일치 0 |
+| **원본 실행 C** 넉백 `0x7101e66c4c` | 같음 | 409건 불일치 0, 크기 360 → 101.5294, 1150 → 187.5, 2500 → 280.0 |
+| **원본 실행 D** 크리티컬 링 `0x71016e6260` | 같음 | 연속 3,000회, 반환값·링 메모리 불일치 0 |
+| **원본 실행 E** 수신 결과 `0x7101a86ec0`(+`0x7101a87edc`, `0x71017db2d4`)·이력 나이 `0x7101a86dc8` | 같음 | 3,823건 불일치 0, 이력 모드 1~6 거부 경로·시간 창 배수 0/1/8 경로 모두 통과 |
+| **원본 실행 F** 히트마커 플래그 `0x7101a86be8`·예측 `0x7101a87e8c` | 같음 | 12,000건 불일치 0 |
+
+스텁(원본 실행 A~F): 허용 목록 밖 게임 함수는 x0 = 0 반환, PLT memcpy/memset/strlen은 파이썬, `__cxa_guard_acquire`는 0(정적 형식 객체 초기화 생략 — IsA 검사는 가짜 vtable이 항상 참). E에서 DamageRateInfo 조회(`0x7101a856e8`)는 배율을 돌려주는 스텁, ObjectEffect_Up(`0x7101a87aa0`)은 빈 스텁, 송신자는 가짜 vtable, info+0xa9 = 0 고정. 파라미터 객체·리시버·이력 노드·접촉 구조체는 원본 오프셋대로 만든 가짜 메모리입니다. 결과 파일 `analysis/combat/r5_emu_combat.txt`. 단일 함수 실행이며 OnHit 전체 흐름(접촉 → 리시버 → 이펙트)의 연결 실행은 아닙니다.
 
 외부 관찰값과의 대조(공략 위키의 스플래시슈터 36/18 등)는 원본 실행이 아니라 참고용이라 결론 근거로 쓰지 않았습니다.
 
 **검증되지 않은 범위**:
 - 접촉 콜백 시점(age가 0인지 1인지).
-- 수신 이력 case 1~6의 정확한 의미.
+- ~~수신 이력 case 1~6의 정확한 의미.~~ → 2026-10-03 원본 실행 E로 확인. 남은 것은 어떤 송신자 클래스가 어떤 모드를 돌려주는지.
 - 플레이어 HP 반영 전체(→ [player_life.md §10](player_life.md#10-검증): HP 홀더 함수만 원본 실행 확인).
-- `$parent` 병합을 필드 단위로 한 것. 코드가 플래그 체인을 쓰는 것과는 맞지만, 배열 필드 병합은 확인하지 않았습니다.
+- `$parent` 병합을 필드 단위로 한 것. 스칼라 필드는 원본 실행 A·B로 확인했고, 배열 필드 병합은 확인하지 않았습니다.
 
 ## 11. 미확정 사항과 추가 분석에 필요한 근거
 
-2026-10-02 [life] 작업으로 플레이어 생명 관련 항목을 [player_life.md](player_life.md)에서 해소하거나 범위를 좁혔습니다. 줄 앞의 ✔는 이번에 확정 수준이 오른 항목입니다.
+2026-10-02 [life] 작업으로 플레이어 생명 관련 항목을 [player_life.md](player_life.md)에서 해소하거나 범위를 좁혔습니다. 줄 앞의 ✔는 확정 수준이 오른 항목입니다. 2026-10-03 [r5 combat]에 바뀐 칸은 "r5:"로 표시했습니다.
 
 | 항목 | 상태(전 → 후) | 근거 / 다음 단서 |
 |---|---|---|
@@ -504,14 +610,22 @@ interface Receiver { colName: string; teamMode: 1|2; team: number; ignoreTeamMas
 | ✔ 적 잉크 지속 데미지 적용 | 값만 [판독] → **식 [판독]** | 0x710268b3b8 안 0x710268bc7c~0x710268bd44(fmax 0 포함), 적용 0x71024b9d34 → 0x71024b0c70 |
 | ✔ 리스폰 시간 | 기어 값만 → **사망 대기식 [판독]** → **리스폰 시점까지 [판독 + 원본 실행]** | T+8 = Around + Chase(+모드 보정) + 30. 모드 보정 = `VersusReferee` vt+0x50(트리컬러만 팀 2 → 120). 조작 기기가 T+8 1→0 프레임에 리스폰(390번째 호출), 리셋 T+0 60/T+4 15/T+0xf4 59 — player_life §6.5, §6.8 |
 | ✔ 무적·아머 설정자 | [미확정] → 부분 [판독] → **[판독] + 무적 조건 원본 실행** (2026-10-02 [respawn]) | 무적 판정 0x71024c7624 조건별 출처 컴포넌트·리스폰 무적 T+0xf4(리셋이 59/119) — [player_life.md](player_life.md) §6.11. 아머 HP 설정자 = startArmor 0x710243c1c4(원인 작은 번호 우선, 홀더 max/hp, 시작·끝 GameFrame, `StartArmor` 이벤트) — §6.9. 남은 것: 원인 번호 ↔ 무기 이름 |
-| ✔ FriendThroughFrameForPlayer | [미확정] → **[판독]** | §4.8: 0x7101762f68/0x7101763a10이 탄 레이어 8/9 전환 |
+| ✔ FriendThroughFrameForPlayer | [미확정] → **[판독]**; r5: vt+0xb0/+0xc0 = 필터 +8 비트0~5 설정/읽기 **[판독]** (`0x71016cb4c0`/`0x71016cb538`) | §4.8: 0x7101762f68/0x7101763a10이 탄 레이어 8/9 전환 |
 | ✔ DamageHelper(+0x160), KnockBackHelper(+0x11b0) 역할 | [미확정] → 클래스 역할 [판독] | DamageHelper = 피해 수신 액터의 HP 홀더 목록 컴포넌트, KnockBackHelper = 바인딩만 하는 0x38 B 컴포넌트. 탄 객체에서 두 포인터를 쓰는 곳은 여전히 [미확정] |
-| ✔ 넉백 적용 | [미확정] → 변환 [판독] | 플레이어: ×1/3600, 최대 0.48, 0x71024c8318이 ×3600으로 물리 메시지. 물리 쪽 처리 [미확정] |
-| ✔ 수신 이력 case 1~6 | [미확정] → **모드별 판정 [판독]** (2026-10-02 [respawn]) | §6.4.1: 1 = 간격(초) 안 같은 송신자 거부, 2 = 이전 합계 초과분만, 3 = 송신자별 누적 상한, 4 = 같은 프레임 같은 송신자/key 거부, 5 = 4 + key 교체, 6 = 1이 거부하면 2로. 이력 나이는 DamageHelper가 1/60초씩 더하고 15초에 지움. 남은 것: 송신자(액터+0x238) 클래스별 모드·값 [미확정] |
-| 시간 창(+0x1fc~0x204) | [미확정] 유지 | 전역 카운터 기반 배수, 설정자 미확인 |
-| 접촉 콜백 시점(첫 명중 age) | [미확정] → **age 시작값 정정 [판독], 첫 명중 age 0 [추정]** (2026-10-02 [combat4]) | age −1 시작([hitbox.md §1](hitbox.md)). 남은 것: 슬롯18·물리·시퀀서의 프레임 안 순서([phys4]) |
+| ✔ 넉백 적용 | [미확정] → 변환 [판독]; r5: 넉백 벡터 계산 `0x7101e66c4c` **[실행]**(§6.5) | 플레이어: ×1/3600, 최대 0.48, 0x71024c8318이 ×3600으로 물리 메시지. 물리 쪽 처리 [미확정] — [hitbox.md §5.2](hitbox.md) |
+| ✔ 수신 이력 case 1~6 | [미확정] → **모드별 판정 [판독]** (2026-10-02 [respawn]) → r5: **[실행]** 3,823건 일치(§6.4.1) | §6.4.1: 1 = 간격(초) 안 같은 송신자 거부, 2 = 이전 합계 초과분만, 3 = 송신자별 누적 상한, 4 = 같은 프레임 같은 송신자/key 거부, 5 = 4 + key 교체, 6 = 1이 거부하면 2로. 이력 나이는 DamageHelper가 1/60초씩 더하고 15초에 지움. 남은 것: 송신자(액터+0x238) 클래스별 모드·값 [미확정] |
+| ✔ 시간 창(+0x1fc~0x204) | [미확정] → r5: **동작 [판독 + 실행]**(§6.4, §4.5) | +0x200이 간격과 배수를 겸함, info+0xa8 ≠ 0이면 건너뜀(탄은 기본 1). 남은 것: 카운터 `0x710580e758`+0x148의 정체, info+0xa8 = 0을 쓰는 송신 쪽, R+0x1fc/+0x200을 바꾸는 쪽 [미확정] |
+| ✔ 접촉 콜백 시점(첫 명중 age) | [미확정] → **age 시작값 정정 [판독], 첫 명중 age 0 [추정]** (2026-10-02 [combat4]) → r5: **이동 접촉 첫 명중 age 0 [판독]**([r5 physics] 프레임 순서) | age −1 시작([hitbox.md §1](hitbox.md)). 남은 것: 생성 위치 겹침 접촉의 age(데미지는 같음) |
 | 플레이어 피격 형상·리시버 분배·Same/Other 표 선택 | 신규 → [hitbox.md](hitbox.md) §2~§4: ColBullet 캡슐 r 0.35 y 0.35~1.30 [데이터], 리시버는 바디별 목록 [판독], 표 선택 = 필터 객체 F+0x30 비교 [판독], F+0x30 값 출처 [미확정] | `0x7103ae53f0` 호출자 |
 | Blast 데미지 | 신규 → [hitbox.md §5.1](hitbox.md) 거리·평면 표 조회·넉백 [판독], 차폐 [미확정] | |
 | 무기 → DamageRateInfoRow 표 채우기, 카테고리 0/1/2 의미 | [추정] | 0x7101a88920이 읽는 무기 정보 트리 생성 코드 |
 | 크리티컬 needCount(생성정보+0x92), VariableRepeat(+0x91), 샷ID(+0x94) | [추정] | 무기 발사 쪽 생성정보 기록 함수 |
-| Same/Other 레이어 표 선택 규칙 | [추정] | Havok 래퍼 필터 콜백 |
+| Same/Other 레이어 표 선택 규칙 | [추정] → [판독] (2026-10-02 [combat4], [hitbox.md §3](hitbox.md)) | 표 선택 = 두 바디 F+0x30 비교. r5: F+0x30 writer 정리(hitbox §3) — 탄 바디 writer [미확정] |
+| r5 신규: 조준 히트마커 조건 | **[판독]**, 플래그·예측 함수 **[실행]**(§6.7) | 남은 것: 슬롯33 show/predict 호출 조건, 예측 단계 수 파라미터 이름, 질의 형상 `0x7101758c94` |
+| r5 신규: 데미지 감쇠·반경·크리티컬 링 | [판독] → **[실행]**(§6.1~§6.3) | 크리티컬 → HitEffectConfig `Shooter_CriticalHit` 행 선택 코드 [미확정] (`0x71028fed18` 후보) |
+| r5 신규: 리시버 +0x208(히트마커 모드) writer | [미확정] | 생성자는 0. 다른 writer는 `str w,[x,#0x208]` + `0x1c4/0x1c8` 동반 스캔으로 못 찾음(`combat4_iscan.py`) |
+| r6: 탄 바디 F+0x30·아군 충돌 | [미확정] → **[실행]** | [hitbox.md §3](hitbox.md): 슬롯9 `0x71013405e0` 팀+1, 쌍 판정 `0x7103c55ed8`. 슈터 탄은 아군에 막힘(데미지 0) |
+| r6: 송신자 이력 모드·탄 +0x160 용도 | [미확정] → **[판독]** | 슈터 모드 0, 클래스별 표 hitbox §4. +0x160 = 탄 쪽 DamageHelper(송신자 보유) |
+| r6: 크리티컬 HitEffectConfig 행 | [추정] → **[실행]** | §6.6: `0x71028fed18` 36,900건. 스플래시슈터 크리티컬 = `Shooter` 행 |
+| r6: 조준 표시 호출 조건 | [미확정] → 식 **[판독]**, 항 의미 [미확정] | §6.7: `0x71024c0fbc`. 단계 수 파라미터 이름 미확정(형 `0x710555cdc0`) |
+| r6: 시간 창 카운터·R+0x208 writer | [미확정] → **[판독]** | GameFrame+0x148, R+0x208 = 2 쓰는 클래스 목록(§6.4.1) |

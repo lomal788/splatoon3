@@ -12,7 +12,7 @@
 | 정점 | `(sectionOffset(s32) + u16) * bitScale16Inv` (1/512) | [판독] `0x71009372cc` + [데이터] 650개 형상의 ShapeParam `AutoCalc` bbox와 최대 오차 9.5e-7 |
 | 프리미티브 | u8 a,b,c,d. c==d → 삼각형(a,b,c). c≠d·b≤d → 삼각형 (a,b,c),(a,c,d). c≠d·b>d → 평면 사각형 1개 | [판독] `0x71009372cc` |
 | 삼각형 → 재질 | 프리미티브 키 `section<<9 \| prim<<1`로 shapeTagTable 이진 탐색 → shapeTag = bphsh 재질표 인덱스 | [판독] `0x710093e82c`(탐색) + [데이터](섹션 기준 키 0/512/1024…, 태그 < 재질 수 전수 성립, 물 태그가 수면 높이 평면) |
-| shapeTag → 재질·필터 | bphsh 재질표 16B 항목(MaterialCollection 인덱스, UserShapeTag 마스크), 필터표 u64(하위 32 = LayerHitMaskEntity 이름 값, 상위 32 = SubLayerHitMaskEntity 이름 값) | [데이터] (Water→`SplWater`, KeepOut→`SplKeepOutPlayer`, Fence→`SplInkThrough`/`SquidThrough`로 이름이 맞음). 엔진이 shapeTag로 재질표를 찾는 코드는 [미확정] |
+| shapeTag → 재질·필터 | bphsh 재질표 16B 항목(MaterialCollection 인덱스, UserShapeTag 마스크), 필터표 u64(하위 32 = LayerHitMaskEntity 이름 값, 상위 32 = SubLayerHitMaskEntity 이름 값) | [데이터] (Water→`SplWater`, KeepOut→`SplKeepOutPlayer`, Fence→`SplInkThrough`/`SquidThrough`로 이름이 맞음). 엔진이 태그로 8 B 필터 행을 고르는 한 단계 `0x7103ad6a70`은 [실행](2026-10-03, 1024/1024). 그 행 배열을 형상에 붙이는 writer·형상별 결과와 공통 필터의 결합은 [미확정] |
 | Yagara 변환 | 섹션 50, 프리미티브 2787, 삼각형 5103, 정점 4088, 재질 27종, bbox (-81.5,-2,-137)~(81.5,28.875,137) | [데이터]+[재구현] |
 
 ## 2. 자료와 도구
@@ -113,7 +113,14 @@ shapeTag = bphsh 재질표 인덱스입니다. Yagara 27종 전부 태그 < 27�
 | 0x1f0cbc7e | SplInkThrough | 0x03ff75cf | SquidThrough | 0, 8 |
 | 0x1bffffc6 | SplWater | 0x03bffa07 | SplWater | 14 |
 
-이름은 `PhiveConfig`의 MaskValue와 정확히 같은 값으로 붙였습니다. 엔진이 이 필터표를 충돌 필터로 쓰는 코드는 [physics] 담당 확인 대상입니다 **[미확정]**.
+이름은 `PhiveConfig`의 MaskValue와 정확히 같은 값으로 붙였습니다.
+
+엔진 쪽 사용(2026-10-03 보완·5차) — 상세는 [../physics/character_controller.md](../physics/character_controller.md) §3.5:
+- **[실행]** 형상 필터 행 선택 `0x7103ad6a70`: 형상 type 7..10 이고 정보 = 형상+0x28, 내부 메시 = 정보+0x28 이면, 잎 결과 태그 `tag & 0x1fff`가 정보+8(행 수)보다 작을 때 정보+0x10 의 8 B 행 low/high u32 를 내보낸다. 행의 low/high 가 이 표의 하위 32(Layer)/상위 32(SubLayer)에 대응한다는 것은 오프셋 배치로 본 것이다.
+- **[미확정]** 정보 객체(형상+0x28 → +8 행 수, +0x10 행 배열, +0x28 내부 메시)를 만드는 writer(bphsh 로더). 5차 시도: 경로 생성 `0x7103a221cc`(".%s.bphsh")까지 찾음. 헤더 오프셋으로 포인터를 만드는 저장 패턴은 phive 범위에서 찾지 못함.
+- **[미확정]** 형상별 행이 공통 쌍 필터(양방향 6개 AND, [실행])와 어떻게 결합되는지(`0x7103c34b7c` → `0x7103b02470`).
+
+마스크 비트 대응 **[데이터]**(PhiveConfig `LayerEntityCollection` 순번: 0 NoHit, 1 CustomReceiver, 2 GameCustomReceiver, 3 Ground, 4 Water, 5 SplPlayer, 6 SplPlayerChariotShield, 7 SplCamera, 8 SplInkBullet, 9 SplInkBullet_FriendThrough, …): `SplKeepOutPlayer` 0x62 = 비트 1·5·6(CustomReceiver·SplPlayer·SplPlayerChariotShield), `SplKeepOutPlayerAndCamera` 0xe2 = 여기에 비트 7(SplCamera), `SplPlayerThrough` 0x1fffff9e = 비트 0·5·6 만 빠짐(플레이어·전차 방패만 통과). 이 비트가 실제 접촉 판정에 그대로 쓰이는지는 위 결합 방식이 남아 **[미확정]**.
 
 ## 4. Yagara 결과 (`analysis/collision/Fld_Yagara_col.json`) [데이터+재구현]
 
@@ -145,8 +152,8 @@ shapeTag = bphsh 재질표 인덱스입니다. Yagara 27종 전부 태그 < 27�
 
 관찰(데이터 해석):
 - 물(14)은 맵 전체(163×274)를 덮는 y=-0.05 평면 24개 삼각형입니다. 그래픽 수면 `OceanHeight 0.0`과 0.05 차이 [데이터].
-- `FillUp`(2, 9, 10)과 `KeepOut`(3, 4)은 필터가 `SplKeepOutPlayer` = **플레이어만 막는 면**이고 위향 면적이 0인 수직 벽입니다. 이전 문서의 "FillUp = 의미 미상"을 "플레이어 전용 벽(구멍 메우기 [추정 — 이름])"으로 좁힙니다.
-- 7번(Stone, `SplPlayerThrough`)은 플레이어가 통과하는 수평 면입니다(잉크·탄은 맞음 [추정 — 필터 이름]).
+- `FillUp`(2, 9, 10)과 `KeepOut`(3, 4)은 필터가 `SplKeepOutPlayer`이고 위향 면적이 0인 수직 벽입니다. 필터 하위 32비트 0x62 의 레이어 비트는 CustomReceiver·SplPlayer·SplPlayerChariotShield 뿐입니다 **[데이터]**(§3.4). 그래서 "플레이어만 막는 면"은 마스크 데이터로는 맞고, 엔진이 형상 행을 공통 필터와 결합하는 방식이 남아 동작으로는 **[미확정]**입니다. "구멍 메우기"라는 용도 해석은 이름에서 온 **[추정]**입니다.
+- 7번(Stone, `SplPlayerThrough`)은 수평 면이고, 필터 하위 32비트 0x1fffff9e 는 SplPlayer·SplPlayerChariotShield(와 NoHit) 비트만 뺀 값입니다 **[데이터]**. 플레이어는 통과하고 잉크탄(비트 8·9)은 맞는다는 해석은 이 비트 대응에서 나오며, 엔진 결합 방식이 남아 동작은 **[미확정]**입니다.
 - 좌우 x, z 범위가 전부 원점 대칭이라 점대칭 맵 구조와 맞습니다.
 
 ## 5. 검증
@@ -187,6 +194,17 @@ shapeTag = bphsh 재질표 인덱스입니다. Yagara 27종 전부 태그 < 27�
 | 항목 | 필요한 것 |
 |---|---|
 | 섹션 키 기준(`+0x60`) 계산 코드 | **해소 [판독]** §3.3: 잎 순회에서 `section << 9` |
-| shapeTag → bphsh 재질표 조회 코드(Phive 쪽) | `0x710093e3d8`가 넘기는 콜백(`[+0x130]` vt+0x40) 판독 — [physics] 영역 |
-| interiorPrimitiveBitField·topLevelTree 의미 | 비트필드 = 프리미티브당 1비트 [데이터], 내부 프리미티브 표시 [추정 — 상관 92%]. 사용 코드(접촉·용접)는 캐스트 경로에 없음 → [bulletbody]/[physics] 쪽 판독 필요 |
-| 필터표 → 충돌 필터 적용 | [physics] Phive 컨트롤러 판독 |
+| shapeTag → bphsh 재질표 조회 코드(Phive 쪽) | 행 선택 한 단계 `0x7103ad6a70` [실행] (§3.4). 남은 것: `0x710093e3d8`가 넘기는 콜백(`[+0x130]` vt+0x40) 구현 클래스, 정보 객체 writer(bphsh 로더, 경로 생성 `0x7103a221cc` 이후) |
+| interiorPrimitiveBitField·topLevelTree 의미 | 비트필드 = 프리미티브당 1비트 [데이터], 내부 프리미티브 표시 [추정 — 상관 92%]. 사용 코드(접촉·용접)는 캐스트 경로에 없음. 5차에서도 읽는 코드를 찾지 못함 → 좁은 단계 처리기 표 `0x7105756468` 4종과 메시 접촉 생성에서 섹션 +0x18 읽기 확인 필요 |
+| 필터표 → 충돌 필터 적용 | 공통 쌍 필터 결합식 [실행]·형상 행 선택 [실행]은 해소. 형상 행과 공통 결과의 결합(`0x7103c34b7c` → `0x7103b02470`)과 행 배열 부착 writer 는 [미확정] — [../physics/character_controller.md](../physics/character_controller.md) §3.5, §9 |
+
+### 6차 갱신 (2026-10-03, r6 physics)
+
+| 항목 | 결과 | 수준 |
+|---|---|---|
+| 필터표 → 충돌 필터 적용 | 결합식 `0x7103c5e244`: bit28 몸체는 삼각형 행 low/high 에 상대 레이어·하위 레이어 비트가 있어야 접촉 유지, 그 뒤 공통 쌍 필터 AND. 4096/4096 원본 실행([../physics/character_controller.md](../physics/character_controller.md) §3.5) | [실행] |
+| 지형 bit28 | 물리 구성요소 초기화 `0x71012e9914` → functor slot0 `0x71012ea8c4`가 레이어 3(Ground) 몸체에 bit28 = 1(태그 `Actor_MapParts_KeepOut`/`Actor_Lift_KeepOut` 액터 제외) | [판독] |
+| bphsh 자원 파서 | 자원 vtable `0x7105765ad8` 슬롯5 `0x7103de04d0`: 헤더 "Phive\0\1\0", BOM 0xfeff, tagfile = base+[0xc]; 자원+0x30 = base+[0x10](재질표), +0x38 = [0x20]>>3, +0x40 = base+[0x14](필터표). Yagara: [0x20] = 0x1b0 → 54(필터 행 28개보다 큼, 태그 ≤ 26 이라 영향 없음). `gimmick_phive.py`의 0x18~0x24 필드 이름(end/tag/mat/flt)은 [0x18] = 파일 크기, [0x1c] = tagfile 크기, [0x20] = 재질표 크기, [0x24] = 필터표 크기로 읽는 것이 실제 값과 맞음 | [판독]+[데이터] |
+| 정보 객체(hknpShape.userData, +0x28) writer | 자원 필드와 정보 객체(+8 행 수, +0x10 행, +0x28 메시)를 잇는 코드 [미확정]. 자원 크기 0x48 이라 정보 = 자원+0x30 은 아님 | 다음: 자원 +0x38/+0x40 reader |
+| FillUp/KeepOut(플레이어만 막음), Stone PlayerThrough | 플레이어 쪽: 결합식 [실행]+bit28 [판독]로 KeepOut 행은 플레이어 접촉 유지, PlayerThrough 행은 끔. 탄 쪽: 막는 접촉 비트 `0x7103c39158` [판독], 호출 사슬 [미확정] | [미확정, 부분] |
+| 용접 비트 | 6차 미착수 | [미확정] |

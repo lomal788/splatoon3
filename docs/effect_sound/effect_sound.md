@@ -6,6 +6,11 @@
 
 상태: 분석 진행(2차: xlink2 컨테이너·비교·커브·난수 규칙, 발사 키 대상, 머즐 플래시 액션 경로, 착탄 θ·벽 판정, Alto 롤오프 판독). 웹 구현은 없습니다. 검증은 합성 테스트와 데이터 전수 검사만 했습니다.
 
+**2026-10-03 5차 갱신:**
+- 원본 실행(unicorn)으로 확인한 것: 리스너 위치(TargetOffset) 512건, 리스너 지향성 거리 배율 2,048건, 그룹 제한기 적용(정렬 뒤 생존) 600경우.
+- 판독으로 정리한 것: S1/S2 기준 플레이어(쏜 사람), 컬링 n(그 팀의 살아 있는 탄 수), 분열 탄 파티클 슬롯, 이미터 형상 0·1번 식, 벽 스플래시 색·알파 식.
+- 위 문장의 "이 영역에 원본 실행 확인은 없습니다"는 3차까지의 상태입니다. 실행 기록은 [solo_fx_audit.md](solo_fx_audit.md)에 모았습니다.
+
 ## 하위 문서
 
 | 문서 | 내용 |
@@ -13,6 +18,7 @@
 | [xlink_format.md](xlink_format.md) | XLNK(ELink2/SLink2) 바이너리 형식, 컨테이너·트리거·조건 규칙, 웹 디스패처 |
 | [sound_resources.md](sound_resources.md) | BARS/AMTA/BWAV/Stream, Alto 설정(감쇠·그룹·리스너), WAV 변환, WebAudio 파라미터 |
 | [effect_resources.md](effect_resources.md) | esetb.byml + VFXB v46, 탄 파티클 OneEmitter 관리자, 착탄 스플래시 분류, HitEffectConfig, 텍스처 변환 |
+| [solo_fx_audit.md](solo_fx_audit.md) | 원본 실행·데이터 대조 검증 기록(제한기, 리스너, 지향성, VAT) |
 
 관련 문서(다른 담당): 탄 생성·이동은 [../weapon/shooter_bullet.md](../weapon/shooter_bullet.md), 피격 판정은 [../combat/damage_hit.md](../combat/damage_hit.md), 도색은 [../paint/paint_and_score.md](../paint/paint_and_score.md)입니다. ELink 에셋 파라미터 `CameraRumbleName`/`CtrlRumbleName`(진동·화면 흔들림) 매핑은 camera 담당 문서([../camera/camera_feel.md](../camera/camera_feel.md), 도구 `web/tools/camera_rumble_map.py`)에 있어 여기서는 다루지 않습니다.
 
@@ -71,6 +77,7 @@ if (!farCull(muzzlePos, team))                // 0x71027e22bc, true = 너무 멀
 
 - **무기 +0x5f0** = 무기 액터 +0x520의 16 B 래퍼 `{vtable 0x71055408b0, XC}`입니다(설정 0x710280eaf8 근처, 래퍼 생성 0x7100f765bc). 이 vtable의 슬롯 3(+0x18) = `0x7100f797f0` → `0x7103e1e61c`로 **XC+0x80(SLink)에만** searchAndEmit합니다. 슬롯 2는 ELink만(0x7103e1e5d0), 슬롯 0은 mode 지정 방출(0x7103e1e37c)입니다. 따라서 **발사 키는 이펙트(ELink)로 가지 않습니다** [판독]. 1차 문서의 "대상 객체 mode 미확정" → 해소.
 - `farCull(pos, team)`: 기준점은 전역 객체의 행렬 이동 성분(+0x14c/+0x15c/+0x16c)이고, 카메라로 추정합니다. R = 600입니다. 기준 플레이어의 팀이 `team`이면 R = 600 − 500·min(n/30, 1)이고, n은 팀별 구조체 +0x10의 정수입니다(의미 미확정). `|pos − 기준점|² > R²`이면 방출하지 않습니다 [판독].
+- **5차(2026-10-03) n의 의미 [판독]:** 팀별 구조체는 탄 관리자 싱글턴(`*0x7105850620`) +8 + team·0x58이고, +0/+8은 탄 연결 목록, **+0x10은 그 목록의 탄 수**입니다. 탄 공통 등록 `0x7101645590`(여러 탄 종류의 생성 경로가 BL로 부름)이 `탄+0x108→+0x2C` 팀의 목록에 탄을 넣고 +0x10을 1 올립니다. `BulletSimple` vt16 `0x7101645f84`가 빼고 1 내립니다(팀 −1·3은 건너뜀). 따라서 **n = 그 팀이 지금 가진 살아 있는 탄 수**이고, 자기 팀 탄이 30발 이상이면 발사음·히트 컬링 반경이 100으로 줄어듭니다. 히트 컬링(R = 400 − 300·min(n/30, 1))도 같은 n입니다. 기준점 객체(카메라 추정)의 정체는 여전히 [추정]입니다.
 - 스플래시 슈터는 `VariableShotRepeatStartFrame`을 설정하지 않아 기본값 0을 씁니다([../../../analysis/param_reflect/spl__WeaponShooterParam.json](../../../analysis/param_reflect/spl__WeaponShooterParam.json)). 그래서 키는 **`"Fire"`**입니다. `WeaponShooterFlash`(값 10)는 `FireImpact`/`FireOn` 키를 쓰고, SLink 데이터의 키 이름도 그렇게 되어 있습니다 [데이터].
 
 **머즐 플래시 = InkAction 액션 경로** [판독]. 슈터 갱신 함수 `0x7102578c34`(무기 behavior, +0x88 = 무기, +0x3aa8 = 플레이어)가 무기 InkAction을 바꾸고, `0x7102864104`가 그 이름으로 ELink·SLink 양쪽의 액션 슬롯 0(= `State[0]`)을 바꿉니다.
@@ -110,7 +117,7 @@ if (weapon+0x320 != id) {
 ```
 M  = 무기 모델(+0x5e8)의 뼈 행렬(뼈 번호 무기+0x3c4/+0x3c6, vt+0x78)     // 3x4, 행 우선
 v  = normalize(-M[0][0], 0, -M[2][0])        // 뼈 X축의 XZ 성분을 뒤집어 정규화(길이 0 이면 (−M00, 0, −M20) 그대로)
-D  = 플레이어 본체(+0x108) +0x538 의 vec3     // 의미 [미확정: player 담당 확인 필요]
+D  = 플레이어 본체(+0x108) +0x538 의 vec3     // = PlayerCamera+0x1a4(리그 수평 시선) 사본 [판독, ../player/player_state.md §6.1.2]
 dot = v.x*D.x + 0*D.y + v.z*D.z
 holder(무기+0x100)+0x60 = dot
 holder+0x18 객체 vt+0x58(dot, holder+0x5c)    // 다른 대상에도 같은 값
@@ -166,6 +173,16 @@ mgr = singleton(0x7105850618) + 8 + team*0x15e8      // 팀별 관리자 3개
 5. **E2 문자열**이 비어 있지 않으면 ELink 인스턴스(mgr+0x690c0)에 E2를 키로 searchAndEmit하고, 핸들 행렬을 n 방향 회전 + 위치, 스케일 1로 씁니다. E2 값 중 `BombSplashWater`, `BigSplashWater`, `SplashSame`, `BigSplash`, `HitBlowerInhole`은 ELink HitEffect 키이고, `Splash`/`Hit`/`SplashWater`는 ELink 키가 아니라 코드 파티클만 나옵니다 [판독+데이터].
 6. req+0x30 > 0이면 요청을 지연 목록에 넣습니다(용도 미추적).
 
+**5차(2026-10-03) 묶음 기준과 지연 목록 [판독]** (프레임 처리 `0x71027b7938`, 비교 `0x71027b84e0`):
+- 같은 요청 판정 `same(a, b)`: `a+0x40 == b+0x40`(종류 k ∈ {1, 2, 3}, 그 밖은 거짓)이고, 참조 대상 `a+0x48 == b+0x48`(참조 객체 +0x28 ≠ −1)이어야 합니다. 그 위에 k = 2면 `a+0x28 == b+0x28`, k = 3이면 `a+0x50 == b+0x50`이 더 필요합니다. +0x40·+0x48·+0x50은 요청 생성 때 info[7]·info+10 참조·info[0xC]입니다(§3.5 요청 필드).
+- 처리 순서:
+  1. mgr+0x50 목록의 요청은 AggregateNum 1로 하나씩 분배합니다.
+  2. 묶음 목록(mgr+0x20, 개수 +0x90)은 맨 앞 요청 A를 잡고, 목록 전체에서 `same(A, ·)`인 요청 수를 세며 빼냅니다(A 자신 포함).
+  3. A+0x30 > 0이고 지연 목록에 `same`인 항목이 있으면 분배하지 않습니다.
+  4. 아니면 `0x71027b877c(A, 센 수)`로 분배합니다. **AggregateNum = 같은 프레임에 같은 대상(·종류)으로 들어온 요청 수**입니다.
+- 지연 목록(mgr+0x69140): 항목의 남은 시간(+0x58)을 매 프레임 1/60씩 줄이고 0 이하면 지웁니다. 즉 **req+0x30 = 같은 대상·종류의 히트 이펙트를 다시 내지 않는 억제 시간(초)**입니다.
+- 네트워크로 받은 `HitEffect` 이벤트는 받는 쪽이 조작 플레이어일 때(`+0xD470` 비교) `0x71027b4aa4`로 바로 집계 방출됩니다.
+
 **θ와 바닥 3종**: a = π/2 − |π/2 − θ|. 탄이 바닥에 수직으로 꽂히면 v̂·n = −1 → θ = π → a = 0 → kind 0 `FloorSplash`. 비스듬히 스칠수록 θ → π/2 → a → π/2 → kind 2 `FloorSplashDist`. 30°/60° 경계 [판독]. 1차 문서의 "θ 정의·벽 슬롯 사용처 [미확정]" → 해소. 벽 판정 상수 0.64144969는 각도로 약 50.1°(acos)입니다.
 
 **피격 표**: HitEffectConfig에서 행(탄 종류, 슈터는 `Shooter`/`Shooter_CriticalHit`)과 열(`<반응>_<대상>`, 예 `Damaged_Default`)로 셀을 찾습니다. 셀이 없으면 `<행>___<반응>_Default`를 씁니다. 셀 필드 오프셋은 리플렉션으로 E1 +0x48, E2 +0x50, S1 +0x58, S2 +0x60이고, 방문 순서 S1, S2, E1, E2에 맞춰 "설정됨" 플래그가 +0x68..+0x6B에 있습니다(`param_reflect.py E1 E2 S1 S2`, 방문 0x710279ecdc) [판독].
@@ -185,6 +202,14 @@ mgr = singleton(0x7105850618) + 8 + team*0x15e8      // 팀별 관리자 3개
 
 - **지형 착탄음**: `Constant_Default`(E2 Splash = 바닥/벽 스플래시)의 S2 `インクヒット`가 지형 착탄음입니다. SLink HitEffect의 `インクヒット`는 SubjectiveType이 Focused면 IsPaintable·Velocity(> 0.9 강/약)로 갈리고, 그 밖(NotEqual Focused)은 Random 컨테이너입니다([effect_resources.md](effect_resources.md) §4). "Constant 반응 = 지형 명중"은 E2 Splash와 묶인 데이터 형태로 본 [추정]입니다(반응 열을 고르는 코드 미추적).
 - S1/S2가 "공격자/피격자" 중 누구 기준인지: 둘 다 같은 HitEffect 사용자 인스턴스(관리자 소유)에서 나가고, SubjectiveType은 req+0x34 플레이어로 정합니다(`0x71027b5430`). +0x34가 공격자인지 대상인지는 [미확정]입니다.
+- **5차(2026-10-03) 해소 [판독]:** 탄 명중 요청은 `0x71016d99f4`(BulletHitEffect, 접촉, 방향, info) → `0x71016d9c60`이 스택에 만들어 `0x71027b4704(*0x7105798618, req)`로 넣습니다. 여기서 **req+0x34 = 탄 소유 플레이어 번호**입니다. 헬퍼 +0x30(탄) → vt+0x78 객체 +0x208 → 액터 id, 없으면 탄 생성 정보(+0x108)+0x1C를 플레이어 번호로 바꿉니다(`0x71026437d0`). req+0x38은 이 경로에서 −1로 남습니다. 따라서 S1/S2의 SubjectiveType은 **쏜 사람 기준**입니다.
+- SubjectiveType 결정 `0x71027b5430(inst, p)` [판독]:
+  - p == 조작 플레이어 번호(`*0x7105791bd0`+0xD474)이면 0 Focused.
+  - p < 0이면 2 Enemy.
+  - 그 밖은 p 플레이어의 팀(+0x160)이 조작 플레이어 팀과 같으면 1 Friend, 다르면 2 Enemy.
+  - 값이 바뀔 때만 속성 갱신 비트(+0x70 |= 0x10)를 켭니다.
+  - 사격장 1인 연습에서 자기 탄의 명중은 Focused입니다.
+- req 나머지 필드 [판독]: +0x00 위치, +0x0C 법선(info+0x10, NaN이면 접촉에서 다시 구함), +0x18 속도, +0x24 접촉 재질 값, +0x28 info[0], +0x2C `0x71028fed18(info[1..3])`, +0x30 info[8] (지연), +0x3C paintable(`0x71012d68cc`), +0x3D 탄 vt+0x208 결과, +0x3E 소유자+0x108+0x6D, +0x40 info[7], +0x50 info[0xC].
 
 ## 4. 데이터: 스플래시 슈터 사용자 [데이터]
 
@@ -232,6 +257,17 @@ Delay 커브는 점 사이 선형 보간입니다 [판독, xlink_format.md §4.3
 
 같은 프레임에 여러 발이 나가면 키 방출도 발마다 일어납니다. 발사음 그룹 `Weapon_AttackFocused`·`Weapon_InsLimit_00`의 GRP 레코드에는 **동시 발음 제한기가 없습니다**(제한기 종류 0) [판독+데이터]. 두 그룹에는 대신 0.016(+0x84 = 레코드 [0x21])이 게임 그룹 객체 +0x1b8에 들어가며, 그 의미는 [미확정]입니다([sound_resources.md](sound_resources.md) §4.3).
 
+제한기가 있는 그룹은 정렬 뒤 **앞쪽 limitCount 개가 남고**, 나머지는 즉시 정지(핸들 종류 1 또는 hard 플래그)하거나 일시정지됩니다 [판독 + 실행, sound_resources.md §4.3.2]. 사격장에서 들리는 그룹 중 제한기가 있는 것은 [데이터, `analysis/vfx/agst_grp_dump.txt`]:
+
+| 그룹 | 쓰는 소리 | 제한기 종류, 개수 |
+|---|---|---|
+| `BulletHit_ToObject` | S1 `ヒット`(`HitEf_Damage_00`) | 4, 1 |
+| `InkSpray_NotFocused` | S2 `インク被弾`(NotFocused) | 1, 5 |
+| `BulletHit_Marking` | 표적 `MarkingStart` | 1, 1 |
+| `Obj_InsLimit_00`, `Obj_Default`, `Weapon_*` | 표적 `ダメージ`/`Break`, 발사음 | 0(없음) |
+
+종류 4는 순서 키 +8이 큰 보이스를 앞에 두므로 `ヒット`는 +8이 가장 큰 하나만 남습니다. +8의 게임 의미(시작 순번 여부)는 [미확정]이라, "가장 최근 소리가 남는다"고 확정하지 않습니다.
+
 | 대상 | 시작 | 유지 | 끝 |
 |---|---|---|---|
 | InkAction(무기 +0x320) | 매 갱신 FireOn/FireOff(보류), 쏜 갱신 FireImpact(즉시) | 무기 +0x374 = 마지막 즉시 변경 프레임 | 다른 액션으로 바뀔 때 |
@@ -273,7 +309,7 @@ function setInkAction(w: Weapon, id: number, now = gameFrame) {   // 0x710286410
 function muzzleShotDirXZDot(boneMtx: Mat34, d: Vec3) {             // 0x7102578c34 끝
   let x = -boneMtx[0][0], z = -boneMtx[2][0]; const l = Math.hypot(x, z);
   if (l > 0) { x /= l; z /= l; }
-  return x * d.x + z * d.z;                                        // d = 플레이어 본체 +0x538 (의미 미확정)
+  return x * d.x + z * d.z;                                        // d = 플레이어 본체 +0x538 = 카메라 리그 수평 시선
 }
 function subjective(p: Player, viewer: Player) { return p === viewer ? 'Focused' : p.team === viewer.team ? 'Friend' : 'Enemy'; }
 ```
@@ -318,11 +354,15 @@ function subjective(p: Player, viewer: Player) { return p === viewer ? 'Focused'
 | 발사 키 방출 대상(무기+0x5f0)과 mode | **해소** [판독]: SLink 전용 래퍼 슬롯 3 | — |
 | 머즐 플래시 액션 변경 시점 | **해소** [판독]: 쏜 갱신에 FireImpact(0x7102579af4) | — |
 | 보류 액션(+0x384) 적용, FireImpact→FireOn 재발생 | **해소** [판독] §3.2: 슬롯 19 `0x710286540c`가 적용, 넘겨받기라 재발생 없음 | 슬롯 19 호출 시점 |
-| `MuzzleShotDirXZDot` 값 계산 | **식 해소** [판독] | 플레이어 본체 +0x538 벡터의 의미(SHARED.md에 [player] 요청) |
+| `MuzzleShotDirXZDot` 값 계산 | **식 해소** [판독]. +0x538 = PlayerCamera+0x1a4(리그 수평 시선) 사본, 매 프레임 0x7102458630이 씀 [판독, player_state.md §6.1.2, 5차에 문서 연결] | 웹 무기 뼈 행렬(Muzzle·무기 X축) 공급 |
 | 착탄 각도 θ의 정의, 벽 스플래시 슬롯 사용처 | **해소** [판독] (§3.5) | — |
 | 지형 착탄 효과음 | **해소** [판독+데이터]: Constant_Default S2 `インクヒット` | 반응 열(Constant 등)을 고르는 호출자 코드 |
-| S1/S2 기준 플레이어 | 부분: 둘 다 관리자 인스턴스, SubjectiveType은 req+0x34 | req+0x34/+0x38 를 채우는 코드(`0x71027b4aa4` 호출 전 단계) |
+| S1/S2 기준 플레이어 | 부분: 둘 다 관리자 인스턴스, SubjectiveType은 req+0x34. **5차 해소** [판독] §3.5: req+0x34 = 탄 소유 플레이어(`0x71016d9c60`), 판정 규칙 `0x71027b5430` | DamageHelper 경로 등 다른 요청 생성자의 +0x34 |
+| AggregateNum 묶는 기준, req+0x30 지연 목록 | **5차 해소** [판독] §3.5: 같은 대상(+0x48)·종류(+0x40, k=2면 +0x28, k=3이면 +0x50)끼리 개수, +0x30초 동안 같은 요청 억제 | 요청 +0x40 값을 정하는 info[7] 생성자 |
+| 발사·히트 컬링 n | **5차 해소** [판독] §3.2: 그 팀의 살아 있는 탄 수(등록 `0x7101645590`, 해제 `0x7101645f84`) | 기준점 객체(카메라 추정)의 정체 |
+| 리스너·지향성·제한기 생존 | **5차 해소** [실행] ([sound_resources.md](sound_resources.md) §4.1.2·§4.1.3·§4.3.2) | 리스너 주시점 공급원, 보이스 +8 writer |
+| 필터 컷오프·패닝 이득·FarFx 버스 | [미확정] (패닝 입력만 [판독], sound_resources §4.5) | aal 보이스 적용, SpeakerBalanceUnifier |
 | xlink compare 1–4, Switch 순서, Curve 형태 | **해소** [판독] ([xlink_format.md](xlink_format.md)) | — |
-| Alto 거리 감쇠 | **모델·평가식·우선순위(AUDC)·지향성(AADR) 해소** [판독] ([sound_resources.md](sound_resources.md) §4.2). DistCoef 결합은 게임 쪽 재정의(0x7103129c98)까지 좁힘 [미확정] | 게임 감쇠 확장(+0x50)의 +4 쓰기 위치 |
-| 그룹 동시 발음 제한 | GRP 레코드 → 그룹 객체 배치 **판독**, 무기 그룹 `Weapon_InsLimit_*`은 제한기 없음(type 0) [판독+데이터] | 제한기 4종 동작, 그룹 +0x1b8(0.016) 의미 |
+| Alto 거리 감쇠 | **모델·평가식·우선순위(AUDC)·지향성(AADR) 해소** [판독] ([sound_resources.md](sound_resources.md) §4.2). DistCoef 결합은 게임 쪽 재정의(0x7103129c98)까지 좁힘 [미확정]. **6차 해소:** 확장+4 = 1/DistCoef, writer = 게임 SLink 훅 `0x710313d4ec` [실행 219,680건] (sound_resources §4.2.7). AATN 세트 칸 배치 확정 [판독] (§4.2.4) | 전역 단위 값, 필터 종류 선택(sound_resources §4.6) |
+| 그룹 동시 발음 제한 | GRP 레코드 → 그룹 객체 배치 **판독**, 무기 그룹 `Weapon_InsLimit_*`은 제한기 없음(type 0) [판독+데이터]. **5차:** 비교 키·guard [실행 2,304건], 정렬 뒤 앞쪽 limitCount 생존·억제 [실행 600경우] (§5, sound_resources §4.3.1~4.3.2) **6차:** 보이스 +8 = 시작 순번, writer `0x71037d790c` [실행 2,445회] (sound_resources §4.3.2) | 그룹 +0x1b8(0.016) 의미, 종류 2~4 정렬 실행 |
 | VFXB v46 이미터 필드 | **주요 필드 해소** [판독] ([effect_resources.md](effect_resources.md) §2.2) | 형상별 식, Render/Combiner |

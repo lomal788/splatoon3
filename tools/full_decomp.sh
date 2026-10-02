@@ -12,11 +12,18 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 export PATH="/c/Program Files/Java/jdk-21/bin:$PATH"
 export GHIDRA_HEADLESS_MAXMEM=8G
 export MSYS_NO_PATHCONV=1
-until mkdir $R/ghidra_proj/full_lock 2>/dev/null; do sleep 5; done
+slot=
+while [ -z "$slot" ]; do
+  for s in full f1 f2; do
+    if mkdir $R/ghidra_proj/${s}_lock 2>/dev/null; then slot=$s; break; fi
+  done
+  [ -z "$slot" ] && sleep 5
+done
+if [ $slot = full ]; then proj=$R/ghidra_proj; else proj=$R/ghidra_proj/$slot; fi
 log=$R/ghidra_proj/full_last_$$.log
-c:/dev/mpj/tools/ghidra_12.1.2_PUBLIC/support/analyzeHeadless.bat $R/ghidra_proj spl3_main -process main.nso -noanalysis -readOnly \
+c:/dev/mpj/tools/ghidra_12.1.2_PUBLIC/support/analyzeHeadless.bat $proj spl3_main -process main.nso -noanalysis -readOnly \
   -scriptPath $R/web/tools/ghidra_scripts -postScript QuickDecomp.java "$out" $todo > $log 2>&1
-rmdir $R/ghidra_proj/full_lock
+rmdir $R/ghidra_proj/${slot}_lock
 grep -E "decomp [0-9]+|ERROR|Exception" $log | head -5
 rm -f $log
 $PY $R/web/tools/decomp_index.py

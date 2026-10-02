@@ -80,3 +80,48 @@ Pack/Actor/BulletShooterBase.pack.zs
 `GameParameters` 사전의 각 항목은 `$type`(코드의 파라미터 구조체 이름, `::`를 `__`로 바꾼 것)과 **기본값과 다른 필드만** 담습니다. 비어 있는 필드는 코드 생성자의 기본값을 씁니다. 예를 들어 `WeaponShooterNormal`에는 `RepeatFrame`이 없는데, `spl::WeaponShooterParam` 생성자 기본값이 6입니다 **[판독]**.
 
 `Params.pack.zs`에 있는 모든 `$type`과 데이터에 나온 필드 목록은 `analysis/param_types_in_data.json`(176종)에 있습니다.
+
+## 6. Banc 배치 → 액터 행렬 [실행]+[판독 — 2026-10-03 6차]
+
+Banc 액터의 `Translate`·`Rotate`(라디안)·`Scale`은 파서 `0x7103d03768`이 엔트리로 옮기고, `0x7103d03f4c`가 생성 정보 +0x40 위치 · +0x4c 회전 3×3(**행 우선, R = Rz·Ry·Rx**) · +0x70 스케일(행렬에 곱하지 않음)로 만듭니다. 씬 섹션 부모 행렬은 로비·대전 맵에서 단위입니다. 원본 실행 4257/4257 비트 일치(`PY web/tools/r6_assets_actor_mtx_emu.py`). 상세·주소·검증은 [gimmick/stage_misc.md](gimmick/stage_misc.md) §5.1. 스케일이 모델·형상 행렬에 들어가는 위치(T·R·S)는 [미확정]입니다.
+
+## 7. 공용 표·리소스 로더 판독 [판독+데이터 — 2026-10-03 6차]
+
+### 7.1 CombinationDataTable 셀의 "필드 없음"과 빈 문자열
+
+`HitEffectConfig`(Bootup 팩 `System/CombinationDataTableData/Default_spl__HitEffectConfig…bgyml`, 셀 `$type spl__HitEffectCell` 816개, 행 48 × 열 17)의 셀에는 `E1/E2/S1/S2` 필드가 아예 없는 경우와 `""`인 경우가 섞여 있습니다 [데이터]. 원본에서는 **둘이 같은 값**입니다 [판독]+[데이터]:
+
+- 셀 생성자 `0x710279ec14`가 `RowKey/ColumnKey`(+0x30/+0x38)와 `E1/E2/S1/S2`(+0x48/+0x50/+0x58/+0x60, 방문 `0x710279ecdc`) 전부를 같은 빈 문자열 포인터 `0x710496315d`("")로 채우고, 설정 플래그 4바이트(+0x68..+0x6b)를 0으로 둡니다 [판독].
+- 로더 `0x71027b5980`은 필드를 읽을 때 그 필드의 설정 플래그(예 +0x48 필드는 +0x6a, `0x71027b68e4`)가 꺼져 있으면 부모 파라미터(+0x10/+0x18 사슬)로 올라가고, 부모가 없으면 자기 값(생성자 기본값)을 씁니다(`0x71027b68f4~0x71027b69c8`) [판독]. 이 표의 셀 816개에는 `$parent`가 없습니다 [데이터].
+- 따라서 필드가 없으면 `""`과 같은 문자열을 읽습니다. 웹 `common/data/hit_effect.json`이 빈 필드를 생략한 것은 원본 조회 결과와 같습니다. +0x48 필드는 `"Splash"`/`"Hit"`/`"SplashWater"`와 문자열 비교로 종류를 정하며(`0x71027b69c8~`), 빈 문자열은 셋 모두와 다르므로 "그 밖" 분기로 갑니다 [판독]. 데이터에서 이 세 값을 갖는 열은 E2 이므로(리플렉션 표기 +0x48 = E1 과 다름) 리플렉션 이름 대응은 다시 확인이 필요합니다 **[미확정]** — 결론(없음 = "")에는 영향 없음.
+
+### 7.2 VFX 프리미티브: G3NT i번째 ↔ BFRES 모델 i번째
+
+VFXB 로더 `0x710082863c`가 최상위 섹션 사슬을 돌며 `G3PR`(0x52503347)을 만나면 첫 자식 `G3NT`의 본문 시작(자식 +0x14)을 리소스 +0xc8 에 두고 `0x7100829e58`(리소스, G3PR)을 부릅니다. `0x7100829e58`은 G3PR 본문을 ResFile 로 캐스트(`0x710088caec`)해 리소스 +0xa8 에 두고 `0x710082a764`를 부릅니다 [판독].
+
+```
+// 0x710082a764 (analysis/decomp/vfx/vfx_lib_02.c 1행)
+n = u16 ResFile+0xdc                    // 모델 수
+prim = 할당(n × 0x90)
+desc = 리소스+0xc8                       // G3NT 첫 항목
+for i in 0..n-1:
+    0x710082c0a0(prim[i], ResFile+0x28 모델 배열 + i×0x78, desc)
+    desc = desc+8 의 next 가 0 이 아니면 desc + next, 아니면 0
+```
+
+즉 **i번째 프리미티브 = BFRES 모델 i번째 + G3NT i번째 항목**입니다 [판독]. G3NT 항목의 8바이트(`effect_vfxb.py`가 "의미 미확정"으로 둔 값, 예 `00 01 02 ff 04 ff 00 00`)는 `0x710082c0a0`이 +0x14·+0x15(8바이트 중 4·5번째)를 정점 속성 인덱스로 써서 `_p0`·`_u1` 등이 없을 때 대체 속성을 고르는 데 씁니다 [판독-부분]. `static` VFXB 의 G3NT 185개 = 모델 185개 [데이터]. 웹 `asset_fx.py`의 대응 규칙은 원본과 같습니다.
+
+### 7.3 효과음 AMTA 피크 [데이터]
+
+AMTA `data`+0x04 피크는 48 kHz 원본에서는 자체 DSP-ADPCM 디코드 피크와 6자리 일치합니다([effect_sound/sound_resources.md](effect_sound/sound_resources.md)). 44.1 kHz 원본(웹 번들 195개, 48 kHz 는 106개)에서는 비 `amtaPeak/decodedPeak`가 **0.853~1.428**로 흩어집니다(예 Spray07 1.348, HitEf_Slime_02 1.428, Pl_FootUpLStone00_03 0.853) [데이터, `web/games/splatoon3/assets/sfx/*/sfx.json`]. 대역 제한 재샘플만으로는 피크가 15% 줄거나 43% 커지기 어려우므로 "48 kHz 재샘플 뒤 측정"이라는 이전 [추정]은 데이터와 잘 맞지 않습니다. 이 값은 제작 툴이 기록한 것이고, 게임 코드가 이 피크를 읽는지(AMTA 로더 후보 `0x710386c63c`, `0x710386ed4c`)는 확인하지 않았습니다 **[미확정]**.
+
+## 8. 미확정 (2026-10-03 6차 갱신)
+
+| 항목 | 상태 | 다음에 볼 곳 |
+|---|---|---|
+| 배열 필드의 `$parent` 병합 방식 | [미확정] (§3) | |
+| 배치 행렬의 S 합성 위치 | [미확정] — [gimmick/stage_misc.md](gimmick/stage_misc.md) §8 | 컴포넌트 vt+0x50 |
+| Box `OffsetRotation`/`Center` 합성 순서 | [미확정] — 같은 곳 | Phive Box 빌더 |
+| AMTA 피크(44.1 kHz) 기록 방식·소비 여부 | [미확정] §7.3 | AMTA 로더 `0x710386c63c`/`0x710386ed4c`의 data+4 읽기 |
+| ~~CombinationDataTable 빈 필드 = ""~~ | 해소 §7.1 [판독]+[데이터] | |
+| ~~VFX 프리미티브 매핑~~ | 해소 §7.2 [판독] | |

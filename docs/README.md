@@ -15,6 +15,17 @@
 
 ## 공용 문서
 
+- [analysis_completion.md](analysis_completion.md) — Lby_Lobby00 1인 연습 출처별 미확정/추정 감사 목록·정확한 처리율
+- [completion_run.md](completion_run.md) — 이번 인수 분석의 명령·성공/실패·보호 파일 검증
+- [completion_summary.md](completion_summary.md) — 이번 회차 종료 보고·영역별 집계·확정/미확정·웹 반영 필요
+- [camera/solo_completion.md](camera/solo_completion.md) — 카메라 기저·붐 구체·FOV 정정
+- [weapon/solo_shooter.md](weapon/solo_shooter.md) — 첫 발·잉크·탄 생성 허용 원본 근거
+- [physics/collision_runtime_completion.md](physics/collision_runtime_completion.md) — 양방향 필터·몸체 원점·월드 단계
+- [graphics/solo_graphics_audit.md](graphics/solo_graphics_audit.md) — 모자 행렬 원본 실행 및 HairArrange 후보 정정
+- [effect_sound/solo_fx_audit.md](effect_sound/solo_fx_audit.md) — FIXED4채널·VAT 법선·음성 제한기 비교
+- [player/solo_completion.md](player/solo_completion.md) — 오징어속도 k1088건, 이동애니속도2004건 원본 비트 대조
+
+
 - [00_extraction_pipeline.md](00_extraction_pipeline.md) — XCI→NCA→ExeFS/RomFS 추출, 해시 검증, 재현 명령
 - [01_package_and_assets.md](01_package_and_assets.md) — RomFS 구성, zstd/SARC/BYML, 액터→컴포넌트→파라미터 연결
 - [02_code_and_params.md](02_code_and_params.md) — main NSO(심볼 없음), 파라미터 리플렉션으로 필드·기본값 판독, 클래스명→vtable

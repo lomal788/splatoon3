@@ -19,6 +19,8 @@ Splatoon 3 v0의 셰이더 바이너리를 컨테이너 구조부터 풀고, Max
 | BlitzUBO0(gsys_user0) | 1104 B 레이아웃 확정(원본 생성자 에뮬 실행), 팀 세트 0/1/2 의 Ink/InkBright 등 7색 + 중립 3색, InkUBOParam 재질값, 2cl 잉크 색 = mix(InkBright×InkRimIntensity, Ink, clamp(m×InkRimBlendCoef))(§3.9) | [판독]+[실행: 레이아웃] |
 | Ink(9)/InkBright(10) 값 | 셰이더에는 BlitzUBO0 data[3/4]·[10/11]·[62/63] 으로 들어감(§3.9). 값은 CPU 계산. 입력 = 활성 env `agl::env::DirectionalLight` 의 DiffuseColor(+0x128)·Intensity(+0x1a0) + 하늘 SH 위쪽 조도, InkBright 보정 0.1/0.5 — 계산식·입력 경로는 [team_color.md §5.3](team_color.md). 값은 스테이지 조명에 따라 달라짐 | [판독] (MainLight→DirectionalLight 경로도 [판독]: 0x7102b607c4/0x7102b60ea0 가 RenderingDay MainLight 를 직접 기록 — [stage_rendering.md §4](stage_rendering.md)) |
 | 맵(스테이지) 재질 | Fld_VSLobby 64재질 프로그램 확정, 베이크·도색·동적광·안개 식 — [stage_rendering.md §5~§8](stage_rendering.md) | [데이터]+[판독] |
+| 후처리 HDRCompose (5차) | `Hoian_ProcHDRCompose` 톤매핑 6종·감마·블룸 합성·색 보정 LUT·비네트 식과 픽셀 순서, 변형 선택(0x710112215c)·플래그(0x7103744058) 원본 실행 일치, 게임 경로 톤매핑 = 4 — [stage_rendering.md §3.1~§3.3](stage_rendering.md) | [판독]+[실행] |
+| 조도 SH 프로그램 (5차) | `Hoian_Proc` `IrradianceClearSH`·`IrradianceCubeMapAllToSH`·`IrradianceSHToCubeMap` 역번역, CPU 리드백 변환 0x71010325d4 원본 실행 일치 — [stage_rendering.md §5.6](stage_rendering.md) | [판독]+[실행] |
 
 ## 2. 자료와 도구
 
@@ -264,13 +266,15 @@ normal = texture(cTexNormal, uv2)        // 프래그먼트: in_attr0.zw
 - 팀 세트 색 i 는 `mgr + 0x2a8 + 세트×0xF0 + i×0x10`([team_color.md §3](team_color.md) 의 전역+0x560 표와 같은 메모리)에서 복사. 세트0 은 swap 이면 Bravo.
 - InkUBOParam 선택 0x7102c1d59c: 시간대 0 Day / 1 Sunset / 2 Night, 모드 플래그에 따라 Oil 또는 Marble 변형. 데이터는 Bootup 팩 `Gyml/InkUBOParam*.bgyml` [판독+데이터].
 - 미확정: data[20], [36].w, [52]~[55] (안개 계열로 보임)의 작성자(holder+0xc28, +0x13a8, +0x13e8, +0x1430, +0x1478), GlobalWind ID 0x5f 를 켜는 데이터.
+- 6차: [22].z(holder+0xcc0) 작성자 = 0x7102be8aec, 값 1/(8·S)(S = 200 또는 400, 문자열 비교로 선택) [판독]. [22].w(+0xcc4) 작성자는 미발견. [53]~[55] 의 RadialFog 칸 이름: [53].w = BlendFactor(로비 기본 0 → 산란 항 꺼짐), [54] = (LobeCtrl 1, SizeCtrl 5, 1/exp2(10), ShadowInfluence 0) [판독] — [stage_rendering.md §4](stage_rendering.md).
+- 5차: [53]~[55] 작성자 = SceneCommonUBOHolder 안개 이벤트 콜백 0x7101185af4 — [53] = (ScatteringCoeff, 1/(End−Start), ScatteringCoeff, RadialFog 값), [54]/[55] = 안개 이벤트 +0x48/+0x38 vec4 [판독]. 표와 이벤트 배치는 [stage_rendering.md §4·§5.5](stage_rendering.md). 정정(2026-10-03): stage_rendering 의 이전 후보 0x7102c5a3c8 은 접지 판정 함수라 무관. 남은 것: [36].w, [52], GlobalWind 데이터.
 
 ### 3.8 웹 포팅
 
 1. **재질별 프로그램을 고정**: 위 절차(§3.5)로 프로그램 번호를 정하고, 그 프로그램의 역번역 GLSL을 참조 구현으로 둡니다. 우버 셰이더 전체를 옮길 필요 없이 플레이어에 쓰이는 프로그램 수십 개만 three.js `onBeforeCompile` 청크로 재현합니다.
 2. 팀색 청크(§3.6.1/3.6.2)와 UV 선택(§3.7)은 원본 식 그대로 씁니다. 텍스처는 PNG로 풀었으므로 `_su0`의 R 채널을 그대로 샘플합니다.
 3. `Mat` uniform 값은 bfres 재질 `params`(없으면 §3.3 기본값), 팀색은 [team_color.md](team_color.md) 계산 결과.
-4. 조명(Env/Context/BlitzUBO1·2)은 CPU 쪽 칸 대응이 미해독이므로 PBR 근사를 유지합니다(셰이더 쪽 사용 칸과 식은 맵 재질 기준으로 [stage_rendering.md §5.4·§5.5·§8](stage_rendering.md)에 정리). BlitzUBO0 은 §3.9 대로 팀 세트 색(Ink/InkBright 포함)·InkUBOParam 으로 채우면 2cl 잉크 분기를 원본 식으로 돌릴 수 있습니다. 팀색·마스크·UV처럼 **색이 정해지는 부분만** 원본 식이고, 최종 셰이딩은 근사라는 점을 구분해 두세요.
+4. 조명(Env/Context/BlitzUBO1·2)은 CPU 쪽 칸 대응이 미해독이므로 PBR 근사를 유지합니다. 정정(2026-10-03, 6차): **Env(`gsys_environment`, 512 B)** 는 칸 대응이 해소되었다 — 멤버 35개 레이아웃 원본 실행, 기록자 0x71036b35c0·0x71036b1300 판독([stage_rendering.md §5.5.1](stage_rendering.md)). Env 는 원본 값으로 채울 수 있고(SH [25..31] 값만 근사), Context·BlitzUBO1·2 는 여전히 미해독이다. (5차: Env 의 안개·SH 원천과 후처리 HDRCompose 는 [stage_rendering.md §3·§4·§5.6](stage_rendering.md)에서 확인, 512 B 블록으로 옮기는 코드는 여전히 미확인)(셰이더 쪽 사용 칸과 식은 맵 재질 기준으로 [stage_rendering.md §5.4·§5.5·§8](stage_rendering.md)에 정리). BlitzUBO0 은 §3.9 대로 팀 세트 색(Ink/InkBright 포함)·InkUBOParam 으로 채우면 2cl 잉크 분기를 원본 식으로 돌릴 수 있습니다. 팀색·마스크·UV처럼 **색이 정해지는 부분만** 원본 식이고, 최종 셰이딩은 근사라는 점을 구분해 두세요.
 
 ## 4. 도색 GPU 스탬프 (Hoian_Proc.sharcb)
 
@@ -298,7 +302,7 @@ PaintOverpaint uniform(RegisterUBO 128 B, 바이트 오프셋): `cColor` 0 (vec4
 |---|---|
 | cColor | 팀 0/1/2 → (1,0,0,0)/(0,1,0,0)/(0,0,1,0) (표 0x7104aa2b6c/60/54), 그 외 0 |
 | cAlpha | 요청 `+0x58` 바이트 / 255 |
-| cHeightRange | 대상 vt+0x68 (vec2) |
+| cHeightRange | 대상 vt+0x80 (vec2). Floor `0x7102c1b820` / Col `0x7102c0d6e0` = (w+min, w+max). 정정(2026-10-03): 이전 기록 "vt+0x68"은 틀렸다. `0x7102c564d0`이 vt+0x68 결과(스탬프 이동, y = D+0x0c 깊이 키)를 지역 변수에 받은 뒤 vt+0x80 결과로 덮어써 넘긴다 [판독] (paint_and_score.md, [r5 paint]) |
 | cWorldViewProj | 0x7102c17ae0 결과 |
 | cFrameBufferSizeInv | (1/폭, 1/높이) — 도색 텍스처(`대상+0x2d8/+0x2da`) |
 | **cTeamAlphaTestThreshold** | **0.3f** (0x3e99999a) |
@@ -373,7 +377,7 @@ function overpaintTexel(D: Float32Array /*4*/, inkMask: number, cAlpha: number, 
 | 팀0 0.8 위에 팀0 ink 0.05 | 0.8062 (1% 감쇠 후 보간) |
 | 팀0 1.0 지우기 0.5: 모드 10 / 모드 11 | (0.5,0,0) / discard(아직 0.3 이상) |
 
-스텁·미검증: 텍스처 포맷 양자화, 블렌드 상태(셰이더 출력이 그대로 기록된다고 가정 — 블렌드 설정 미확인), 행렬, GPU 래스터 규칙.
+스텁·미검증: 텍스처 포맷 양자화, 블렌드 상태(셰이더 출력이 그대로 기록된다고 가정 — 블렌드 설정 미확인), 행렬, GPU 래스터 규칙. 정정(2026-10-03): 이 가운데 행렬은 스탬프 행렬 `0x7102c17ae0` 원본 실행 6400/6400 원소 비트 일치로 해소됐다 [실행] (paint_and_score.md §3.5.5, `web/tools/r5_paint_stamp_emu.py`).
 
 ## 5. UI 사용자 셰이더 MeterAction
 
@@ -414,7 +418,7 @@ OUTPUT = c * vColor;   // 이후 CalcAlphaProcess(알파 처리), FinalAdjustmen
 | 항목 | 상태 | 필요한 근거 |
 |---|---|---|
 | ~~Ink(9)/InkBright(10) 팀색 값~~ | 해소 — 입력 P 는 "도색 관리자"가 아니라 env 관리자(전역 0x71059a7838)의 DirectionalLight(정정 이유: GOT 0x71057907e8 이 가리키는 객체의 +0x4bd0/+0x4be0 은 env 객체 타입별 색인표, RTTI 0x7105814c50 = DirectionalLight). `CorrectionInkSSS` 기본값 BrightnessOffset 0.1 / BrightnessOffsetLuminance 0.5 (생성자 0x71011af154) | [team_color.md §5.3](team_color.md), 남은 것은 거기 §9 |
-| ~~BlitzUBO0 레이아웃~~ | 해소(§3.9): 작성자 0x7101185c7c(팀색)·0x7102c1d6ec(InkUBOParam), 레이아웃 원본 에뮬 실행 1104 B 일치. r3_batch1 후보 4개는 무관한 생성자·소멸자였음 | 남은 것: data[20]/[36].w/[52..55] 작성자, GlobalWind 데이터 |
+| ~~BlitzUBO0 레이아웃~~ | 해소(§3.9): 작성자 0x7101185c7c(팀색)·0x7102c1d6ec(InkUBOParam), 레이아웃 원본 에뮬 실행 1104 B 일치. r3_batch1 후보 4개는 무관한 생성자·소멸자였음. 5차: [53]~[55] = 0x7101185af4(안개 이벤트), [20] = 0x7102c2036c([stage_rendering.md §7](stage_rendering.md)) | 남은 것: data[36].w/[52] 작성자, GlobalWind 데이터. 6차: [22].z = 1/(8·S)(0x7102be8aec, S 200/400), [53].w = RadialFog BlendFactor(기본 0), [54] = (LobeCtrl, SizeCtrl, 1/exp2(2·SizeCtrl), ShadowInfluence) — [stage_rendering.md §4·§7](stage_rendering.md). [22].w 작성자 미발견 |
 | `blitz_calc_color` ID 전체 의미 | 대부분 해소(§3.6.4 표). 남은 source/calc_type 값은 단일 옵션 쌍이 없음 | 여러 옵션이 다른 쌍 역번역 |
 | ~~도색 모드 0..17 ↔ 도색 종류~~ | 해소([paint]): 모드 = 패스 역할 + 팀(§4.2 모드 설명). 모드 3·7·13 용도는 [paint] 쪽 미확정 | paint_and_score.md §3.5.4 |
 | ~~도색 텍셀 A 채널 의미~~, 텍스처 포맷 정밀도, ~~블렌드 상태~~ | A 는 모드 13 만 씀(판정 무관), 블렌드 끔·채널 마스크는 원본 에뮬로 확인([paint] §3.1·§3.5.4). 비트 폭 이름만 [추정] | paint_and_score.md |

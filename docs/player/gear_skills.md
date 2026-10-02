@@ -38,7 +38,7 @@ PlayerParam vtable 슬롯25 0x71024265a0  (GameParameterTable 바인딩)
    0x7102664c48 SuperJumpTimeSave +0xf8/+0xfc, 0x7102665590 ActionSpecUp_Squid +0x13c/+0x140)
 ```
 
-호출 시점(장비 변경·리스폰 때인지 매 프레임인지)은 확인하지 않았다 **[미확정]**. 결과가 PlayerParam에 캐시되고 이동 코드는 캐시만 읽는다 **[판독]**.
+호출 시점은 이전 판에서 **[미확정]**이었다. 2026-10-03 5차 판독: 메인 계산 `0x7102475a54`가 **매 프레임** `0x71024761e8`에서 AP 집계 `0x710265ca78(PlayerParam)`을 부르고, 반환값이 참일 때만 `0x71024761f4`에서 `0x710265ca04`(기어 계산 11개 연속 호출 + `0x7102667b50`)를 부른다. `0x710265ca78`은 14개 능력의 (메인 + 서브) AP 합을 PlayerParam+0x3c/+0x74의 직전 값과 비교해 하나라도 다르면 참을 돌려준다(전역 바이트 `0x71058e87c8`이 0이면 거짓). 그 밖에 `0x71024744c0`(함수 `0x71024719d4`), `0x7102490f40`(`0x71024901c4`), `0x7102491dc4`(`0x7102491b68`)가 `0x710265ca04`를 조건 없이 부른다(이 세 함수의 게임 의미는 **[미확정]**). 결과가 PlayerParam에 캐시되고 이동 코드는 캐시만 읽는다 **[판독]**.
 
 ## 4. 구조체·필드
 
@@ -58,9 +58,9 @@ PlayerParam vtable 슬롯25 0x71024265a0  (GameParameterTable 바인딩)
 | +0x104 | f32 | 적 잉크 위 이동 속도 | 〃 | 0x710245b2b4 |
 | +0x108 | f32 | 적 잉크 위 사격 중 이동 속도 | 〃 | 0x710245b2b4 |
 | +0x10c | f32 | 적 잉크 ShotK | 〃 | 미확정 |
-| +0x110 | f32 | 적 잉크 지속 데미지/프레임 | 〃 | 미확정(combat 영역) |
-| +0x114 | f32 | 적 잉크 데미지 한계 | 〃 | 미확정 |
-| +0x118 | f32 | 적 잉크 아머 HP | 〃 | 미확정 |
+| +0x110 | f32 | 적 잉크 지속 데미지/프레임 | 〃 | PlayerStepPaint 갱신 `0x710268b3b8` [판독] — [player_state.md §8.2](player_state.md), [../combat/player_life.md](../combat/player_life.md) |
+| +0x114 | f32 | 적 잉크 데미지 한계 | 〃 | `0x710268b3b8` [판독] |
+| +0x118 | f32 | 적 잉크 아머 HP(실제로는 적 잉크 무데미지 프레임 수 상한) | 〃 | `0x710268b3b8` [판독] — [../combat/player_life.md](../combat/player_life.md) §1 |
 | +0x13c | f32 | ActionSpecUp_Squid WallJumpChargeFrm 결과(벽 점프 충전 프레임) | 0x7102665590 | 상태 결정 0x7102442354 지상 공통 H(0x8f WallJumpCharge 판정의 보간 상한) [판독, 2026-10-02 [move] 보조 분석] — [player_state.md §6.3](player_state.md) |
 | +0x140 | f32 | ActionSpecUp_Squid Somersault_MoveVelKd 결과(0AP 0.85 ~ 57AP 1.0) | 0x7102665590 | 벽 점프·오징어 롤 0x7102459630: 발사 속도 ×(+0x140)^n (n = 본체+0x7dc, 10 상한) [판독] — [movement_physics.md §6.8](movement_physics.md) |
 | +0x148/+0x150 | 핸들 | `PlayerGearSkillParam_MainWeaponSetting`(무기별) | 미확정 | 0x710265df40, 0x7102669b90 |
@@ -85,7 +85,7 @@ PlayerParam vtable 슬롯25 0x71024265a0  (GameParameterTable 바인딩)
 | +0x1f8 | spl__PlayerGearSkillParam_SubEffectReduction |
 | +0x200 | spl__PlayerGearSkillParam_ActionSpecUp_Squid |
 
-`+0x180`이 켜진 모드(대체 getter 0x71024fefe4/0x71024ff2a4/0x71024ff564 등, `+0x188` 객체)의 정체는 확인하지 않았다 **[미확정]**. 대전에서는 꺼져 있다고 보고 기본 경로만 문서화한다 **[추정]**.
+`+0x180`이 켜진 모드(대체 getter 0x71024fefe4/0x71024ff2a4/0x71024ff564 등, `+0x188` 객체)의 정체는 이전 판에서 **[미확정]**이었다. 해소(2026-10-02 [move], [movement_physics.md §6.1](movement_physics.md)): +0x180은 씬 플래그 `Scene_Coop`(연어런)에서 켜지고 대전·사격장에서는 0이다 **[판독+실행(에뮬)]**. +0x188이 가리키는 파라미터 타입 이름만 **[미확정]**이다.
 
 ### 4.2 능력 열거형 [데이터]
 
@@ -132,7 +132,7 @@ if (id == SquidMove_Up && (PlayerParam.+0xac >> 4) & 1)   // 특수 능력 값 1
     p = clamp(p * 0.8, 0, 1)                 // 0.8 = 전역 [0x71058c034c], 정적 초기화 0x710265c230이 씀 [실행(에뮬)]
 ```
 
-능력 104의 실제 게임 이름(닌자 오징어인지 등)은 문자열만으로 확정하지 않았다 **[미확정]**.
+능력 104의 표시 이름은 이전 판에서 **[미확정]**이었다. 해소(2026-10-03 5차): `Mals/<언어>.Product.100.sarc.zs`의 `CommonMsg/Gear/GearPowerName.msbt`에서 라벨 `SquidMoveSpatter_Reduction`(열거 이름과 같은 문자열)의 값이 USen "Ninja Squid", KRko "징어닌자", JPja "イカニンジャ"다 **[데이터]**. 같은 파일에서 100 StartAllUp = "스타트 대시", 103 ComeBack = "컴백", 105 DeathMarking = "리벤지"(KRko).
 
 ### 5.2 Low/Mid/High 비선형 보간 (모든 기어 계산 함수에 인라인)
 
@@ -153,7 +153,7 @@ result = Low + range * k
 ```
 
 - 상수 0.001 = 0x3a83126f, 0.999 = 0x3f7fbe77, -1.442695 = 0xbfb8aa3b **[판독]**.
-- `logf`·`expf`는 SDK 임포트(PLT 0x7103e9c2a0, 0x7103e9be20). 웹에서는 `Math.log`/`Math.exp` 결과를 `Math.fround`로 감싸면 된다. 이번 비교에서 파이썬 `math.log/exp`+f32 반올림 결과가 원본 실행과 비트 일치했다 **[실행(에뮬)]**. 다만 에뮬에서도 log/exp는 파이썬으로 대신 계산했으므로 SDK 수학 라이브러리 자체의 1ulp 차이는 검증 범위 밖이다.
+- `logf`·`expf`는 SDK 임포트(PLT 0x7103e9c2a0, 0x7103e9be20). 웹에서는 `Math.log`/`Math.exp` 결과를 `Math.fround`로 감싸면 된다. 이번 비교에서 파이썬 `math.log/exp`+f32 반올림 결과가 원본 실행과 비트 일치했다 **[실행(에뮬)]**. 다만 에뮬에서도 log/exp는 파이썬으로 대신 계산했으므로 SDK 수학 라이브러리 자체의 1ulp 차이는 검증 범위 밖이었다. 정정(2026-10-03 5차): SDK logf/expf를 직접 실행하면 1740건 중 1건이 1ulp 다르다(§9 아래 교정 이력).
 - HumanMoveUp Mid(0.12)는 정확히 중점이라 Human 속도는 p에 선형 **[실행(에뮬)]**.
 
 ### 5.3 사격 중 이동 배율(+0xbc)
@@ -201,8 +201,8 @@ function gearLerp(low: number, mid: number, high: number, p: number): number { /
 `web/tools/player_gear_emu.py`:
 
 - 합성 상태: PlayerParam 0x260 B 영역에 AP만 넣고, 파라미터 객체는 4.3 기본값 + 플래그 1. 기어 열거 표(0x71058c0458/60/68)는 0..13 항등, 특수능력 표(0x71058bc378/80/88)는 100..111로 채움. 전역 상수 구조체는 원본 정적 초기화 0x710265c230을 먼저 실행해 채움.
-- 실행: 0x710265df40 / 0x710265fd48(비트4 꺼짐·켜짐) / 0x7102665ee4를 AP 22종 × (메인만, 서브만)으로 실행.
-- 결과: 출력 731값 모두 재구현과 차이 0 (`analysis/player/gear_emu_result.txt` 끝줄 `최대 절대 차 0.000e+00`).
+- 실행: 0x710265df40 / 0x710265fd48(비트 4 꺼짐·켜짐) / 0x7102665ee4를 AP 22종 × (메인만, 서브만)으로 실행.
+- 결과: 출력 731개 값 모두 재구현과 차이 0 (`analysis/player/gear_emu_result.txt` 끝줄 `최대 절대 차 0.000e+00`).
 - 스텁: PLT의 logf/expf/powf/sqrtf는 파이썬 f32 계산으로 대체, 그 밖의 PLT는 x0=0 반환. 열거 표는 합성(실제 표 내용·순서는 초기화 함수 0x710266e4dc, 0x71024cdd94를 실행하지 않음).
 - 검증하지 않은 범위: AP 집계 0x710265ca78(조건부 가산·특수 능력), MainWeaponSetting 덮어쓰기 분기(+0x148 null로만 실행), `$parent` 체인 탐색, +0x180 대체 모드.
 
@@ -210,8 +210,12 @@ function gearLerp(low: number, mid: number, high: number, p: number): number { /
 
 | 항목 | 이유 / 필요한 근거 |
 |---|---|
-| 기어 계산 호출 시점 | 0x710265ca04의 호출자 미추적 |
+| 기어 계산 호출 시점 | **해소 [판독]**(2026-10-03 5차): 매 프레임 AP 변화 검사 → 변하면 재계산(§3). 남은 것: 조건 없이 재계산하는 세 호출자(`0x71024719d4`, `0x71024901c4`, `0x7102491b68`)의 게임 상황 [미확정] |
 | AP 집계 세부(StartAllUp/EndAllUp/ComeBack 등 조건부 AP) | 0x710265ca78 일부만 읽음. 가산값은 전역 상수 구조체 0x71058c0340~(정적 초기화 0x710265c230)에 있으며 `analysis/player/bss_consts_58bb000.txt`로 값은 뽑아 둠 |
-| 특수 능력 104의 게임 내 이름 | 문자열 `SquidMoveSpatter_Reduction`만 확인 |
-| +0x10c(ShotK)·+0x110~+0x118의 소비처 | reader 미추적(데미지는 combat 영역) |
-| ActionSpecUp_Squid 두 값의 체감 의미 | +0x140 은 발사 속도에 n 제곱으로 곱해진다(판독). n(본체+0x7dc)의 writer·의미(연속 횟수 추정)는 미확정 |
+| 특수 능력 104의 게임 내 이름 | **해소 [데이터]**: "징어닌자"(Ninja Squid) — §5.1 |
+| +0x10c(ShotK)·+0x110~+0x118의 소비처 | **부분 해소 [판독]**: +0x110/+0x114/+0x118은 PlayerStepPaint `0x710268b3b8`이 읽는다(combat 문서). +0x10c(ShotK) reader는 [미확정] — 다음: PlayerParam 포인터(본체+0xa658)를 받는 함수에서 `ldr s?, [x?, #0x10c]` |
+| ActionSpecUp_Squid 두 값의 체감 의미 | **해소 [판독+실행(구간)]**(2026-10-03 정정): +0x140은 롤·벽 점프 발사 속도에 정수 n(10 상한)만큼 반복 곱한다. n은 공통 발사 꼬리에서 +1, 입력 경로에서 형태 이탈 또는 strict 90프레임 초과 시 0 — [movement_physics.md §6.8.1](movement_physics.md). +0x13c는 상태기계 H(0x8f WallJumpCharge)의 보간 상한 |
+
+2026-10-03 보완: 특수 능력 104의 AP 비율 0.8 보정(§5.1) 외에, 목표 오징어 속도에서 `0x710266c6e4`가 0.9를 반환한다. 인자 bit0이 켜져 있으면 1을 반환한다. 원본 1088건 비트 대조 **[실행]** — [movement_physics.md §6.1.1](movement_physics.md). 표시 이름은 5차에서 해소했다(§5.1).
+
+2026-10-03 5차 정정(§5.2·§8): "파이썬 `math.log/exp` + f32 반올림이 원본과 비트 일치"는 에뮬에서 logf/expf를 파이썬으로 대신 계산한 결과였다(§8 스텁 기록과 같음). 원본 SDK 모듈(`extracted/exefs/sdk.img`의 logf·expf)을 직접 실행해 §4.3 표 15행 × AP 0..57 × 특수 능력 비트(0/1) = 1740건을 대조하면 **1건이 1ulp 다르다**: OpInk_MoveVel_Shot(0.012/0.033/0.042) AP 50, SDK 0x3d2a7108 / 파이썬 0x3d2a7107 **[실행]**(`web/tools/r5_player_libm_emu.py`). 웹에서 비트 일치가 필요하면 SDK logf/expf 알고리즘을 옮겨야 한다.

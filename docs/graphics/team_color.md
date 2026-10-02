@@ -128,7 +128,7 @@ inkCorrection(out, lin, P, _, bright = (i == 10))
 | `L` | `agl::env::DirectionalLight` (vtable 0x7105723008, 객체 0x258 B, 팩토리 0x71035d8c60) | 0x71035d9320 이 이름 문자열과 함께 등록해 반환 ID 를 0x7105999180 에 저장, RTTI 확인 함수 0x71035d8354 가 같은 vtable 슬롯 +0x48 [판독] |
 | `L+0x128` | 파라미터 `DiffuseColor`(파라미터 객체 +0x110, 값 +0x128 vec4, 기본 (1,1,1,1)) | 생성자가 이름 CRC32 를 즉석 계산(`D,i,f,f,u,s,e,C,o,l,o,r`) [판독] |
 | `L+0x1a0` | 파라미터 `Intensity`(객체 +0x188, 값 +0x1a0, 기본 1.0) | 같은 생성자(`I,n,t,e,n,s,i,t,y`) [판독]. 다른 소비자(0x7101134c40)도 `Intensity × DiffuseColor` 를 광원 색으로 씀 |
-| 하늘 항 | 전역 0x71058186e4 (vec4, 초기 (0,0,0,1)) = SH9 조도(0x7101033dc0, 7×vec4 형식 cAr/cAg/cAb/cBr/cBg/cBb/cC)를 **위쪽 (0,1,0)** 으로 평가한 값 | 팀색 관리자 생성자 0x710117649c 가 등록한 콜백 0x71011767f8 이 이벤트 객체 +0x18 의 SH 계수로 갱신 [판독]. 이벤트 종류(어느 시스템이 SH 를 보내는지)는 [미확정] |
+| 하늘 항 | 전역 0x71058186e4 (vec4, 초기 (0,0,0,1)) = SH9 조도(0x7101033dc0, 7×vec4 형식 cAr/cAg/cAb/cBr/cBg/cBb/cC)를 **위쪽 (0,1,0)** 으로 평가한 값 | 팀색 관리자 생성자 0x710117649c 가 등록한 콜백 0x71011767f8 이 이벤트 객체 +0x18 의 SH 계수로 갱신 [판독]. 이벤트 종류(어느 시스템이 SH 를 보내는지)는 [미확정] → **5차 해소**: 이벤트 키 0x710580e818 을 보내는 쪽은 환경광 관리자(0x710102a3e8, 대체 경로 0x7101029f6c)이고 계수는 환경 큐브를 GPU 로 SH 투영한 리드백(0x71010325d4)이다([stage_rendering.md §5.6](stage_rendering.md)) [판독]+[실행: 변환·평가 함수 각 2000건] |
 
 ```
 t = Intensity · L*(DiffuseColor.rgb)/100 + L*(skyUp.rgb)/100            // §5.2 의 t (flag = 1)
@@ -137,9 +137,20 @@ r = clamp((6·Rate1 − Rate6)/5 + (Rate6 − Rate1)/5 · t, 0, Rate6) = clamp(0
 
 - 스테이지 조명 값의 출처: env 파라미터 접근자 두 클래스가 그룹 이름 `"MainLight"` 로 DirectionalLight 를 읽고 쓴다 — ID 0x53 get/set 0x710104d8e4/0x710104d9b4 = `Intensity`(+0x1a0, f32), ID 0x54 get/set 0x710104da84/0x710104db54 = `DiffuseColor`(+0x128, 16 B) [판독]. 스테이지 씬 팩의 `game__gfx__parameter__RenderingDay/Night/Sunset` 에 `Lighting.MainLight{Color, Intens, Latitude, Longitude, CubeMapIntens, IsUseCubeMapIntens}`(리플렉션 0x71011bc170: Color +0x30, CubeMapIntens +0x40, Intens +0x44, Latitude +0x48, Longitude +0x4c, IsUseCubeMapIntens +0x50)가 있어, `MainLight.Color → DiffuseColor`, `MainLight.Intens → Intensity` 로 들어간다. **[판독]으로 정정**: 렌더링 파라미터 적용 0x7102b5fe88 → 0x7102b5ff94 → 0x7102b607c4 가 env 첫 DirectionalLight 의 +0x128 = lerp(MainLight.Color), +0x1a0 = lerp(MainLight.Intens) 를 접근자를 거치지 않고 직접 쓰고, 0x7102b60ea0 이 +0x1c0 Direction = (−sin Lon·cos Lat, −sin Lat, −cos Lon·cos Lat) 를 쓴다([stage_rendering.md §4](stage_rendering.md)). 대전 로비(`LobbyVersusLockerTest.RenderingDay`)는 Color (0.6706, 0.8510, 1.0), Intens 10. 예: `Vss_Yagara` 낮(`Vss_YagaraDay00`) MainLight Color (0.902, 0.827, 0.616), Intens 6.0 [데이터] → 앞 항 6·L*/100 = 5.58.
 - 기본 env 값 [데이터]: `Env/Default.Nin_NX_NVN.genvb.zs`(SARC) 안 `*/default*.baglenv`(AAMP v2, 이름 CRC32)를 `PY web/tools/render_aamp.py` 로 풀면 `DirectionalLight/DirectionalLight0`(name `Main`)이 하나씩 있다 — Day: DiffuseColor (1,1,1), Intensity 4.0, Direction (−0.3,−0.7,−0.6) / Sunset: (1, 0.889, 0.803), 4.0 / Night: (0.635, 0.466, 1.0), 0.1 / Viewer: (1, 0.95, 0.7), 4.0. 기본 낮이면 앞 항 = 4·100/100 = 4.0(r = 0.41 + 0.07·하늘 항). 스테이지 `MainLight`(예 Yagara Intens 6)가 이것을 덮는지는 위 [추정]에 달려 있다.
+
+- **2026-10-03 문서 정정:** 바로 위 마지막 문장의 “덮는지는 위 [추정]”은 오래된 결론이다. §5.3 및 stage_rendering §4의 2b607c4 직접 기록으로 덮어쓰기는 [판독] 확정이다. 기본 env 값 데이터는 유지한다. 하늘 SH 송신원·조명 변경 뒤 팀색 재계산은 여전히 미확정.
 - **소비처** [판독]: 재질 파라미터에는 `my_team_color_type == "8"` 일 때만 Ink 가 들어가고(§6), 주된 소비처는 셰이더 사용자 블록 BlitzUBO0 이다 — 팀 세트 0/1/2 의 Ink/InkBright 가 data[3]/[4], [10]/[11], [62]/[63] 으로 복사되어 몸·옷에 묻은 잉크(2cl 분기)와 미니맵 셰이더 색으로 쓰인다([shaders.md §3.9](shaders.md)).
 - **계산 시점**: 팀 세트를 만들 때(0x7101176830 → 0x71011743a0) 그 순간의 env 값으로 한 번 계산한다. env 나 DirectionalLight 가 없으면 Ink/InkBright 칸은 **쓰지 않고 이전 값이 남는다** [판독: 조기 return]. 조명이 바뀐 뒤 다시 계산하는 경로는 [미확정].
+- 5차 보충: SH 이벤트 콜백 0x71011767f8 은 전역 skyUp 만 바꾸고 팀 세트를 다시 계산하지 않는다 [판독]. 따라서 SH 가 팀 세트 생성 **뒤에** 도착하면 Ink/InkBright 에는 그 이전 skyUp(초기 (0,0,0,1) 포함)이 쓰인다. 세트를 다시 만드는 다른 호출 경로는 여전히 [미확정]. SH 값 자체는 GPU 큐브 투영 결과라 원본 실행으로는 구할 수 없다. 다만 투영 셰이더 IrradianceCubeMapAllToSH 역번역(analysis/r5_gfx_stage/proc/)과 환경 큐브 데이터로 CPU에서 다시 계산할 수 있으므로 [미확정]으로 둔다(정정 2026-10-03: 이전 표기 "확정 불가"를 바꿈). 대체 경로(0x7101029f6c)일 때의 SH 는 `0.1·Intensity·DiffuseColor` 를 위에서 비춘 방향광 SH 이므로, 그 경우 skyUp = SH(0,1,0) 은 재구현 가능하다 [판독].
 - 민감도: r 은 t ≥ 6 에서 0.55 로 포화한다. Yagara 낮 가정에서 앞 항만으로 t = 5.58(r = 0.520)이고, 하늘 항(L*/100)이 0.424 이상(위쪽 조도 휘도 Y ≥ 약 0.128)이면 포화한다. 하늘 SH 값은 런타임이라 미상이므로 이 스테이지의 r 은 **0.520 ~ 0.55** 범위다(Ink R 채널 기준 약 7% 차이) [재구현 계산 + 추정 입력]. 표는 §8.
+- **6차: 대전 로비(사격장)에서는 skyUp 이 결과에 영향을 주지 않는다** [실행+판독+데이터].
+  - 판독: 0x71011754xx 의 r 계산은 `s2 = (6·Rate1 − Rate6)/5 + (Rate6 − Rate1)/5 · t`, `r = (s2 > Rate6) ? Rate6 : s2`, `r = (s2 < 0) ? 0 : r` 이다(fcsel 두 번). Rate6 > Rate1 이면 t ≥ 6 에서 r = Rate6 로 포화한다.
+  - 하늘 항: 0x71011750f4 가 전역 skyUp 을 읽어 `L*(Y)/100` 을 더한다. Y = 0.2126r + 0.7152g + 0.0722b 다. skyUp 은 SH 평가(0x7101033dc0, max 0) 결과이거나 초기값 (0,0,0,1)이라 Y ≥ 0 이고, 따라서 L* ≥ 0 이다(Y < 0.008856 이면 `116·(7.787Y + 0.1379) − 16 ≥ 0`). skyUp 을 쓰는 곳은 이 함수와 초기화(0x71011742f8)·SH 콜백(0x7101176814)뿐이다(xref 3건).
+  - 로비 값: `Intensity 10 × L*(0.6706, 0.8510, 1.0)/100 = 10 × 92.73/100 = 9.27`. t ≥ 9.27 > 6 이므로 r = Rate6(0.55)로 포화하고, Ink/InkBright 는 skyUp 과 무관하다.
+  - 원본 실행: `web/tools/r6_gfx_stage_inkcorr_emu.py`. 0x7101174afc 전체를 unicorn 으로 실행했고, powf·fmodf 는 SDK 원본(sdk.img)을 PLT GOT 에 연결했다. 리소스 미로드 경로라 계수는 전역 *0x71057940a8 칸에 데이터 값(0.5/0.55/0.2, SSS 0.1/0.5)을 넣었다. 싱글턴 초기화 가드만 미리 켰다.
+  - 결과: 무작위 입력색 500개 × bright 0/1 × skyUp 5종((0,0,0,1), 0, 무작위 0..50 셋)에서 **500/500 출력 16 B 비트 동일**. 대조군(Intensity 4, Diffuse 1 → 앞 항 t = 4)은 485/500 이 skyUp 에 따라 달라져, 하네스가 하늘 항을 실제로 반영함을 확인했다.
+  - 한계: MaxSaturation 은 미로드 경로 값 1.0(데이터 0.99)이다. 포화 판정과 무관하다.
+  - 웹: 로비에서는 `envLight.skyUp` 을 0 으로 두어도 원본과 같은 Ink/InkBright 를 얻는다. 하늘 SH 값 자체(맵 간접광용)는 [stage_rendering.md §5.6.1](stage_rendering.md) 대로 여전히 [미확정]이다.
 
 
 ## 6. 재질 파라미터 쓰기 — 0x7101103490 [판독]
@@ -248,7 +259,7 @@ set0 `my_team_color_hue_complement` = (0.0143, 0.6256, 0.7445). Alpha HueDark/Hu
 
 | 항목 | 필요한 것 |
 |---|---|
-| ~~Ink(9)/InkBright(10) 값, S.a/S.b~~ | **해소(입력 경로)** — §5.3: P = 활성 env DirectionalLight(DiffuseColor·Intensity) + 하늘 SH 위쪽 조도, S = CorrectionInkSSS 기본 0.1/0.5. 남은 것: ① ~~스테이지 `RenderingDay.MainLight` 값이 들어가는 호출 경로~~ 해소(0x7102b607c4 직접 기록, §5.3), ② 하늘 SH 를 보내는 이벤트·값(런타임), ③ 기본 env `.baglenv`(AAMP, 해시 이름) 의 DirectionalLight 값, ④ 조명 변경 뒤 재계산 여부 |
+| ~~Ink(9)/InkBright(10) 값, S.a/S.b~~ | **해소(입력 경로)** — §5.3: P = 활성 env DirectionalLight(DiffuseColor·Intensity) + 하늘 SH 위쪽 조도, S = CorrectionInkSSS 기본 0.1/0.5. 남은 것: ① ~~스테이지 `RenderingDay.MainLight` 값이 들어가는 호출 경로~~ 해소(0x7102b607c4 직접 기록, §5.3), ② ~~하늘 SH 를 보내는 이벤트~~ 해소(5차, 환경광 관리자 — §5.3 표) · 값은 GPU 결과라 셰이더 역번역 + 큐브 데이터로 재계산해야 함 [미확정] → **6차: 로비 조명에서는 r 포화로 Ink/InkBright 가 skyUp 과 무관 [실행](§5.3)**, 다른 스테이지(앞 항 t < 6)에서는 여전히 필요, ③ 기본 env `.baglenv`(AAMP, 해시 이름) 의 DirectionalLight 값(§5.3 기본 env 값 [데이터]로 해소), ④ 조명 변경 뒤 재계산 여부(SH 콜백은 재계산 안 함 [판독], 다른 경로 [미확정]) |
 | ~~셰이더 안 혼합식~~ | 해소 — §7.3 |
 | RSDB 행 vs romfs `Gyml/*.TeamColorDataSet.bgyml` 우선순위 | 로더(0x710140946c, 0x71014097d0) 판독 |
 | `swap` 플래그 의미, 26000 조건 | 0x71026da7e0 호출자 추적 |

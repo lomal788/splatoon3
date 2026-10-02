@@ -255,10 +255,10 @@ canBind(pir = PlayerInkRail, rail):                       // 0x710262c480, 기�
   st = [body+0xa8c8]+0xc8                                  // 플레이어 상태 번호
   if st ∉ S = {0x82..0x90, 0xaa..0xac, 0xed, 0xee, 0x10c}: return false
        // S는 [player] movement_physics §4.2의 "오징어 속도 경로 상태 집합"과 같은 집합 → 오징어(잠복) 상태에서만 탑승
-  if body+0x926c / +0x65c(0x1a·0x1c) 계열 특수 상태, [body+0xa6c0](PlayerInkActionSpNiceBall)+0x2658 != 0,
-     [body+8]+0x7b9 != 0, [body+0xa880](PlayerDokanWarp)+0x30 != 0: return false
-  if [body+0xa810](PlayerAttractTarget) 핸들 대상 상태가 7~11 밖: return false
-  if [body+0xa7c0](PlayerCoopZombie)+0xeec != 0: return false
+  if body+0x926c / +0x65c(0x1a·0x1c) 계열 특수 상태, [body+0xa6c0] (PlayerInkActionSpNiceBall)+0x2658 != 0,
+     [body+8]+0x7b9 != 0, [body+0xa880] (PlayerDokanWarp)+0x30 != 0: return false
+  if [body+0xa810] (PlayerAttractTarget) 핸들 대상 상태가 7~11 밖: return false
+  if [body+0xa7c0] (PlayerCoopZombie)+0xeec != 0: return false
   if recentFinish(pir, player) and rail.id(+0x10) == pir+0x1d0(직전 레일 id): return false   // §7.5
   return true
 ```
@@ -272,13 +272,13 @@ canBind(pir = PlayerInkRail, rail):                       // 0x710262c480, 기�
 | 1 | T+8 > 0 | 사망 대기([life] T+8) |
 | 2 | (T+0x98 > 0 && T+0xac > 0) 또는 (T+0xb4 > 0 && T+0xc4 > 0), 또는 T+0x88 > 0, T+0xb4 > 0, T+0x98 > 0, T+0 > 0 | [life]의 같은 계열 타이머(다운 등) |
 | 3 | T+0x101 ≠ 0, 바이트 T+0x85bc(=본체+0x9314) ≠ 0 | 의미 미확정 |
-| 4 | [T+0x9970](=MissionTicketGateAction)+0x38 == 1 && +0x3c ≤ 124.0 | 미션 전용 |
-| 5 | p3+8, p3+10, p3+0xb 바이트 ≠ 0, [p3+0x1628](CoopSeq)+0x1348 == 0xc | 의미 미확정 |
+| 4 | [T+0x9970] (=MissionTicketGateAction)+0x38 == 1 && +0x3c ≤ 124.0 | 미션 전용 |
+| 5 | p3+8, p3+10, p3+0xb 바이트 ≠ 0, [p3+0x1628] (CoopSeq)+0x1348 == 0xc | 의미 미확정 |
 | 6 | 전역 조건(`[0x7105825fd0]+0x180==0`, `[[0x7105801cc0]+0xc70]+0x18 ≥ 0`, [본체+0xa8e0]+0x2c ≠ 0 이고 +0x48 분기 일치)일 때 본체+0x92e0 또는 +0x92a0 바이트 ≠ 0 | 의미 미확정 |
 | 7 | CoopSeq+0x38 > 9 또는 비트 ∉ {0,1,6,9}(마스크 0x243) | 연어런 진행 상태 |
 | 8 | (MissionTicketGateAction+0x38 ∉ {0,5}) 또는 (MissionSeqPinch+0x38 ∈ {3,4}) | 미션 전용 |
 | 9 | 상태 번호(+0xc8)가 0xef/0xf0이고 [상태+0x18]+0x30(+[0x71058bb8f4] 인덱스) ≤ 95.0, 0xf1, 0xf2이고 같은 값 ≤ 50.0 | 특정 상태의 진행 값(애니 프레임 [추정]) |
-| 10 | [p1+0xd7](=[본체+0xa6d0])+0x38 ≠ 0, 또는 DokanWarp+0xcf ≠ 0, 또는 w = DokanWarp+0x30 ∈ {1,2}, 또는 w ∉ {0} 이면서 (w==3 이고 세부 조건 X 불충족, 또는 +0xc0 == 1, 또는 +0xf4 ≥ 0x1f) | 토관 워프. w==0(대전 기본)이면 +0xcf만 봄 |
+| 10 | [p1+0xd7] (=[본체+0xa6d0])+0x38 ≠ 0, 또는 DokanWarp+0xcf ≠ 0, 또는 w = DokanWarp+0x30 ∈ {1,2}, 또는 w ∉ {0} 이면서 (w==3 이고 세부 조건 X 불충족, 또는 +0xc0 == 1, 또는 +0xf4 ≥ 0x1f) | 토관 워프. w==0(대전 기본)이면 +0xcf만 봄 |
 | 11 | StartLaunch+0xb4 ≠ 0 이고 r = (+0xc60 ≤ 0 ? 1 : max(+0xa4/+0xc60, 0)) < +0xc64 | 경기 시작 발사 연출 진행 중 [추정 — 컴포넌트 이름] |
 | 그 외 | 0(허용) | |
 
@@ -439,7 +439,7 @@ bias(x, b):
 recentFinish(pir, player):                                 // 0x710262c7f0
   if (now - pir+0x1dc) <= FinishImmAfterFrame(SplPlayer 30) and pir+0x1d8:
       return clamp01(body+0x73c / K) > 0                    // K = [[0x7105795dd8]+0xe8], 부호만 의미
-  if [body+0xa880](PlayerDokanWarp)+0x30 ∈ {1,2}:
+  if [body+0xa880] (PlayerDokanWarp)+0x30 ∈ {1,2}:
       return clamp01(body+0x73c / K) > 0
   return false
 canBind: recentFinish && rail.id == pir+0x1d0 이면 금지
