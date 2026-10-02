@@ -3,3 +3,8 @@
 /tools/graphics_bfres2gltf
 /tools/shader_ryujinx
 /.venv
+node_modules
+dist
+test/out
+games/splatoon3/assets/common/lib
+tools/bin
