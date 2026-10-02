@@ -1,0 +1,5 @@
+/tools/__pycache__
+/tools/ghidra_scripts
+/tools/graphics_bfres2gltf
+/tools/shader_ryujinx
+/.venv

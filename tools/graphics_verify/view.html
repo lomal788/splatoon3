@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>spl3 graphics verify</title>
+<style>html,body{margin:0;background:#202428;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<script type="module">
+// Headless check view for converted Splatoon 3 glb (web/tools/graphics_verify/shot.mjs drives it).
+// ?scene=body|assembled|squid|weapon  &clip=Wait&frame=0  &attach=full|translate (weapon, default full) &hatattach=full|translate (hat, default translate)  &team=OrangeBlue
+// Lighting / team color blend are approximations (no original shader). Bone binding follows model_character.md §6.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { buildTeamSets, materialTeamParams } from '/web/tools/graphics_verify/teamcolor.mjs';
+
+const P = new URLSearchParams(location.search);
+const W = 960, H = 720;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x3a3f46);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 1.2));
+const dl = new THREE.DirectionalLight(0xffffff, 1.8); dl.position.set(1.5, 3, 4); scene.add(dl);
+const G = '/analysis/graphics/web/';
+const loader = new GLTFLoader();
+const load = (n) => new Promise((res, rej) => loader.load(`${G}${n}/${n}.glb`, res, undefined, rej));
+const texLoader = new THREE.TextureLoader();
+const report = { scene: P.get('scene') || 'assembled', parts: {}, warnings: [] };
+window.__report = report;
+
+// team color: my team = set 0 of the TeamColorDataSet row (approximate blend, see team_color.md §7)
+const rows = await (await fetch('/analysis/graphics/rsdb/TeamColorDataSet.json')).json();
+const row = rows.find((r) => r.__RowId.includes('/' + (P.get('team') || 'OrangeBlue') + '.'));
+const set = buildTeamSets(row, false)[0];
+const tp = materialTeamParams(set, {});
+const teamLin = new THREE.Color(tp.my_team_color[0], tp.my_team_color[1], tp.my_team_color[2]); // linear
+report.myTeamColorLinear = tp.my_team_color;
+
+function applyTeam(root, dir) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    const m = o.material;
+    const tc = m.userData?.fres?.teamColor;
+    if (!tc) return;
+    if (tc.maskTcl && !m.map) {
+      const t = texLoader.load(`${G}${dir}/tex/${tc.maskTcl}`); t.flipY = false; t.colorSpace = THREE.NoColorSpace;
+      m.map = t; m.color = teamLin.clone(); m.needsUpdate = true;
+    } else if (tc.maskTcl) {
+      const t = texLoader.load(`${G}${dir}/tex/${tc.maskTcl}`); t.flipY = false; t.colorSpace = THREE.NoColorSpace;
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.tclMap = { value: t }; sh.uniforms.teamColor = { value: teamLin };
+        sh.fragmentShader = 'uniform sampler2D tclMap; uniform vec3 teamColor;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+          '#include <map_fragment>\n float tcl = texture2D(tclMap, vMapUv).r; diffuseColor.rgb = mix(diffuseColor.rgb, teamColor, tcl);');
+      };
+      m.needsUpdate = true;
+    } else if (tc.team_color_map_type === '3' && !m.map) {
+      m.color = teamLin.clone();
+    }
+  });
+}
+
+// bind matrices (model space) of a skinned skeleton: bone name -> Matrix4
+function bindWorld(root) {
+  const out = {};
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    o.skeleton.bones.forEach((b, i) => { out[b.name] = o.skeleton.boneInverses[i].clone().invert(); });
+  });
+  return out;
+}
+
+// Attach a part glb to the body skeleton.
+//   map: part bone -> body bone (same name by default), attachPart: part bone that defines the space offset A.
+//   mode 'full'      : A = Bbind(attach) * Pbind(attachPart)^-1
+//   mode 'translate' : A = translation of that matrix only (rigid hats / weapons test)
+function attach(body, bodyBind, part, opt) {
+  const partBind = bindWorld(part.scene);
+  const map = (n) => (opt.map && n in opt.map ? opt.map[n] : n);
+  const findBody = (n) => body.getObjectByName(map(n));
+  // part bind for rigid (skin 0) parts: node world in bind pose
+  part.scene.updateMatrixWorld(true);
+  const pBindOf = (n) => partBind[n] ?? part.scene.getObjectByName(n).matrixWorld.clone();
+  const aPart = opt.attachPart, aBody = opt.attachBody ?? map(aPart);
+  let A = bodyBind[aBody].clone().multiply(pBindOf(aPart).clone().invert());
+  if (opt.mode === 'translate') A = new THREE.Matrix4().makeTranslation(new THREE.Vector3().setFromMatrixPosition(A));
+  if (opt.mirrorX) A = new THREE.Matrix4().makeScale(-1, 1, 1).multiply(A);
+  const info = { mapped: [], own: [], rigid: 0, skinned: 0 };
+  const own = {};
+  const nodeFor = (b) => {
+    const tb = findBody(b.name);
+    if (tb && b.name !== '__none') { if (!info.mapped.includes(b.name)) info.mapped.push(b.name + '->' + tb.name); return tb; }
+    if (own[b.name]) return own[b.name];
+    const parentNode = b.parent && b.parent.isBone ? nodeFor(b.parent) : body;
+    const nb = new THREE.Bone(); nb.name = 'part:' + b.name;
+    const parentBind = parentNode.isBone ? bodyBind[parentNode.name] ?? parentNode.userData.bindWorld : new THREE.Matrix4();
+    const wantBind = A.clone().multiply(pBindOf(b.name));
+    nb.userData.bindWorld = wantBind;
+    nb.matrix.copy(parentBind.clone().invert().multiply(wantBind)); nb.matrix.decompose(nb.position, nb.quaternion, nb.scale);
+    parentNode.add(nb); own[b.name] = nb; info.own.push(b.name);
+    return nb;
+  };
+  const meshes = [];
+  part.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const o of meshes) {
+    if (o.isSkinnedMesh) {
+      info.skinned++;
+      const bones = o.skeleton.bones.map((b) => nodeFor(b));
+      const inv = o.skeleton.bones.map((b, i) => {
+        const nb = bones[i];
+        const bb = nb.userData.bindWorld ? null : bodyBind[nb.name];
+        return bb ? bb.clone().invert().multiply(A) : o.skeleton.boneInverses[i].clone();
+      });
+      const sm = new THREE.SkinnedMesh(o.geometry, o.material);
+      sm.name = o.name; sm.frustumCulled = false;
+      if (opt.mirrorX) { sm.material = o.material.clone(); sm.material.side = THREE.BackSide; }
+      body.add(sm);
+      sm.bind(new THREE.Skeleton(bones, inv), new THREE.Matrix4());
+    } else {
+      info.rigid++;
+      // rigid mesh under bone node n: v_world = B_cur * Bbind^-1 * A * Pnode * v
+      let n = o.parent; while (n && !partBind[n.name] && !(n.name && findBody(n.name)) && n.parent) n = n.parent;
+      const tb = findBody(n.name);
+      const m = bodyBind[tb.name].clone().invert().multiply(A).multiply(pBindOf(n.name).clone()).multiply(o.matrixWorld.clone().premultiply(n.matrixWorld.clone().invert()));
+      const mesh = new THREE.Mesh(o.geometry, o.material); mesh.name = o.name; mesh.matrixAutoUpdate = false; mesh.matrix.copy(m);
+      tb.add(mesh); info.mapped.push(n.name + '->' + tb.name + ' (rigid)');
+    }
+  }
+  report.parts[opt.name] = info;
+}
+
+function pose(gltf, root, name, frame) {
+  const clip = gltf.animations.find((c) => c.name === name);
+  if (!clip) { report.warnings.push('clip missing ' + name); return; }
+  const mixer = new THREE.AnimationMixer(root);
+  const a = mixer.clipAction(clip); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  mixer.setTime(frame / 60);
+  report.clip = { name, frame, duration: clip.duration };
+}
+
+const sceneName = report.scene;
+let target = new THREE.Vector3(0, 0.9, 0), dist = 3.4;
+if (sceneName === 'squid') {
+  const sq = await load('Player_Squid'); applyTeam(sq.scene, 'Player_Squid');
+  scene.add(sq.scene); if (P.get('clip')) pose(sq, sq.scene, P.get('clip'), +(P.get('frame') || 0));
+  target.set(0, 0.2, 0); dist = 2.6;
+} else if (sceneName === 'weapon') {
+  const w = await load('Wmn_Shooter_NormalT'); applyTeam(w.scene, 'Wmn_Shooter_NormalT'); scene.add(w.scene);
+  target.set(0, 0.15, 0.25); dist = 1.6;
+} else {
+  const body = await load('Player00');
+  applyTeam(body.scene, 'Player00');
+  scene.add(body.scene);
+  // hide alternative mouth shapes except Mouth00 (visibility anim decides at runtime)
+  body.scene.traverse((o) => { if (/^Mouth0[1-4]_Model__/.test(o.name)) o.visible = false; });
+  const bodyBind = bindWorld(body.scene);
+  if (sceneName === 'assembled') {
+    const wmode = P.get('attach') || 'full', hmode = P.get('hatattach') || 'translate';
+    const parts = [
+      ['Har_SQD000_F', { map: { Head_Root: 'Head' }, attachPart: 'Head_Root' }],
+      ['Eyb_SQD000_F', { map: { Head_Root: 'Head' }, attachPart: 'Head_Root' }],
+      ['Clt_SHT000', { attachPart: 'Skl_Root' }],
+      ['Btm_000_F', { attachPart: 'Skl_Root' }],
+      ['Shs_BOT000', { attachPart: 'Leg_2_L' }],
+      ['Tnk_Simple', { attachPart: 'Spine_3' }],
+      ['Wmn_Shooter_NormalT', { map: { Root: 'Weapon_R' }, attachPart: 'Root', mode: wmode }],
+    ];
+    if (P.get('hat') === '1') parts.push(['Hed_CAP000', { map: { Root: 'Head' }, attachPart: 'Root', mode: hmode }]);
+    for (const [n, opt] of parts) {
+      const g = await load(n); applyTeam(g.scene, n); attach(body.scene, bodyBind, g, { ...opt, name: n });
+    }
+    // right shoe: same model mirrored onto *_R bones [추정 — LObjParent_ShsMirror]
+    const s2 = await load('Shs_BOT000'); applyTeam(s2.scene, 'Shs_BOT000');
+    attach(body.scene, bodyBind, s2, { name: 'Shs_BOT000_mirror', attachPart: 'Leg_2_L', attachBody: 'Leg_2_L', mirrorX: true,
+      map: { Leg_2_L: 'Leg_2_R', Ankle_Assist_L: 'Ankle_Assist_R', Ankle_L: 'Ankle_R', Toe_L: 'Toe_R' } });
+    // hide harness variants except the one chosen by GearInfoClothes HarnessType (Clt_SHT000: S, thin false, hide false)
+    body.scene.traverse((o) => { const m = /^(Belt_EndStop_L|Belt_Under|Carabiner)_(L|LF|M|MF|S|SF|Hide)_low__/.exec(o.name) || /_(Hide)_low__/.exec(o.name);
+      if (m && (m[2] ?? m[1]) !== 'S') o.visible = false; });
+  }
+  if (P.get('clip')) pose(body, body.scene, P.get('clip'), +(P.get('frame') || 0));
+}
+scene.updateMatrixWorld(true);
+const cam = new THREE.PerspectiveCamera(30, W / H, 0.05, 100);
+const yaw = +(P.get('yaw') || 20) * Math.PI / 180;
+cam.position.set(target.x + Math.sin(yaw) * dist, target.y + 0.25, target.z + Math.cos(yaw) * dist);
+cam.lookAt(target);
+const box = new THREE.Box3().setFromObject(scene);
+report.bbox = { min: box.min.toArray().map((x) => +x.toFixed(3)), max: box.max.toArray().map((x) => +x.toFixed(3)) };
+await new Promise((r) => setTimeout(r, 1500));
+renderer.render(scene, cam);
+window.__done = true;
+</script>
+</body>
+</html>
