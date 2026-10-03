@@ -168,6 +168,45 @@ if T+8 < 1 && T+0x88 < 1 && T+0x98 < 1 && T+0xb4 < 1 && PD.hp < 1 && !(본체+0x
 
 즉 **오브젝트 HP는 모든 기기가 각자 같은 이벤트를 적용**하고, 플레이어 HP는 **조작 기기 한 곳만** 적용합니다. 플레이어의 `SplPlayer` GPT에는 `HitPointHolderArray`가 없으므로([damage_hit.md §4.10](damage_hit.md#410-hitpointholder-오브젝트-hp-데이터)) 플레이어의 DamageHelper(+0xa6a0)는 HP 대상이 없는 상태로 보입니다 **[추정]**. 이 경우에도 0x7101e4476c가 AttackEvent를 보내는지는 확인하지 않았습니다 **[미확정]**.
 
+### 3.6.1 HP 대상0과 명중 이벤트 — 2026-10-03 정정 [데이터]+[판독]+[실행]
+
+위 §3.6의 `[추정]`·`[미확정]` 결론을 보존하고 정정한다. 원본 SplPlayer GPT의 키 부재, 실제 DamageParam factory/count getter, DamageHelper 초기화의 count0 분기와 전체 리스너 실행을 연결했다. **HP 대상은0이고, HP0 자체는 AttackEvent 경로를 차단하지 않는다.** 실제 1인 경로의 netref/dc/peer 게이트가 이벤트 구성을 또는 직렬화 진입을 별도로 막는다. 고정 r7 질문 `player_life.md:L169`에 대해 이 결론으로 확정한다. 일반 BYML 전체 로더·실제 세션 peer 생성·네트워크 송수신은 해당 주장에 포함하지 않는다.
+
+#### 원본 데이터와 기본 객체 [데이터]+[실행]
+
+원본 추출 `extracted/params/Component/GameParameterTable/SplPlayer.game__GameParameterTable.bgyml.json`의 GameParameters/spl__DamageParam에는 HitPointHolderArray 키 및 $parent가 없다. 리시버 Main/Chariot의 RefHitPointHolder는 둘 다 빈 배열이다. 실제 `1a7cd84` DamageParam factory는 +80에 배열VT55c90d8, +88 count0/+98 parent0, +A8 flag0을 만든다. 실제 vt0 타입 검사 `1a7d4b4`는 DamageParam RTTI singleton58591f8를 받아 true다. 원본 `38b6944(P+80)`이0을 반환했다. 기존 reflection1a7ce70의 정확한 배열 value=+80, flag=+A8 근거를 재사용하며, old param_reflect JSON의 offset168을 배열 값으로 혼동하지 않는다.
+
+실제 `1e3d53c` Helper 생성자 +30=0/+38=null, +dc=1. H+1f0=P로 연결하고 실제 `1e3d69c` entry→1e3da1c를 실행했다. count0의 `1e3d7cc→1e3d7d8`이 HP배열 생성 전체를 건너뛰므로 +30/+38이0/null로 남았다. GameParameter BYML loader 전체·비어 있지 않은 다른 sender/receiver 생성은 이번 실행 밖이다. 값을 근거 없이0으로 고른 것이 아니라 원본 데이터의 키 부재와 실제 타입 기본 생성/실제 count 소비를 연결했다.
+
+#### HP0와 실제 이벤트 분기 [판독]+[실행]
+
+`1e4476c`는 +30<1일 때 result+8=1만 쓰고, 추가 리스너/송신자 핸들 정리를 거쳐 계속한다. HP count 때문에 return하지 않는다. `1e44b4c`의 **H+dc=0**이면 return이다. init 마지막 `1e3e03c..1e3e054`가 **Hdc = (H208!=null)&&previousHdc**를 쓰므로 netref가 없으면 정상 초기화 뒤 Hdc가0이다. Hdc1과H208null을 수동 결합해서 만드는 유효하지 않은 fixture를 정상 게임 행동으로 쓰지 않는다.
+
+Hdc1이고 공격자ID 상위4비트<=C이며, damage>=1 또는 knockback이 비영이면 이벤트 경로에 들어간다. `1e44e00..1e44e0c`의 **H30<=1**은 single AttackEvent 선택이며 HP0도 포함한다. 이후 x22=H208=NetRef이다. 뒤의 +10/+90/+2c/+48/+30은 NetRef 필드다. `1e455a4 ldr[x22,#30];cbz`는 **HP count0 검사와 관계없다**.
+
+후속 조건은 NetRef+90 모드(1은거부,2는전역관전자+140 조건), +2c enabled, authority+48 0..4, +30 객체 및 내부+60의 송신 버퍼 RTTI, 게임/세션 running 상태, 최종 peer count다. `1e45648` peer getter(vt+48), `1e4564c cmp w0,#2`, `1e45650 b.lt return` 때문에 **peer1은 HP수가0인지와 상관없이 직렬화 전에 돌아온다**. HP0 자체는 막지 않아 peer>=2·다른게이트를 모두 통과하면 `1e45654` serialization 경계에 도달할 수 있다.
+
+원본 `r8_camweapon_zero_hp_event_emu.py`에서 dc초기0/1×netref null/존재×peer0/1/2×damage0/1/360 = **36건 모두 일치**. result+8=1, single packet 구성 여부, peer gate 진입 여부, serialization 경계 진입 여부를 원본 PC로 확인했다. actual senderVT55bdfd0 mode0 getter를 실행하고 H98 Main mask0을 사용했다. HP holder 누적은0이므로 호출되지 않는다. Knockback0, attackerID1, authority모드3, 유효 synthetic NetRef/Buffer 및 peer값/RTTI 공급 경계를 명시했다. peer>=2는 직렬화 경계에서 멈췄으며 실제 송신 성공을 주장하지 않는다.
+
+| 상태 | 원본 관찰 |
+|---|---|
+| netref null, init gate 적용 | Hdc=0, result8=1, 이벤트 구성 없음 |
+| netref 존재, Hdc0 | result8=1, 이벤트 구성 없음 |
+| netref/Hdc1, damage0, KB0 | result8=1, 이벤트 구성 없음 |
+| netref/Hdc1, damage>=1, peer1 | single 이벤트 데이터 구성 뒤 peer<2 return, 직렬화 없음 |
+| 위와 같고 peer2 | serialization 경계 도달; 실제 네트워크는 제외 |
+
+#### 실제 명령·실패 및 다음 범위
+
+- SHARED/FUNCS, player_life§3.6/hitbox§4.1, r8/inventory_before 고정 raw를 먼저 대조.
+- `decomp_index.py --no-build 1e4476c 1e3d69c 1e3d53c 1a7ce70 1a7cd84 38b6944`→기존 network/net_player.c,life/batch1.c,combat/batch1.c,combat4/blast_2.c 원문 재사용. `func_lookup.py` listener4732B/init16976B/factory332B 확인.
+- `class_info.py spl__DamageParam`→VT55c8e50/create1a7cd84/getName1a7d8a0; actualVT0=1a7d4b4, 실제 ASM1a7cd84/1e3d69c/1e3e03c/1e44dc0/1e455a4 읽음. 메타데이터 이름을 함수 offset만으로 추측하지 않음.
+- 실패: 잘못된 SplPlayer.json 경로FileNotFound→정확한 *.game__GameParameterTable.bgyml.json로 교정. root DamageParam lookup이 null인 시도는 실제 GameParameters/spl__DamageParam 경로로 교정. Windows wildcard rg os123→실제 directory와 -g 사용. stdout cp949가 화살표를 대체 표시한 결과가 있어 JSON UTF8 원문으로 대조; 원본 파일은 올바름.
+- 최종 `.venv/Scripts/python.exe web/tools/r8_camweapon_zero_hp_event_emu.py` →실제empty param/helper1+zeroHPcallback36 PASS, mismatch0, zero_hp_event_emu.json 저장.
+
+웹 반영: 플레이어 DamageHelper HP 배열을 PlayerDamage HP1000으로 대신 채우지 않는다. HP0를 이유로 콜백을 무조건 early-return시키지 않고 local HP권한은 PlayerDamage 경로를 유지한다. 1인 연습의 이벤트 송신 생략은 peer/netref/dc 게이트와 구분한다. 실제 runtimeNetRef producer와 session peer1 생성은 이번 실행 입력이며 root의 다른 원본 근거와 연결해야 한다. 네트워크 송신 backend 전수 분석으로 범위를 확장하지 않는다.
+
+
 ## 4. 구조체·필드·상수
 
 ### 4.1 *HP 홀더* (기준: 홀더 시작. PlayerDamage+0x30, PlayerArmor+0x38, PlayerCoopZombie+0x30, DamageHelper 대상+0x58→) [판독 + 실행]
@@ -378,9 +417,21 @@ if armor.active && armor.hp <= armor.pending && info.dmg - 1000 > 0:     // 이�
 - 같은 팀 판정은 `info.team != 피해자 팀`(액터 +0x668)입니다. 리시버의 팀 판정(Through)과 별개로 한 번 더 막습니다.
 - 아머 수치(1000/800, 유예 20프레임)는 상수 블록 값과 0x710243b93c의 `0x14`입니다. 아머 HP 자체(아머 홀더 max)는 startArmor 0x710243c1c4가 넣습니다(§6.9, 이전 [미확정] 해소).
 
+### 6.3.1 “무기 종류 1”의 의미 정정: Other/Blood [판독 + 실행 데이터] (2026-10-03 [r8 combat])
+
+기존 §6.3의 “무기 정보 `0x7101a81a68`가 종류1”이라는 표현을 정정합니다. 이 함수는 조회가 아니라 **식별자 +0x20/+0x24/+0x28 세 정수를 복사**합니다. `0x71024b0c70`의 즉시 HP 경로는 복사본 **category=−1 && id=1**을 검사합니다(먼저 id=10을 제외). id=1은 원본 `spl::DamageReasonOtherId` 등록 배열의 **Blood**입니다. 배열은 `r8_combat_enum_emu.py`가 원본 `0x710349a028`로 실행 확인(11개), 결과 `combat_enum_emu.json`. 그러므로 “종류1”은 무기 분류 1이 아니라 Other/Blood 피해 이유입니다.
+
+그 분기는 피해 팀이 플레이어 팀과 같으면 반환합니다. 다른 팀이고 `param_15 & 1`이면 PlayerDamage 홀더에 피해를 누적하고 세부 기록을 쓰며, 거짓이면 원본 `0x7101a89524`를 호출합니다. 어느 쪽도 이후 일반 아머 선택 블록에 내려가지 않고 **반환하므로 아머를 거치지 않습니다**. 이 결론은 `analysis/decomp/life/batch1.c`의 기존 원본을 새로 판독해 실제 식별자 검사와 enum 출력으로 연결한 것입니다. 모든 Blood 생산자나 일반 아머 동작을 새로 실행한 근거는 아닙니다. 웹 반영 필요: `impl/combat.md`에서 “kind1” 예외를 모호한 무기 종류로 적용하지 말고 category−1/Other id1 Blood 조건으로 구현해야 합니다.
+
 ### 6.4 회복률 선택 [판독, 조건 의미는 추정]
 
 `0x71024591c8(본체+0x784)`가 참이면 1000.0/s, 아니면 125.0/s. 참 조건: (+0x784)+0x1c 바이트, 또는 본체+0xa5f4 바이트, 또는 전역 0x71058bbb9a, 또는 넷 레플리카 상태 7~11이 아님, PlayerGeyser(+0xa808) 상태 1·2, PlayerPipeline(+0xa6d0) 상태≠0, PlayerPeriscope(+0xa818) 상태 2, PlayerVehicleSpectacle(+0xa6d8) 조건 … . 첫 조건이 "자기 잉크에 잠수"일 것으로 봅니다 **[추정]**.
+
+### 6.4.1 빠른 회복 판정의 액터 상태 해석 정정 [판독] (2026-10-03 [r8 combat])
+
+기존 §6.4의 “넷 레플리카 상태7~11”을 정정한다. `24591c8`는 본체+a668의 +1b0/+1b8 핸들이 유효할 때 **일반 Actor+24 수명 상태**를 읽으며 값7..11 밖이면 참이다. `3c7e8cc/3c7f810`은 일반 액터 요청 경로에서6을 쓰고 삭제 요청 경로가7을 쓴다. 넷 레플리카 enum이라는 근거는 없다. 별도 PlayerVehicleSpectacle 경로도 +80/+88 액터 핸들의 같은 필드를 읽는다.
+
+첫 바이트 B+7a0은 이제 [player_state.md](../player/player_state.md) §6.1.4의 실제 생산자와 연결된다: 일반 자기 잉크 오징어 조건·벽 충전 기준·상태머신/디버그 override를 포함해 벽 타기 전용 값으로 한정하면 안 된다. **B+a5f4/전역58bbb9a의 원본 이름·생산자와 일반Actor 상태8..11의 의미는 미확정**. 빠른 회복 전체 질문을 확정으로 올리지 않았다. 생존/표시 enum의 서로 다른 순서는 [damage_hit.md](damage_hit.md) §4.7.2 참조.
 
 ### 6.5 사망 시작 — 0x710245ff9c(T, PlayerParam, …, 공격자) [판독]
 
@@ -621,6 +672,16 @@ i = 액터+0x79c는 팀 안 순번으로 보이고 플레이어마다 다른 항
 
 F 거짓이면 T+0 = 120, T+4 = 75, T+0xf4 = 119이고 각각 R+74 / R+118 / R+119입니다(원본 실행 결과 같음). 호출 위치 **[판독, 2026-10-02 [combat4]]**: 0x71024a2c98은 `spl::PlayerBehavior`(vt `0x7105632b08`) **슬롯18** `0x7102353ad0` → 메인 계산 0x7102475a54 안 `0x7102476fd0`, 사망 판정·사망 시작은 **슬롯19** `0x7102353d24` → 0x7102483134입니다. 한 프레임에 슬롯18이 슬롯19보다 먼저 돈다면(= [move]가 쓰는 "슬롯18 → 물리 → 슬롯19" 순서, **[추정]**) 사망 프레임 D의 슬롯19에서 T+8 = 390, D+1의 슬롯18이 첫 감소이므로 **리스폰 R = D + 390 프레임**입니다. 순서가 반대라면 D + 389. 액터 단계 순서는 [phys4]에 요청했습니다(SHARED). → 정정(2026-10-03 [r5 combat]): [r5 physics]가 한 프레임 안에서 플레이어 슬롯18(단계0)이 슬롯19(단계1)보다 먼저 돈다는 것을 판독(작업 그래프 간선은 원본 실행)했으므로([physics/phive_controller.md §6.7](../physics/phive_controller.md)) **R = D + 390 [판독]** 입니다(타이머 감소 자체는 §10 원본 실행).
 
+#### 6.8.7 리스폰 후 타이머의 몸체 마스크 — 2026-10-03 정정 [판독]+[실행]
+
+§6.8.1의 T+0와 §11의 “3AE4C48 의미 [미확정]”는 **새 native pair 소비자 연결로 해소**한다. 기존 타이머·무적·reset 실행 결과는 재사용한다. `249CB60`에서 PlayerCollision(본체+0xa690)+0x48/+0x50 몸체에 `(body,1)`을 요청하면 Body+0x88 bit11을 켜고 staging에서 F+0xc layer 허용 마스크를0으로 만든다. `24A2C98`에서 T+0이0에 도달해 `(body,0)`을 요청하면 bit11을 끄고 저장된 Body+0x15c 허용 마스크를 복원한다. **타이머 종료가 요청하는 변화는 body 쌍 거부 해제다.** pending+0xd0 bit0/dirty+0xd4 bit19를 거쳐 적용되므로 요청 시점과 staging 적용 시점을 합치지 않는다. T+0>0의 HP 무적 검사는 §6.11의 별도 조건이다.
+
+새 `3C56BC4→3B19798→3B19308`은 nativeWorld body+0x98 engine Body의 F를 소비하고, table.allow와 양방향 layer 마스크를 모두 요구한다. F+0xc=0이면 해당 몸체 쌍은 제거된다. native body를 월드에서 삭제하거나 motion을 멈추거나 캡슐 반경을 줄이는 의미가 아니다. 기존 reset/timer 호출 근거에 **새 setter→전체 staging 16,384사례/32,768필드와 실제 native filter17,571쌍**을 연결했다. 독립 표/마스크 계산 불일치0, null/자동 매핑/실행 오류0.
+
+synthetic engine/native Body·표 fixture와 단일 스레드 mutex 경계, 미부착 body의 refresh early return을 사용했다. 부착된 broadphase refresh 및 실제 전체 솔버를 실행했다고 확대하지 않는다. 원본 CharacterMatterRigidBody의 실제 F getter를 사용했으며 추상 VT null 슬롯을 사용한 초기 실패도 보존했다. 자세한 식·명령·실패는 [character_controller.md §3.3.2](../physics/character_controller.md), `analysis/completion/r8/physics_bit11_pair_emu.json`과 `physics_commands.md`에 있다. 기존 r7 allow 표29×3을 신규 데이터로 중복 계산하지 않는다.
+
+웹 반영 필요: 리스폰 무적 타이머와 피격 몸체의 쌍 허용 마스크를 각각 관리하고, reset bool1은 마스크0, 타이머 종료 bool0은 저장 마스크 복원으로 적용한다. 인간/오징어/잠복 피격 형상 전환은 이 비트 검증만으로 해소하지 않는다.
+
 ### 6.9 아머 HP 설정(StartArmor) — 0x710243c1c4 [판독]
 
 ```
@@ -696,6 +757,14 @@ startArmor(A = PlayerArmor, hp, startFrame, duration, cause, send):
 - 아머 활성 시 리시버 열 이름을 `NiceBall_Armor`로 바꿔 DamageRateInfo 열이 달라집니다(0x710243bbe8) **[판독]**. 데이터 열 `NiceBall_Armor`의 배율은 [damage_hit.md §4.6](damage_hit.md#46-damagerateinfo-표-데이터판독) 표에서 봅니다.
 - 피격 반응(애니·이펙트)은 0x71024b1510, 0x71024be3b4 경로이며 내용은 미분석 **[미확정]**.
   - 2026-10-03 [r5 combat] `0x71024b1510`(피격 반응) 판독 **[판독 일부]**: 피해 적용 `0x71024b0c70` 끝(dmg > 0 && 무적 아님)과 원격 Attack 수신의 표시 경로(§3.2)에서 불리며, xlink 키 **`Damage`**(문자열 `0x71048a862f`) 또는 아머 활성(PlayerArmor+0xf18)·아머 파괴 유예(+0xef8 > 0)면 **`Damage_Armor`**(`0x7104969877`)를 `[[본체+0x780]+0x200]` xlink 사용자에 `searchAndEmit`합니다. 같은 상태 구조체 S(인자 3)로 과다 발생을 막습니다: S+4 = min(S+4 + 1, 4)(4에 닿으면 반환), S+8(재발생 대기, 8 [`0x71058bc204`])이 남아 있으면 같은 아머 상태에서 잃은 HP(1000 − hp)가 333 [`0x71058bc208`]의 배수를 새로 넘을 때만 다시 내보내고, S+0xc = 8 [`0x71058bc200`]. 아머 쪽 키가 아니고 S+0x2c == 0이면 S+0x2c = 1로 하고 `[[본체+0x780]+0x1d8]` 쪽에도 `Damage`를 한 번 내보냅니다(S+0x2c를 되돌리는 쪽 [미확정]). 무기 정보가 범주 2·id % 10000 == 5이거나 id 50010이면 xlink를 생략하고, 인자 5가 참이고 범주 2·id % 10000 == 9가 아니면 첫 분기(대기 무시)로 갑니다. S+4/+8/+0xc를 줄이는 쪽, 진동 `ARMS_UIButtonDecide.bnvib` 분기 조건(본체 −0x95a5 바이트)은 [미확정].
+
+### 7.1 피격 함수 후보 정정과 Damage_Shield [판독] (2026-10-03 [r8 combat])
+
+위 기록의 `0x71024be3b4`를 일반 피격 애니메이션으로 묶은 표현을 정정합니다. 직접 호출자는 `0x7102464374`(리시버 리스너)와 `0x7102497814`(Attack 표시 경로) 두 곳이며, **반환값이 참이면 `Damage_Shield`를 `0x71026ba798`로 내보냅니다**. 일반 `Damage`/`Damage_Armor`의 `0x71024b1510`과 별도 제한입니다. 기존 `analysis/decomp/life/batch2.c`를 재사용하고 두 호출부 명령을 새 판독했습니다.
+
+`24be3b4(S,H,D,R,force)`에서 H+0x48은 최대 HP, +0x4c는 현재 HP, D+0x20은 f32 검사값입니다. R+0x20/24/28은 이유 식별자 세 정수입니다. ID 50008/50010/50013, category2의 id%10000=5/9/7 등은 거부, category2의 id%10000∈{6,14} && D+0x20<1도 거부합니다. D+0x20≥1이면 R+0x24=8 또는(category1,ID4) 또는(category−1,ID6)도 거부합니다. 통과 후보마다 S+0x1c=min(S+0x1c+1,4), 네 번째부터 거부합니다. force bit0이면 여기서 허용합니다. 보통은 S+0x20 대기와 S+0x24 쿨다운을 보고 잃은 HP=H.max−H.hp가 333의 새 배수를 넘었는지 검사합니다. 허용 시 +0x20=8/+0x24=8/+0x28=잃은HP, 보류 시 +0x20=8/+0x28 갱신만 합니다. 일반 피격 S 기준은 **본체+0x9228** (`0x71024b130c`), 0 초기화는 `0x7102457bf4~7bf8`입니다.
+
+**[미확정]**: 화면 애니 상태 전이·制限 해제 주기, S+0x2c 리셋·카운터 감소, 실제 ASB 소비·전체 xlink 수명. `combat/player_life.md:L697`은 전체 애니·이펙트 복합 질문으로 조사중이며 이 후보 정정만으로 확정 수에 넣지 않습니다. 웹 반영 필요: `impl/combat.md`·`impl/fx.md`의 일반피격/Shield 발생 제한 분리(코드와 구현 문서는 수정하지 않음).
 
 ## 8. 다른 기능과의 상호작용
 
@@ -786,6 +855,18 @@ startArmor(A = PlayerArmor, hp, startFrame, duration, cause, send):
 | 피격 반응(애니·이펙트) 0x71024b1510 | [미확정] → **xlink 키·발생 제한 [판독 일부]** (2026-10-03 [r5 combat], §7) | S+4/+8/+0xc 감소 쪽, `[[본체+0x780]+0x200]`/`+0x1d8` xlink 사용자 이름, 0x71024be3b4 |
 | 플레이어 리시버 팀 설정 | [미확정] → **[판독]** (2026-10-03 [r5 combat], [damage_hit.md §4.5](damage_hit.md)) | `0x71024719d4`가 리시버 +0x1bc = 액터 팀, +0x1e8 = 0, +0x1fc = 0 |
 
+**2026-10-03 r8 정정:** 위 표의 리스폰 후 T+0=0 몸체 변경 의미는 §6.8.7의 새 native 쌍 필터 근거로 해소했다. 당시 미확정 행은 조사 이력으로 보존한다.
+
 ## 12. 6차 메모 (2026-10-03 [r6 combat])
 
-- 사용량 소진으로 이 문서의 미확정 행은 6차에 착수하지 못했습니다(상태 그대로). PlayerCollision 슬롯13/48/73 판독은 [hitbox.md §6.1](hitbox.md)에 있습니다: 슬롯13 리셋이 +0x50 바디 비트11 = 1, 슬롯48이 `0x7103ae24a4` 뒤 비트11 = 0. 비트11 의미는 [미확정](소비처 후보 `0x7103af11a4`, `0x7103af1ee8`).
+- 사용량 소진으로 이 문서의 미확정 행은 6차에 착수하지 못했습니다(상태 그대로). PlayerCollision 슬롯13/48/73 판독은 [hitbox.md §6.1](hitbox.md)에 있습니다: 슬롯13 리셋이 +0x50 바디 비트11 = 1, 슬롯48이 `0x7103ae24a4` 뒤 비트11 = 0. 비트11 의미는 [미확정] (소비처 후보 `0x7103af11a4`, `0x7103af1ee8`).
+
+### 6.12 r8 사격장 관련 전역 플래그 생산자 (2026-10-03) [판독]+[실행]
+
+기존 §11의 `58e87c8`·`58e87ac` 이름 미확정을 새 scene writer로 정정한다. 원본 이름이 보존된 변수가 아니므로 아래 이름은 웹 권장명이다. 신규 player 분석 [gear_skills.md §5.4](../player/gear_skills.md) 및 [player_state.md §6.1.1.1](../player/player_state.md)의 실제 명령·실행 결과를 연결하며 이미 확정된 조건 함수 결과를 재분석하지 않는다.
+
+- `58e87c8` = 원본 `2b5657c`의 `2b56590`에서 `2b578e0` 반환값을 저장. `Scene_Versus` tag가 참이거나 exact scene 이름이 `LobbyVersus`/`LobbyLocal`/`ShootingRange`이면 1이다 [판독]. tag 조회는 S+224 scene ID와 `58e90f0` tag index/bit table를 이용한다. 웹 권장명 `isVersusTaggedOrPracticeScene`.
+- `58e87ac` = 별도 원본 scene writer. 이름 `LobbyVersus`/`LobbyVersus_GfxTest`/`LobbyCoop`/`LobbyLocal`에서 1이다 [판독]+[실행]. 웹 권장명 `isLobbyScene`.
+- 따라서 `ShootingRange`는 c8=1, ac=0이다. 두 플래그를 같은 Lobby boolean으로 합치면 잘못이다. Scene tag 또는 이름의 실제 scene 분류이며 임의의 랭크/온라인 boolean이 아니다.
+
+검증: player 신규 `r8` 결과의 exact name 9종 비교 PASS와 raw input pipeline 2,800건/11,200필드 비트 불일치0를 재사용한다. 이름 분기는 실행, `Scene_Versus` bit table 분기는 명령 판독이다. 네트워크·랭크 모드 실제 동작은 분석하지 않았다. 이 근거로 고정 inventory `player_life.md:L780`의 두 플래그 이름 질문만 확정한다. 전체 무적/사망 보정 복합 질문은 기존 상태를 유지한다.

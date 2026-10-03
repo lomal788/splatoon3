@@ -12,7 +12,7 @@
 |---|---|
 | `RSDB/TeamColorDataSet.Product.100.rstbl.byml.zs` | 36행. 행 키 `Work/Gyml/<이름>.game__gfx__parameter__TeamColorDataSet.gyml`. 필드 `Alpha/Bravo/CharlieTeamColor`, `NeutralColor`(RGBA 0~1), `Alpha/Bravo/Charlie/NeutralHueOffset`, `HueOffsetEnable`(36행 모두 false), `Alpha/Bravo/CharlieUIColor`, `IsSetUIColor`, `Tag` |
 | `Tag` 분포 | VersusRegular 10, Mission 10, Coop 7, Gambit 3, VersusTricolor 2, Blitz 1, CoopOption 1, MissionOption 1, VersusOption 1 |
-| `Gyml/*.TeamColorDataSet.bgyml` (romfs 루트 24개) | 일부 행의 사본(예 GreenPurple은 RSDB와 Alpha 값이 다름 — 어느 쪽을 쓰는지 [미확정]) |
+| `Gyml/*.TeamColorDataSet.bgyml` | 2026-10-03 정정 [데이터]+[판독]+[실행]: 실제 v0 추출본 15개·196 제공 원소는 RSDB와 동일. 일반 로비 팀색은 RSDB typed table 행 사용. 원문 “24개·GreenPurple Alpha 차이·우선순위 미확정”은 §11에 정정 이력 보존. [teamcolor_rsdb_source.md §3~§10](teamcolor_rsdb_source.md). |
 | `RSDB/TeamColorOffset` | 12행 (Brightness, Hue, Saturation): Bright(0.1,0,0) Dark(-0.2,0,0.5) HueBright(0.05,0.1,0) HueBrightHalf(0,0.05,0) HueDark(0.05,-0.1,0) HueDarkHalf(0,-0.05,0) Ink(-0.25,0,0) InkBright(0,0,0) InkLame(0.1,0,0) InkLameRare(0.05,0.1,0) Pale(0.1,0,-0.05) Silhouette(0,0,-0.6) |
 | `SingletonParam` `game__gfx__parameter__TeamColorHueDirPeak` | BrightPeak 0.2, DarkPeak 0.72 |
 | `SingletonParam` `game__gfx__InkColorCorrection` | `CorrectionInkMain{DownBrightnessLuminanceRate 0.5, DownBrightnessRate1 0.2, DownBrightnessRate6 0.55, MaxSaturation 0.99}` (MinBright는 데이터에 없음 → 기본 0.01) |
@@ -104,7 +104,7 @@ out  = HSV→RGB(h, s', v')   // 5.1과 같은 변환·특이점(hueOff 0)
 
 | 기호 | 출처 | 값 |
 |---|---|---|
-| M.LumRate/Rate6/Rate1/MaxSaturation/MinBright | InkColorCorrection 루트 +0x30 포인터 하위 구조 `+0x30/+0x38/+0x34/+0x3c/+0x40`(설정 플래그 +0x44..+0x48). 리플렉션 방문 함수 0x71011ae1dc, 생성자 0x71011ae104 기본값 0.35/0.5/0.1/1.0/0.01 [판독] | 데이터 CorrectionInkMain 0.5/0.55/0.2/0.99, MinBright 기본 0.01. 루트 +0x30 = CorrectionInkMain 이라는 대응은 [추정: 데이터 키가 이것 하나] |
+| M.LumRate/Rate6/Rate1/MaxSaturation/MinBright | InkColorCorrection 루트 +0x30 포인터 하위 구조 `+0x30/+0x38/+0x34/+0x3c/+0x40`(설정 플래그 +0x44..+0x48). 리플렉션 방문 함수 0x71011ae1dc, 생성자 0x71011ae104 기본값 0.35/0.5/0.1/1.0/0.01 [판독] | 데이터 CorrectionInkMain 0.5/0.55/0.2/0.99, MinBright 기본 0.01. **[판독]으로 정정(2026-10-03 r8):** 루트 리플렉션 0x71011ad544가 +0x30 포인터를 문자열 `CorrectionInkMain`/타입 `game__gfx__InkColorCorrectionMain`으로 직접 등록한다. 설정 플래그 주소는 루트 +0x40이다. 종전 데이터 키 하나에 의존한 추정은 원본 등록 코드로 해소했다 |
 | S.BrightnessOffset, S.BrightnessOffsetLuminance | 루트 +0x38 포인터 하위 구조 `game::gfx::InkColorCorrectionSSS`(`CorrectionInkSSS`) +0x30/+0x34. 생성자 0x71011af154 기본값 0x3dcccccd/0x3f000000, 리플렉션 0x71011af210 이 +0x30 `"BrightnessOffset"`, +0x34 `"BrightnessOffsetLuminance"` 등록 [판독] | **0.1 / 0.5** — SingletonParam 데이터에 `CorrectionInkSSS` 키가 없어 기본값 그대로 [판독+데이터] (InkBright 전용) |
 | P (Model, i=8) | color (0,0,0), scale 0, flag 0 → t = 0 | r = (6·0.2−0.55)/5 = 0.13 |
 | P (Ink/InkBright) | 활성 env 의 첫 `agl::env::DirectionalLight` — color = `DiffuseColor`(+0x128), scale = `Intensity`(+0x1a0), flag 1(하늘 SH 항 더함). §5.3 [판독] | 런타임(스테이지 조명) 값. 정정: 이전 판의 "도색 관리자"는 틀림 — `*0x71057907e8` 는 GOT 이고 가리키는 전역 0x71059a7838 은 env 관리자(+0x4bd0 타입별 색인표, +0x4be0 객체 배열)다 |
@@ -193,7 +193,7 @@ renderInfo `my_team_color_type`에 따른 덮어쓰기:
 ### 7.2 순서·정밀도
 
 - 계산은 경기 시작(팀색 결정)·스왑 시 한 번. 매 프레임 아님 [추정: 호출자들이 초기화·설정 함수].
-- 원본은 f32. JS는 double로 계산하므로 마지막 자리 오차가 날 수 있습니다. 비트 일치가 필요하면 연산마다 `Math.fround` [추정: 이 함수들에 FMA가 있는지 미확인].
+- 원본은 f32다. **정정(2026-10-03 r8) [판독]:** 11743a0/1174534/1188334/1174afc/1176830 다섯 함수 전체 2500명령에 fmadd/fmsub/fnmadd/fnmsub/fmla/fmls가 없다. 원본의 분리된 f32 산술에는 연산별 `Math.fround`가 필요하다. `powf`/`fmodf` 등 호출 라이브러리 내부와 JS Math 함수의 비트 동등성은 이 명령 검사로 확정하지 않는다. 근거: `web/tools/r8_gfx_team_precision.py`, `analysis/completion/r8/graphics_team_precision.json`.
 - 색 공간: 데이터 색은 `powf(c, 2.2)`로 선형화한 뒤 모든 오프셋을 **선형 공간에서** HSV 처리합니다. 웹 셰이더에는 선형 값으로 넘깁니다.
 
 ### 7.3 셰이더 안 혼합식 [판독 — 셰이더 역번역, [shaders.md §3.6](shaders.md)]
@@ -255,11 +255,26 @@ set0 `my_team_color_hue_complement` = (0.0143, 0.6256, 0.7445). Alpha HueDark/Hu
 
 조립 렌더(`analysis/graphics/shots/scene_assembled*.png`)에서 머리카락·눈썹·탱크·무기 잉크통·오징어 몸이 set0 Model 색(주황)으로 칠해지는 것을 확인했습니다 [실행: 재구현 렌더].
 
+### 8.1 r8 데이터 공급 원본 실행 — 2026-10-03
+
+[실행]+[판독]+[데이터] 신규: 36행 typed loader/이름조회 1,296개 검사 mismatch0/null0, Gyml15개 제공 원소196 비트동일. 이는 데이터 공급 검증이며 위 색 계산 전체의 원본 대조로 확대하지 않는다. [teamcolor_rsdb_source.md §10](teamcolor_rsdb_source.md)에 SDK/할당/종료등록 경계와 상위 resource filesystem 실행 한계를 기록했다.
+
 ## 9. 미확정과 필요한 근거
 
 | 항목 | 필요한 것 |
 |---|---|
-| ~~Ink(9)/InkBright(10) 값, S.a/S.b~~ | **해소(입력 경로)** — §5.3: P = 활성 env DirectionalLight(DiffuseColor·Intensity) + 하늘 SH 위쪽 조도, S = CorrectionInkSSS 기본 0.1/0.5. 남은 것: ① ~~스테이지 `RenderingDay.MainLight` 값이 들어가는 호출 경로~~ 해소(0x7102b607c4 직접 기록, §5.3), ② ~~하늘 SH 를 보내는 이벤트~~ 해소(5차, 환경광 관리자 — §5.3 표) · 값은 GPU 결과라 셰이더 역번역 + 큐브 데이터로 재계산해야 함 [미확정] → **6차: 로비 조명에서는 r 포화로 Ink/InkBright 가 skyUp 과 무관 [실행](§5.3)**, 다른 스테이지(앞 항 t < 6)에서는 여전히 필요, ③ 기본 env `.baglenv`(AAMP, 해시 이름) 의 DirectionalLight 값(§5.3 기본 env 값 [데이터]로 해소), ④ 조명 변경 뒤 재계산 여부(SH 콜백은 재계산 안 함 [판독], 다른 경로 [미확정]) |
+| ~~Ink(9)/InkBright(10) 값, S.a/S.b~~ | **해소(입력 경로)** — §5.3: P = 활성 env DirectionalLight(DiffuseColor·Intensity) + 하늘 SH 위쪽 조도, S = CorrectionInkSSS 기본 0.1/0.5. 남은 것: ① ~~스테이지 `RenderingDay.MainLight` 값이 들어가는 호출 경로~~ 해소(0x7102b607c4 직접 기록, §5.3), ② ~~하늘 SH 를 보내는 이벤트~~ 해소(5차, 환경광 관리자 — §5.3 표) · 값은 GPU 결과라 셰이더 역번역 + 큐브 데이터로 재계산해야 함 [미확정] → **6차: 로비 조명에서는 r 포화로 Ink/InkBright 가 skyUp 과 무관 [실행] (§5.3)**, 다른 스테이지(앞 항 t < 6)에서는 여전히 필요, ③ 기본 env `.baglenv`(AAMP, 해시 이름) 의 DirectionalLight 값(§5.3 기본 env 값 [데이터]로 해소), ④ 조명 변경 뒤 재계산 여부(SH 콜백은 재계산 안 함 [판독], 다른 경로 [미확정]) |
 | ~~셰이더 안 혼합식~~ | 해소 — §7.3 |
-| RSDB 행 vs romfs `Gyml/*.TeamColorDataSet.bgyml` 우선순위 | 로더(0x710140946c, 0x71014097d0) 판독 |
+| RSDB 행 vs romfs `Gyml/*.TeamColorDataSet.bgyml` 우선순위 | 2026-10-03 해소 [판독]+[실행]+[데이터]: module3df331c→manager38ca19c→factory3df432c→RSDB file3df4504→typed14076b8→query140946c. 실제15 사본 값도 동일. 14097d0 로더 설명 철회(실제14097cc classname leaf). [상세 §3~§10](teamcolor_rsdb_source.md). |
 | `swap` 플래그 의미, 26000 조건 | 0x71026da7e0 호출자 추적 |
+
+2026-10-03 r8 루트 이름 검증 [판독]: `analysis/decomp/shader/inkcorr.c`의 0x71011ad544는 루트 +0x30/+0x38을 각각 CorrectionInkMain/CorrectionInkSSS, 루트 +0x40/+0x41을 두 설정 플래그로 방문자에게 넘긴다. 0x71011ad884는 해당 플래그를 읽는다. 하위 구조 필드·기본값과 로비 포화 실행은 기존 r6 근거이며 새 성과로 재계상하지 않았다. 이 추가 판독은 RSDB/Gyml 우선순위·재계산 주기를 확정하지 않는다.
+
+
+## 10. 원본 재현에 필요한 반영
+
+일반 사격장 팀색의 기준은 RSDB typed 행이다. `Work/Gyml` 키를 개별 `.bgyml` 파일 조회로 해석하면 안 된다. `impl/render.md`, `impl/assets.md`에 RSDB36행·typed 필드 공급 반영이 필요하며 이번 작업에서는 코드/impl 변경 없이 완료 표에 남겼다.
+
+## 11. 정정 기록
+
+2026-10-03: 과거 §2 원문 “romfs 루트24개, GreenPurple은 RSDB와 Alpha 값이 다름—어느 쪽을 쓰는지 미확정”을 보존한다. 실제 v0 파일15개·196 제공 값 비트동일, GreenPurple RGBA동일 및 RSDB 파일 공급→원본 typed query 신규 근거 때문에 결론을 정정했다. 과거 값/개수의 발생 원인은 미확정이며 추정하지 않는다. 과거 §9의 “로더140946c/14097d0” 중 전자는 메모리 행 조회이고, 후자는 classname 반환14097cc의 중간 주소다. 새 실제 파일/typed loader 주소와 실패 이력은 [teamcolor_rsdb_source.md](teamcolor_rsdb_source.md)에 기록했다.

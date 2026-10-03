@@ -51,7 +51,7 @@ Splatoon 3 v0 대전 로비(`LobbyVersus` 씬, 배치 `Banc/Lby_Lobby00`)의 시
 
 | 슬롯 | 주소 | 내용 |
 |---|---|---|
-| 7 | `0x71021ee66c` | 상태 기계(+0x128) 6개 등록: `cWait`, `cDamageShot`, `cBurst`, `cBurstWait`, `cExpand`, `cFlick`. 상태 i의 enter = vt[47+2i], exec = vt[48+2i](멤버 포인터 vtable 오프셋 0x178+0x10·i) |
+| 7 | `0x71021ee66c` | 상태 기계(+0x128) 6개 등록: `cWait`, `cDamageShot`, `cBurst`, `cBurstWait`, `cExpand`, `cFlick`. 상태 i의 enter = vt[47+2i], exec = vt[48+2i] (멤버 포인터 vtable 오프셋 0x178+0x10·i) |
 | 8 | `0x71021eec40` | 초기화: 강체 `Main`→+0x108, `ColBullet`→+0x110, 각 몸 캡슐의 A.y(형상 +0xdc)를 +0x118/+0x11c에 저장, 애니 보조(+0x170) 생성. `IsTipsTrial`이면 `[액터+0x348]+0x3b = 0` |
 | 9 | `0x71021ef144` | 리시버(DamageHelper 두 번째 목록 첫 항목)에 리스너 `0x71021ef25c` 등록, 리시버+0x1fc(시간 창 사용) = 0 |
 | 11 | `0x71021ef2cc` | 해제 |
@@ -341,6 +341,22 @@ b = ((Z.y·w.y + w.x·Z.x) + w.z·Z.z) − ((Z.x·Y.x + Z.y·Y.y) + Z.z·Y.z)·(
 
 플레이어 접촉의 접촉점+0x60은 탄 바디 접촉 목록에서는 쓸어 넘기기 비율 f입니다([../physics/phive_controller.md](../physics/phive_controller.md) §6.4). 플레이어(캐릭터 강체) 접촉에서도 같은 구조인지는 [미확정]입니다. 6차 확인(2026-10-03): 쓸어 넘기기 `0x7103c55968`의 BL 호출자는 탄 바디 스텝 `0x7103b0a454` 하나뿐이고, `0x7103c40000`~`0x7103c60000`에서 +0x60에 f32를 쓰는 곳은 `0x7103c59234`(`0x7103c58e4c` 안, 다른 구조체로 보임) 하나였습니다. 캐릭터 강체 ↔ 키네마틱 강체 접촉의 접촉점 작성자는 찾지 못했습니다 [미확정]. 물리 영역에 넘겼습니다(SHARED `[r6 range→physics]`).
 
+#### 6.3.1 플레이어 접촉 점 +0x60의 생산자 — 8차(2026-10-03) [데이터]+[판독]+[실행]
+
+정정(2026-10-03): 위 6차의 “3c59234는 다른 구조체로 보임”, “플레이어 접촉에서도 쓸어 넘기기 비율인지 [미확정]”을 아래 원본 이벤트·실제 vtable·동일 접촉 점 전달로 해소합니다. 이전 탐색은 함수 시작을 잘못 잡아 이 저장 명령을 3c58e4c의 일부로 읽었습니다. **실제 시작은 0x7103c58fe4**(3c58fe0 RET 다음)이며 원본 디컴파일 `analysis/decomp/r8_camweapon/contact_solved.c`에 독립 함수로 저장했습니다.
+
+- 물리 월드 생산자0x7103c4579c는 childWorld+0x100에 실제 수집기(vtable **0x71057566f8**, 크기0x28)를 설치합니다. 이 vtable **slot15(+0x78)=0x7103c58fe4**가 접촉 충격 이벤트를 읽습니다. 기존 월드 구축 원문은 `analysis/decomp/r8_physics/bootstrap.c`입니다.
+- 원본 reflection **0x7105474c10**은 이벤트 이름 `hknpContactImpulseEvent`, **0x7105474cb0**은 멤버 이름 `contactImpulses`(문자열0x71048b9671)와 오프셋 **+0x30**을 갖습니다 [데이터]. 이 이름과 원본 복사를 그대로 사용하며 실제 SI 질량/충격 단위로 환산하지 않습니다.
+- 3c58fe4는 E+0x18가 가리키는 캐시의byte+4개 점에 대해 `s=E[+0x30+4·i]`를 읽고 **FCMP s,0; B.LS**이면 건너뜁니다. 정상 수는 양수만 통과하되 **NaN은 unordered라 이 B.LS를 통과**합니다. 디컴파일의 `0.0 < s`는 이 NaN 동작을 보존하지 않습니다. status(E+0x20)0/1/3/4의 접촉 점+0x64는 각각0/1/2/4이며 status2·그외는 처리하지 않습니다.
+- 원본3c584f0→3c4cc04/3c4d1c0은 두 native body의+0x98 Phive 강체와 접촉 수집 목록을 묶습니다. 3c59dd0→3c59ec4가 점/법선/깊이를 만들고 **3c59234 STR S8,[point,+0x60]**가 s를 비트 그대로 저장합니다. 3c5a410은 상대속도+0x24만 공급하고 +0x60을 바꾸지 않습니다. 3c5a0e4/실제수집기 콜백→3a60c74가 **같은 점 포인터**를 접촉 목록에 넣습니다.
+- 별도 일반 매니폴드 변환3c597f0의3c59bb8은 point+0x60=0, 캐릭터 특수 접촉3c68968→3c4c898의3c4c990도 point+0x60=0을 초기화합니다. 따라서 표적은 이 초기 접촉만으로 임의의 양수 휨을 만들지 않습니다. 충격 이벤트가 공급한 점의 +0x60은 **contactImpulses 값**이며 탄 쓸어 넘기기의 f와 의미가 다릅니다.
+
+표적 원본 **0x71021f0348**은 §6.3의 Actor_Player 분기에서 접촉쌍→목록record→바로 이 point를 두 번 역참조해 +0x60을 읽고, 접촉 방향 플래그로 부호를 고른 법선에 `s×PlayerImpulsScaler(실제0.005)`를 곱해 BendCalculator의 종류1로 전달합니다. 위치는 반대쪽 접촉 방향일 때 `point.pos + depth·point.normal`입니다. 종류/플래그 없이 항상 `−normal`을 붙이면 원본과 달라집니다. §6.3 표의 부호는 **표적에서 상대 플레이어 쪽으로 향하는 법선**으로 읽어야 합니다. `impl/range.md`의 “플레이어·폭탄 접촉 휨 충격 없음”은 플레이어의 이 조건부 충격과 이미 §6.3에서 판독한 Actor_BulletBomb의 `접촉 vt+0x18 속도×BombImpulsScaler` 계약을 반영해야 합니다. Bomb 계약은 기분석 재사용이며 이번에 서브 무기 실제 동작을 분석하지 않았습니다.
+
+`web/tools/r8_camweapon_contact_impulse_emu.py` 실행: 원본 이벤트/강체 매핑/접촉 목록 **1920건**, 통과 접촉 점 **1311개**의 scalar/위치/법선/status/동일포인터 저장 비트 일치; 이 점을 표적 플레이어 분기에 넘긴 방향2종 **2622건**의 위치·충격3성분·종류1 비트 일치, **mismatch0**. 결과 `analysis/completion/r8/range_contact_impulse_emu.json` [실행]. 실행한 원본은3c58fe4/3c584f0/3c4cc04/3c4d1c0/3c59dd0/3c59ec4/3c5a410/3c5a0e4/3c5a2a0/3c4d040/3a60c74 및21f0348입니다. 합성 layer4/group0 수집 목록과 정상 강체 그래프이며 native body ID조회·Havok 매니폴드 복원0a4a510·점 할당·재질/shape-key 조회·캐릭터별 pair callback3c5a604·Actor_Player 태그 조회는 경계를 스텁으로 격리했습니다. BendCalculator 뒤는 기존 r5 원본실행 재사용입니다. **실제 Havok 충돌/충격 이벤트 생성까지 실행한 결과는 아니며**, 실제 플레이어 속도·질량에서 어떤 scalar가 발생하는지에 대한 수치 예측은 이 검증 범위에 넣지 않습니다.
+
+웹 반영 필요: `impl/range.md`는 Player 접촉 scalar를 쓸어 넘기기 f나 이동속도로 대체하지 말고 original contactImpulses를 받도록 분석 계약을 기록해야 합니다. 시뮬레이터가 같은 충격 이벤트를 만들지 못하면 그 차이를 [미확정]으로 유지해야 합니다. 코드는 변경하지 않았습니다.
+
 ### 6.4 데미지 숫자 (vt19 `0x71021efc24`, 표시 `0x71021f0c90` → `0x710338cf0c`, 텍스트 `0x710338d2d0`) [판독]+[실행]
 
 ```
@@ -393,6 +409,20 @@ for 활성 슬롯: if 슬롯 age(+0x3c) ≥ 2 && 닫는 중 아님: Out 재생, 
 **Main 강체로 넘기는 방식 [판독] (2026-10-03)**: `0x7103ae41b8(강체, out, 목표 위치)`는 목표가 NaN이면 경고만 하고, 아니면 `out = (목표 − (현재 위치 + dt·(ω × (현재 위치 − 질량 중심)))) × (1/dt)`(dt = 월드+0x24, 1/dt = 월드+0x28)를 계산하고, `0x7103ae2890`이 이 값을 선속도(유닛/초)로 씁니다. 즉 키네마틱 Main 몸은 한 물리 스텝에 레일 위치로 옮겨지고, 회전은 이 경로로 넘기지 않습니다. 액터 행렬이 Main 몸을 따라가는 경로(컨트롤러 Main `IsTrackingActor false`, `WarpMode AfterUpdateWorldMtx`)는 여전히 [미확정]입니다.
 
 6차 진척(2026-10-03) [판독]: RigidBodyController 파라미터 방문 `0x7103b9e32c`/`0x7103b89c4c` 기준 오프셋은 TrackingBoneName +0x40, TrackingEntityAlias +0x48, BoneBindModePosition +0x50, BoneBindModeRotation +0x54, **WarpMode +0x58**(열거 `AfterUpdateWorldMtx, BeforeUpdateWorldMtx, None`), IsTrackingEntity +0x5e, **IsTrackingActor +0x69**, **UseNextMainRigidBodyMatrix +0x6a**입니다. 실행용 기록은 `0x7103ae9f2c`가 몸마다 0x18 B 칸(소유 객체 +0x28 배열)에 만듭니다: 칸+0xc = BoneBindModeRotation, 칸+0x10 = WarpMode, 칸 바이트0 bit1 = IsTrackingActor(참일 때 OR 2), bit6 = UseNextMainRigidBodyMatrix(`& 0xbf | v<<6`). 이 칸을 읽어 액터 행렬을 몸에서 되돌려 쓰는 함수는 찾지 못했습니다 [미확정]. 다음 단서: 칸 +0x10(WarpMode)·바이트0 bit1을 읽는 곳, 물리 영역 `[r6 physics]`의 슬롯19 write-back 동적 추적(`0x7100f76f78`).
+
+#### 6.5.1 Main 강체 → 액터 행렬 되쓰기 — 8차(2026-10-03) [판독]+[데이터]+[실행]
+
+정정: 위 “액터가 강체를 따라가는 것으로 보임 [추정]”, §11의 “이동 표적 액터 행렬 미판독”은 아래 실제 선택·되쓰기 사슬로 해소합니다. 6차에서 getter0x7103a13a24를 읽었으나 선택표 생산자와 호출 후 액터 저장을 연결하지 못한 기록은 남깁니다.
+
+새 생산자 **0x7103a02bf0**는 P+0xe8개/P+0xf0의0x14B 선택표와 P+0x108 기본 선택 인덱스를 만듭니다. 일반 Main경로0x7103a087f4..0x7103a08848에서 entry+0=0·P+0x108=index를 쓰고, 물리 리소스의 첫 컨트롤러 이름(0x7103b42090 개수,0x7103b422cc index0의 Name)을0x710173aa64로 조회해 controller index0/body index0을 선택합니다. 173aa64가 비교하는 기본 이름은 lazy getter0x7101652c5c의 literal **Main**(0x7101652e44..68). 표적 실제 ControllerSet은 첫 컨트롤러Main, 첫 강체Main이고 다음 강체ColBullet입니다 [데이터]. 새 원문 `analysis/decomp/r8_camweapon/main_builder.c`, `main_alias.c`; 리소스는 `analysis/range/actor/SighterTarget_Move/Phive/ControllerSetParam/SighterTarget.phive__ControllerSetParam.bgyml.json`입니다.
+
+새 **0x7103a102f0(P,0)**는 P+0x108→선택표(entry+0=0, +4 controller index, +8 body index, +0x10 character 여부)→`*(P+0x20)[controller]`의+8 RBC→RBC+0x18의0x18B body record+8을 반환합니다. 일반강체 getter0x7103a13a24는 body+0xd8..0x104의48B Mtx34와 선속도+0x138/각속도+0x144를 그대로 돌려줍니다. body flags+0x88 bit5면 실패; bit6/7이면 binder의뼈index short+4/+6가 모두−1이 아닐 때 실패합니다. 표적 Main의TrackingBoneName은빈문자열이고 IsTrackingActor=false, ColBullet만true입니다. WarpMode와TrackingActor는 actor→body 추종 선택을 위한 별도 입력이며 Main matrix를읽는 이 경로를 바꾸지 않습니다.
+
+네이티브 액터 슬롯19 **0x7100f76f78**의0x7100f77420..0x7100f77500은 위 getter를 실제 호출하고 성공하면 actor에 되씁니다. 결과 Mtx34의번역(성분3/7/11)→actor+0x28c/+0x290/+0x294, 회전9성분→actor+0x298..0x2b8입니다. 선속도는+0x2f8와+0x310, 각속도는+0x304와+0x31c 두곳에 각각 복사합니다. 그 뒤 behavior 슬롯19로 넘어가므로 모델·DamageInfo 위치는 그프레임 물리 결과를 봅니다(프레임 순서는 기존 physics§6.7 재사용).
+
+원본 **3a102f0→3a13a24→0f77420..77500** 사슬을 합성 정상Main 그래프로 실행했습니다. 임의 행렬12f32·속도6f32와 flags0/40/80/c0 **1024/1024 비트 일치**, 선택표/bit5/뼈바인딩 거부6건 일치, mismatch0입니다. 도구 `web/tools/r8_camweapon_main_restart_emu.py`, 결과 `analysis/completion/r8/range_emu.json`. actor+4e0 posecache callback은ret스텁, 실제Havok적분·실제전체액터생성·character 특수경로·fallback은 실행제외입니다. 원본되쓰기명령의 저장순서와 데이터Main 연결은 [판독]으로, 검사한경로의 복사는 [실행]으로 구분합니다.
+
+웹 반영 필요: impl/range.md의 이동표적은 레일값을 모델에 직접 쓰는 것과 원본Main 물리스텝→actor복사 순서를 구분하고, ColBullet은 actor추종 몸으로 유지해야 합니다. 코드는 수정하지 않았습니다.
 
 ### 6.6 사격 구역 [판독]+[데이터]+[실행]
 
@@ -634,7 +664,7 @@ ctrl+0x28 = cur
 | ~~몸 값 +0xdc 보간(`0x71021f0dcc`)의 의미~~ | **해소 [실행]** §4.3: 캡슐 A 정점, t는 [0,1] 클램프 | — |
 | ~~접촉 속도 단위(vt+0x18)~~ | **해소 [판독]** §6.3: 유닛/초(탄 바디 +0xdc, 강체 +0x138), 탄 바디 +0x148 공급자는 생성 때 0 | 클래스 밖 +0x148 쓰기(`0x7103ada484` 등)의 대상 클래스 |
 | ~~접촉 태그 6종의 정확한 이름~~ | **해소 [판독]** §4.5 | — |
-| 이동 표적 액터 행렬 | [판독-부분] Main 몸 속도 경로(§6.5), RigidBodyController 파라미터 오프셋·실행 칸(+0x10 WarpMode, 바이트0 bit1 IsTrackingActor) [판독]. 액터가 몸을 따라가는 경로 [미확정] | 칸(`0x7103ae9f2c`가 만드는 0x18 B 배열)의 +0x10·bit1 reader, 물리 `[r6 physics]` 슬롯19 write-back 추적 |
+| ~~이동 표적 액터 행렬~~ — 해소(8차 §6.5.1) | [판독-부분] Main 몸 속도 경로(§6.5), RigidBodyController 파라미터 오프셋·실행 칸(+0x10 WarpMode, 바이트0 bit1 IsTrackingActor) [판독]. 액터가 몸을 따라가는 경로 [미확정] | 칸(`0x7103ae9f2c`가 만드는 0x18 B 배열)의 +0x10·bit1 reader, 물리 `[r6 physics]` 슬롯19 write-back 추적 |
 | ~~사격 구역 래치의 효과~~ | **해소 [판독]** §6.6: 로비 플래그 && +0x938d == 0 → 입력 종류 1~3 차단. 버튼 이름은 player 영역 [추정] | 전역 `0x71058e87ac` 이름(writer) |
 | ~~로케이터 회전 저장 순서~~ | **해소 [실행]+[판독]** §6.6: R = Rz·Ry·Rx 행 우선([r6 assets] 원본 실행) + 열 내적 판정 → l = Rᵀ(p − T) | — |
 | ~~영역 모양 번호 = 문자열 순번+1~~ | **해소 [판독]** §4.5 | — |
@@ -644,7 +674,7 @@ ctrl+0x28 = cur
 | ~~LossOfColor(잉크 색 빠짐)의 경로~~ | **해소 [판독]+[데이터]** §6.2.1: DamageHelper 칠 보완 = Mag·bias(1 − hp/max, Bias/Mag) → 재질 `thr_comp_paint_intens_*`·`two_color_complement_paint_intensity` | 셰이더 식은 그래픽 영역. `M_Body`의 `comp_paint_type` 옵션 값(셰이더 아카이브 기본값) |
 | 머티리얼 애니 `Damage`를 재생하는 곳 | [미확정] — 같은 파라미터를 칠 보완 경로가 직접 씀 [판독]. 표적·DamageHelper 범위에 `Damage` 문자열 참조 없음 | `Damage` 문자열 참조 42곳 중 재질 애니 재생(모델 애니 보조 재질 채널) 호출자 |
 | ~~재피격 때 `ダメージ` 재방출 여부~~ | **해소 [실행]** §7.1: 액션 프레임 역행이면 이전 이벤트를 끄고 다시 방출. 직전 프레임이 0이면 안 남 | `ダメージ` 에셋의 loop 비트(사용자 리소스 +0x80 표 작성자) — effect_sound 영역 |
-| 플레이어 접촉 충격(접촉점+0x60) | [판독-부분] 탄 바디 접촉에서는 쓸어 넘기기 비율 f. 쓸어 넘기기는 탄 바디 전용(BL 호출자 1곳) | 캐릭터 강체 ↔ 키네마틱 강체 접촉점 작성자(물리 영역에 넘김) |
+| 플레이어 접촉 충격(접촉점+0x60) | [데이터]+[판독]+[실행] §6.3.1: 실제 collector3c58fe4의 hknpContactImpulseEvent.contactImpulses→동일point60→표적 J,1920+2622건 일치 | 실제 Havok solver 충격 생성 실행 제외; 원본 field/전달/소비 의미 확정 |
 | 수신 이력 모드(탄 송신자)·ObjectEffect_Up | [미확정] (combat 영역 `[r6 combat]` 선점, 결과 대기) | 송신자 생성 `0x7101e3d69c` |
 | 팁 시험 진행 | **[판독]+[데이터]** §6.7: 시퀀스 → 도우미 → Playground 메시지 → 로직 AINB Setup 펄스, 판정 객체 5종, 태그별 Setup/Restore | 깨짐 메시지 큐 `0x710582b7c0` → 버스 배달 함수, 판정 형식 검사 `0x710553e680`의 클래스, 성공(상태 7) 뒤 연출 |
 | 로직 액터(`SplLogicActor`)의 `Logic_Activate`가 하는 일, 장면 시작 때 팁 시험 표적·PaintedArea가 꺼져 있는지 | [미확정] | 노드 vtable `0x710553cd00` 기반 `0x7103cb83d4`(묶기)·`0x7103cb7bf8`, 펄스 처리 calc |

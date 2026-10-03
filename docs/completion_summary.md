@@ -1,6 +1,14 @@
 # Lby_Lobby00 1인 연습 — 이번 회차 마무리
 
-## 6차 (2026-10-03) — 사용량 한도로 조기 마무리, 최신
+## 7차 (2026-10-03) — 추가 분석, 최신
+
+**사용자 지정 최우선: 카메라·물리·사격·바닥 도색·그래픽.** [핵심 체감 경로](core_experience_priority.md)의 미완료 연결을 먼저 해결하며, 주변 항목의 처리율로 대체하지 않는다.
+
+**확정 382/986 = 38.74%**, 6차 370/986에서 **12개 출처 기록 추가 확정**. 이번 갱신은 31개 기록이다. 중복 출처를 보존한 목록 처리율이며 게임 전체 파악도를 뜻하지 않는다. 부분 해소는 확정으로 세지 않았다.
+
+상세 집계·확정 근거·검증·남은 질문·웹 반영 목록: [completion_r7.md](completion_r7.md). 보호 파일592개 변경0.
+
+## 6차 (2026-10-03) — 사용량 한도로 조기 마무리, 당시 기록
 
 - 11개 담당 모두 결과 json 작성(`analysis/completion/r6/*.json`) → `analysis/completion/r5_merge.py`(r5+r6)로 합침.
 - 7개 담당(combat, paint, physics, gfx_stage, gfx_char, fx, player)은 도중에 분석을 멈추고 그때까지의 결과만 문서에 반영했다. 손대지 못한 행은 json에 "6차 미착수". 경위·SHARED 기록은 [r6_interrupted.md](r6_interrupted.md).
@@ -24,7 +32,7 @@
 
 6차 핵심: 사격장 탄 시드 13(부팅 뒤 첫 진입, 대전 뒤엔 직전 시드 유지), 새 탄은 생성 프레임에 갱신 안 함, 액터 회전 Rz·Ry·Rx 행 우선 [실행], 팁 시험 흐름(AINB 해독), 표적 팀색 물듦 = 1−hp/max, 사격장 UI dt 1.0, 데미지 숫자 전각.
 
-## 5차 병렬 분석 (2026-10-03) — 최신
+## 5차 병렬 분석 (2026-10-03) — 당시 기록
 
 10개 영역(피격·판정, 표적·사격장, 도색, 물리·충돌, HUD, 그래픽 스테이지, 그래픽 캐릭터, 이펙트·효과음, 이동, 카메라·탄)을 병렬로 분석했다. 영역별 결과는 `analysis/completion/r5/<영역>.json`이고, `analysis/completion/r5_merge.py`로 [analysis_completion.md](analysis_completion.md)에 합쳤다. 합치기 전 상태는 `analysis/completion/inventory_before_r5.json`에 보존했다.
 

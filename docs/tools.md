@@ -113,3 +113,38 @@ sh web/tools/quick_decomp.sh C:/dev/splatoon3/analysis/decomp/<영역>/<이름>.
 - `c:/dev/splatoon3/original/`은 읽기 전용입니다.
 - 작업 파일은 전부 `c:/dev/splatoon3` 안에 둡니다. 문서는 `web/docs/`, 새 파이썬 도구는 `web/tools/`, 디컴파일 결과는 `analysis/decomp/<영역>/`.
 - 키 값은 문서·출력에 옮기지 않습니다.
+
+## r8 연결 검증 도구 (2026-10-03)
+
+도구는 저장된 실제 명령과 fixture·스텁·경계를 해당 문서 §10 또는 `analysis/completion/r8/*_commands.md`에서 확인한 뒤 실행한다. 아래 성공은 표의 함수 범위를 뜻하며 원본 전체 게임 실행을 뜻하지 않는다. 신규 물리 world/contact 탐색 도구는 진행 중으로 별도 기록하고 전체 솔버 확정으로 간주하지 않는다.
+
+| 영역 | web/tools 도구 | 원본 실행 범위·문서 |
+|---|---|---|
+| 피격 | `r8_combat_knockback_chain_emu.py` | 게임 메시지→실제 큐·컴포넌트→f32 충격 합성 — [combat/knockback_pipeline.md](combat/knockback_pipeline.md) |
+| 피격 | `r8_combat_critical_lifecycle_emu.py` | 원본 생성·등록·reset 방송/수신 — [combat/critical_ring_lifecycle.md](combat/critical_ring_lifecycle.md) |
+| 피격 | `r8_camweapon_zero_hp_event_emu.py` | 대상 HP0의 원본 Helper init·listener와 송신 진입 경계 — [combat/player_life.md](combat/player_life.md) |
+| 피격 | `r8_camweapon_ref_rigid_binding_emu.py` | 실제 body name getter·순회→receiver 목록 바인딩 — [combat/hitbox.md](combat/hitbox.md) |
+| 명중 이펙트 | `r8_hiteffect_consume_emu.py` | 반응 enum·큐/FIFO·원본 소비자·S1/E1/S2/E2·컬링 — [combat/hit_effect_pipeline.md](combat/hit_effect_pipeline.md) |
+| 이펙트 | `r8_fx_identity_emu.py` | 실제 init_array 등록·정적 초기화→속도0 회전 소비 — [effect_sound/floor_fixed_rotation.md](effect_sound/floor_fixed_rotation.md) |
+| 충돌 필터 | `r8_physics_bit11_pair_emu.py` | bit11 setter→전체 staging→실제 native pair filter — [physics/character_controller.md](physics/character_controller.md) |
+| 형태별 피격 형상 | `r8_physics_hitshape_emu.py` | 24f5dd8 전체 함수 일반 조건·히스테리시스·f32 shape 기록 — [physics/character_controller.md](physics/character_controller.md) |
+
+추가 함정: `func_lookup.py`와 `decomp_index.py`의 최근 선행 함수는 Ghidra 미정의 구간에서 실제 함수 경계를 뜻하지 않을 수 있다. 반환 크기·명령 prologue를 확인한다. HitEffect enum getter는 인자별 문자열 함수가 아니라 전체 문자열 pointer 배열을 반환한다. 큐의 빈 sentinel은 null이 아니라 head 주소이며, ActorRef 무효값은 실제 필드의 −1이다. 원본 signed/unsigned·NaN 결과와 f32 계산 순서를 문서의 재현식대로 유지한다.
+
+
+### r8 최종 체인 검증 추가 (2026-10-03)
+
+| 도구 | 확인 범위 | 근거 |
+|---|---|---|
+| `r8_physics_hitshape_native_emu.py` | game ColBullet/Chariot 기록→sphere/capsule 선택→원본 native shape 교체·owner bind. 실제 부착 몸체 broadphase 전체는 제외 | [combat/hitbox.md §2.1](combat/hitbox.md) |
+| `r8_physics_initial_velocity_emu.py`, `r8_physics_prestep_cap_emu.py`, `r8_physics_finalizer_cap_emu.py`, `r8_physics_pose_emu.py` | 초기속도→carry→최종 physical/COM 속도→double 적분→native 원점·잔차. 무회전/관성0·감쇠0 경계의 whole 원본 함수와 독립 식 대조 | [physics/phive_controller.md §6.10.4~5](physics/phive_controller.md) |
+| `r8_camweapon_contact_*_emu.py`, `r8_combat_solver_info_emu.py`, `r8_combat_contact_quality_emu.py` | 접촉 bias·유효질량·single/dual normal 순차행, 계수 생산과 quality cache 입력. 정확한 파일별 명령은 contact_kernel_commands.md/physics_commands.md | [physics/phive_controller.md §6.10.4](physics/phive_controller.md) |
+| `r8_graphics_weapon_category_sources_emu.py` | 실제4 AS 입력 공급 caller·Shtr/Shtr 및 빈 이름. holder는 fixture, sink 뒤 전체 포즈는 제외 | [graphics/animation_weapon_blackboard.md](graphics/animation_weapon_blackboard.md) |
+| `r8_graphics_teamcolor_rsdb_emu.py` | 실제 RSDB36행 typed loader/lookup1296검사, metadata/hash/classname, Gyml15 사본196 제공 값 bit 비교. 상위 파일 로드는 판독 | [graphics/teamcolor_rsdb_source.md](graphics/teamcolor_rsdb_source.md) |
+
+최종 정정: native 압축 inverse mass의 SHLL 상위16비트 복원을 IEEE FP16으로 읽지 않는다. prestep의 `cap/sqrt`와 finalizer의 `(1/sqrt)*cap`, f32 곱을 double로 올리는 COM 순서를 합치지 않는다. TeamColor `14097d0`은 로더가 아닌 classname leaf14097cc의 중간 주소다. 기존 함수/기존 근거는 새 실행 건수나 새 확정 행으로 중복 계상하지 않는다.
+
+| 추가 도구 | 검증 범위 | 본문 |
+|---|---|---|
+| `r8_camweapon_as_request_first_tick_emu.py` | 요청 whole1,025 + 첫 틱 whole1,025 + 래퍼 복사 블록1,025; 9,225 f32 비트 일치. metadata·출력 capacity0·연속2틱 실패 경계 유지 | [graphics/as_request_first_tick.md](graphics/as_request_first_tick.md) |
+| `r8_gfx_projected_shadow_creation_emu.py` | 그림자 생성 블록64사례·126객체 및 Scene 등록. 실제 도구 이름과 단계별 명령은 shadow 지원 문서 확인 | [graphics/projected_shadow_runtime.md](graphics/projected_shadow_runtime.md) |

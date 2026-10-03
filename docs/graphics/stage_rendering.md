@@ -30,7 +30,7 @@
 | Env UBO 512 B 칸 대응 (6차) | 기록자 = gsys 0x71036b35c0(뷰마다) + 안개 0x71036b1300. 멤버 35개 선언(0x71036ae130 안)을 원본 실행해 오프셋을 얻었다: [0] Ambient, [1]/[2] Hemisphere 색, [4].xyz/[23].xyz 주광 방향, [4].w 세기, **[5] = Intensity·DiffuseColor**, [6] 둘째 색, [7..9] 둘째 방향광, **[10..21] agl Fog 4개(색, 방향, −S/(E−S), 1/(E−S), Damp)**, **[25..31] = 환경광 관리자 SH 0x70 B**(§5.5.1) | [실행]+[판독] |
 | 하늘 SH 경로 (6차) | 로비의 환경광 객체 "Main" 은 기본 장면 gfx 경로(0x710121dbc0 → 0x71010bf36c)로 `+0x5c8 = 0`(캡처 경로)을 받는다. 대체 SH(주광 0.1·I·Diffuse)는 캡처 전 첫 송신에만 쓰이고, 그 뒤 **실행 중 렌더한 BaseCubeMap(256², RGBA16F)** 을 두 번 캡처해 투영한 SH 로 바뀐다. 큐브는 romfs 데이터가 아니라 장면을 그린 결과다(§5.6) | [판독] |
 | 팀색 skyUp (6차) | 로비 주광(Intens 10, L*(Diffuse) 92.73)에서는 `t ≥ 9.27 > 6` 이라 r 이 Rate6 에서 포화해 **Ink/InkBright 가 skyUp 과 무관**하다. 0x7101174afc 원본 실행 500색×skyUp 5종 모두 비트 동일(대조군 t=4 는 485/500 달라짐) | [실행]+[판독]+[데이터] |
-| HDRCompose 로비 변형 (6차) | BLOOM: 블룸 객체 +0x438 = agl bloom 파라미터 `finalblend`(Default env 값 1) → **가산(BLOOM 1)**. CC: +0x2410 bit4 는 생성 때 0x71035db354 가 켜고 끄는 코드가 없다 → **CC 1**. GAMMA: 장면+0x1c0 = gsys 장면 설정, +0xf00 = `linear_lighting_enable`(Common true) → 장면+0x523c bit4 가 꺼져 있으면 GAMMA 1(pow 1/2.2). bit4 출처는 [미확정](§3.2) | [판독]+[데이터], 감마 일부 [미확정] |
+| HDRCompose 로비 변형 (6차) | BLOOM: 블룸 객체 +0x438 = agl bloom 파라미터 `finalblend`(Default env 값 1) → **가산(BLOOM 1)**. CC: +0x2410 bit4 는 생성 때 0x71035db354 가 켜고 끄는 코드가 없다 → **CC 1**. GAMMA: 장면+0x1c0 = gsys 장면 설정, +0xf00 = `linear_lighting_enable`(Common true) → 장면+0x523c bit4 가 꺼져 있으면 GAMMA 1(pow 1/2.2). bit4 출처는 [미확정] (§3.2) | [판독]+[데이터], 감마 일부 [미확정] |
 | 그림자 설정 (6차) | gsys 설정 생성자 0x7103705fec 를 실행해 이름 해시를 복원했다. 동적 깊이 그림자 = 캐스케이드 2, **1024×1024**, 깊이 바이어스 `depth_shadow_polygon_offset 0.3`·`polygon_scale 5.0`, `depth_shadow_pcf_offset 0.5`(텍셀 → UV 0.5/1024), near/far 1.5·20·250·16 / 60. 정정: 2048·`Depth_32`·`R32_G32_float` 는 **정적 그림자**(`static_sdw_*`) 값이다(§3) | [실행]+[데이터]+[판독] |
 | RadialFog (6차) | 필드 BlendFactor +0x30(0.0), Color +0x34(1, 0.95, 0.7, 1), Intens +0x44(1.0), LobeCtrl +0x48(1.0), ShadowInfluence +0x4c(0.0), SizeCtrl +0x50(5.0). 로비는 빈 블록 → BlendFactor 0 → **산란 항 꺼짐**(§4, §5.5) | [판독] |
 
@@ -69,6 +69,41 @@ RenderingDay(LobbyVersusLockerTest):
 | Shadow.ProjShadow | Density 0(구름 그림자 없음), Scale (0.05, 0.05) |
 
 ColorGrading 곡선 `Data` 6개 = (x0, y0, 기울기0, x1, y1, 기울기1)로 보이는 Hermite 2점 [추정 — 해석 코드 미판독]: R (0,0,0.7648)→(1,1,0.2668), G (0,0,0.5099)→(1,1,0.2549), B (0,0,0.6168)→(1,1,0.3585).
+
+**정정(2026-10-03, 7차):** 위 문장은 이전 기록입니다. `Data = (X0, Y0, M0, X1, Y1, M1)`은 원본 함수로 해소했습니다. M은 **구간 정규 좌표의 접선**이며, 실제 X 단위의 기울기처럼 `(X1−X0)`를 곱하지 않습니다. 로비는 X 간격이 1이라 두 해석이 같은 숫자를 내지만, 비단위 X 간격의 합성 입력도 실행해 이 차이를 확인했습니다. 전체 LUT 결과까지 확정한 것은 아닙니다.
+
+### 2.2.1 ColorGrading Hermit2D 곡선 (7차) [실행]+[판독]+[데이터]
+
+이름·번호 연결 [판독]: ColorGrading 방문 함수는 R/G/B 곡선을 각각 +0x70/+0x50/+0x30에 넣습니다. 파라미터 곡선 래퍼(vtable 0x7105553c78, 슬롯 4 = 0x71010080B0)는 BYAML 로더 0x71038C7F28을 부릅니다. 이 로더는 0x71038C8FC8이 문자열 0x710493E6B9를 분리한 이름 표의 **+0x38(번호 7, 0부터 세므로 여덟째)**와 `Type`을 비교하며, 0x71038C8344에서 7을 만들어 0x71038C8228에서 곡선 +8에 기록합니다. 문자열 배열의 번호 7은 `Hermit2D`입니다.
+
+적용 0x710115567C는 R 곡선의 type(+0x78)·Data 원소 수(+0x80)·Data 포인터(+0x88)를 읽어 색 보정 객체의 선택 곡선 레코드(`CC+0xFA0+slot×0x280`) +0x28(type)·+0x2B(원소 수), +0x80(Data 복사)에 넣습니다 [판독]. G/B는 같은 레코드 +0x40/+0x58 헤더를 씁니다. LUT 갱신 0x71035DC218은 종류 6에서 이 헤더(`CC+0xFC8/+0xFE0/+0xFF8`)의 type으로 점프표 **0x71057215E8**을 읽습니다. 번호 7의 포인터는 **0x710358CFE0**이며, 이번에 새로 판독·실행한 함수입니다. 이 연결을 다른 camera 곡선 함수 주소에 그대로 적용하지 않습니다.
+
+ABI: S0 = 입력 t, X0 = 타입 헤더(type 바이트 +0, Data 원소 수 u8 +3), X1 = f32 Data 배열, 반환 S0. n = `floor(header[3]/3)`개의 `(X,Y,M)` 키입니다. 유효 데이터는 증가하는 X 키 2개 이상입니다. t≤첫 X면 첫 Y, t≥마지막 X면 마지막 Y를 반환합니다. 중간에서는 **다음 키 X>t인 첫 구간**을 선택합니다. `MaxX`로 나누는 명령은 이 reader에 없습니다.
+
+```text
+u = f32(f32(t−X0) / f32(X1−X0))
+h00 = 2u³−3u²+1; h01 = 3u²−2u³
+h10 = u³−2u²+u; h11 = u³−u²
+Y = Y0*h00 + Y1*h01 + M0*h10 + M1*h11
+```
+
+연산은 원본의 FMUL/FADD/FSUB/FDIV 순서로 모두 f32입니다. **FMA는 없습니다.** 비트 대조 도구가 쓰는 정확한 결합 순서는 `twoSq=f32(u*f32(u+u))`, `twoCube=f32(u*twoSq)`, `threeSq=f32(u*f32(u*3))`, `sq=f32(u*u)`, `cube=f32(u*sq)`, h00=`f32(f32(twoCube−threeSq)+1)`, h01=`f32(threeSq−twoCube)`, h10=`f32(u+f32(cube−twoSq))`, h11=`f32(cube−sq)`입니다. 출력은 `f32(f32(M1*h11) + f32(f32(M0*h10) + f32(f32(Y1*h01)+f32(Y0*h00))))`입니다. 디컴파일의 `u*u*3`처럼 곱 결합을 바꾸면 비트가 달라질 수 있습니다.
+
+로비의 원본 Data는 §2.2 JSON의 f32 값 그대로이며, LUT 갱신 입력 `t = f32(i/7)`의 원본 함수 출력은 다음과 같습니다. 표의 숫자는 표시만 9자리 반올림했으며 결과 JSON에 f32 비트가 있습니다.
+
+| i | R | G | B |
+|---:|---:|---:|---:|
+| 0 | 0 | 0 | 0 |
+| 1 | 0.130998716 | 0.104448766 | 0.113857903 |
+| 2 | 0.294183195 | 0.257711560 | 0.267257094 |
+| 3 | 0.472613573 | 0.438181609 | 0.442272514 |
+| 4 | 0.649350286 | 0.624252319 | 0.620979607 |
+| 5 | 0.807453334 | 0.794316649 | 0.785453022 |
+| 6 | 0.929983079 | 0.926768064 | 0.917768061 |
+| 7 | 1 | 1 | 1 |
+
+원본 전체 0x710358CFE0 실행은 **2,127/2,127 비트 일치**입니다. 로비 RGB 3곡선×12입력=36건, 합성 200곡선의 2~7개 비단위 X 간격·경계·내부 키·바깥 값·무작위 구간=2,091건입니다. 함수 스텁·SDK 대체 함수는 없습니다. 이 결과는 곡선 단독 reader이며, 파라미터 로더·적용 writer·GPU LUT 렌더를 실행한 것이 아닙니다. 음수 출력/1 초과를 이 reader에서 clamp하지 않습니다. 키가 정렬되지 않았거나 X가 중복된 잘못된 데이터의 안전성은 이번 검증 범위 밖입니다.
+
 
 RenderingDay 구조 오프셋(방문 함수 디컴파일 `analysis/decomp/gfx4/g3_visitors.c`, 추출 `web/tools/gfx4_visitor_fields.py`) [판독]: MainLight {Color +0x30, CubeMapIntens +0x40, Intens +0x44, Latitude +0x48, Longitude +0x4c, IsUseCubeMapIntens +0x50}, DepthFog {Color +0x30, End +0x40, ScatteringCoeff +0x44, Start +0x48}, HeightFog {Color +0x30, Dir +0x40, End +0x4c, Start +0x50}, DynamicLight {GridOffset +0x30, GridSize +0x3c}, ColorGrading {CurveColorB +0x30, G +0x50, R +0x70, HDRTint +0x90, Hue +0xa0, Saturate +0xa4, Value +0xa8, Enable +0xac}, SkySphere {ActorName +0x30, Color0 +0x38, EmissionIntensInEnvMap +0x48, ExposureNotInEnvMap +0x4c, Offset +0x50, Rotate +0x5c, SaturationInEnvMap +0x60, Scale +0x64, Enable +0x68}, LightArray 원소 {Intensity +0x30, Latitude +0x34, LongitudeFromMainLight +0x38}, DOFGaussian {End +0x30, FarCancel +0x34, Level +0x38, Start +0x3c}, ManualExposure {Value +0x30}, BakeShadow {AOOff +0x30, AOScale +0x34, AOMainLightOcclude +0x38, ShOff +0x3c, ShScale +0x40}. 필드마다 "설정됨" 플래그 바이트가 있고 없으면 `$parent` 로 올라가 찾습니다(디컴파일의 상속 반복문, `web/tools/gfx4_fold.py` 로 접어 읽음).
 
@@ -201,6 +236,7 @@ VIG   = 비네트+8 ? (비네트+0x34 == 1 ? 2 : 비네트+0x34 == 0 ? 1 : 0) : 
 
 - **블룸 합성 = 가산(BLOOM 1)** [판독+데이터]. 블룸 객체(장면+0x2ab8)의 파라미터 묶음은 객체+0x30 에서 시작한다(0x71036ecd4c 가 `x19+0x30` 을 0x71036eb47c 에 넘김). 0x71036eb47c 는 이름 CRC 를 인라인으로 계산해 파라미터를 만든다. 묶음+0x3f0 이 `finalblend`(값 +0x408, 생성자 기본 1)이고, 묶음+0x0 이 `threshhold`(값 +0x18) 등이다. 따라서 블룸+0x438 = 묶음+0x408 = **`finalblend`**, 블룸+0x48 = `threshhold`, +0x68 = `threshold_range`, +0x88 = `intensity` 로 0x7102b699c0 의 기록 위치와 맞다. 로비 genv(VSLobby_Day)에는 블룸 객체가 없고 기본 env `defaultday.baglblm` 의 `finalblend`(해시 0x359a9772) = **1** 이다. RenderingDay 적용 0x7102b699c0 과 env 접근자(Bloom 0x08~0x1b)는 이 칸을 쓰지 않는다(0x7101050000~0x7101053000 범위 +0x438/+0x408 접근 0건). 0x7103744058 은 `+0x1c = (finalblend == 2)` 를 쓰므로 BLOOM = 1 + 0 = **1(`HDR·노출 + Bloom`)** 이다. 비트 0 의 나머지 조건(장면+0x280 bit0, 블룸+8 뷰 마스크)은 런타임 값이라 확인하지 못했다.
 - **CC = 1** [판독]. ColorCorrection 객체 생성자 0x71035d9450 이 +0x2410 = 0 을 쓴 뒤 0x71035db354(곡선 초기화)를 불러 `+0x2410 |= 0x12`(bit1·bit4)를 켠다. +0x2410 을 쓰는 다른 곳(0x71035dc218 LUT 갱신 `&= ~2`, 0x71035de4a8·0x71035df17c·0x710104bf04·0x710115567c `|= 2`, 0x71035df17c `|= 0xa`)은 bit4 를 끄지 않는다(`r5_gfx_stage_bitscan.py` 전수). 따라서 색 보정 객체가 있고 `color_correction` 설정(+0x8d0)·ColorGrading.Enable(+0x218, 로비 true)이 켜져 있으면 CC = 1 이다.
+- **7차 곡선 reader 해소** [실행]+[판독]: `Hermit2D` 번호7 = 0x710358CFE0, Data6의 `(X,Y,정규 접선)`과 8점 표본값은 §2.2.1입니다. 다른 연산 종류·GPU 셰이더·최종 LUT 내용은 계속 미확정입니다.
 - **색 보정 LUT 는 GPU 에서 만든다** [판독]. 0x71035dc218 은 `+0x218 && (+0x2410 & 6)` 일 때 bit1 을 지우고, 12칸의 연산 목록(+0x258 색인, 종류 0~9)을 UBO 로 만든다. 종류 6 은 곡선 4개(+0xfc8/+0xfe0/+0xff8/+0x1010)를 `t = i/7`(i = 0..7) 8점으로 표본화하고, 다른 종류는 +0x960 의 0x28 B 칸(vec4 2개)을 그대로 넣는다. 그 뒤 렌더 타깃(한 변 `color_correction_3dbake_texwidth` = 8)에 그린다. LUT 값 자체는 agl 색 보정 셰이더 역번역과 연산 목록 대응이 필요해 [미확정]이다.
 - **GAMMA** [판독, 일부 미확정]. 0x71036c99b8 의 인자 = `linear_lighting_enable(장면+0x1c0 +0xf00) ? (장면+0x523c bit4 ? 장면+0x5239 bit4 : 1) : 장면+0x5239 bit4`. 장면+0x1c0 이 gsys 장면 설정 객체이고 +0xf00 이 `linear_lighting_enable`(Common true)임은 생성자 실행으로 확인했다(§3.0). 장면+0x523c bit4 와 +0x5239 bit4(= 장면+0x4918 하위 객체 +0x924/+0x921)를 쓰는 명령은 gsys 범위 직접 오프셋·비트 쓰기 스캔에서 찾지 못했다. bit4 가 꺼져 있으면 GAMMA 1(`pow(c, 1/2.2)`)이다.
 
@@ -251,7 +287,7 @@ apply(t, A, env, B):            // 값 = lerp(B값, A값, t)  (일부는 t 를 [
 
 6차 판독(2026-10-03) — 남은 적용 함수 세 개 [판독, 구조체 이름은 일부 추정]:
 
-- **0x7102b66c54**: RenderingDay A/B 의 vt+0x80 하위 구조체를 읽어 env+0x2800 객체에 쓴다 — +0x5ac/+0x5b0(같은 값 두 칸), +0x440(구조체 +0x34 보간), +0x360/+0x364, +0x400/+0x404, +0x380, +0x420(구조체 +0x38 보간). env+0x2800 객체와 하위 구조체 이름은 [미확정](필드 수·형태로는 그림자 계열로 보임 [추정]).
+- **0x7102b66c54**: RenderingDay A/B 의 vt+0x80 하위 구조체를 읽어 env+0x2800 객체에 쓴다 — +0x5ac/+0x5b0(같은 값 두 칸), +0x440(구조체 +0x34 보간), +0x360/+0x364, +0x400/+0x404, +0x380, +0x420(구조체 +0x38 보간). env+0x2800 객체와 하위 구조체 이름은 [미확정] (필드 수·형태로는 그림자 계열로 보임 [추정]).
 - **0x7102b68ef4**(vt+0x88 == 1 일 때만): vt+0x90 하위 구조체의 bool(+0x40, 플래그 +0x44), f32 +0x38(+0x41), +0x3c(+0x42), +0x30(+0x43)을 env+0x2ac8 객체 +0x1a8(bool, t ≈ 0 일 때만), +0x268(= max(0, 보간)), +0x1e8(보간) 등에 쓰고, 값이 바뀌면 0x71035e553c(갱신 표시)를 부른다. t ≈ 0 이면 +2000(0x7d0)을 0 으로 지운다. 하위 구조체는 방문 함수 0x71011dcd8c(`ShadowPPBlur` +0x50, `DynamicShadowMap` +0x48 을 담는 묶음) 쪽으로 보이나 어느 것인지는 [미확정].
 - **0x7102b60200**: vt+0xc8 하위 구조체의 vec3 +0x30(플래그 +0x40)과 f32 +0x3c(플래그 +0x41)를 A/B 보간해 이벤트(키 0x7105810450, vtable 0x7105559ec0)로 `{vec3, vec3, f32}` 를 보낸다. RenderingDay 에서 vec3+f32 묶음은 `GlobalWind`(RenderingDay +0x58, 플래그 +0x89)이고 env 접근자에 `GlobalWindDir`·`GlobalWindIntens` 가 있어 GlobalWind {Dir, Intens} 로 본다 [추정: 형태·이름 대응]. 로비 RenderingDay 에는 GlobalWind 블록이 없다 [데이터].
 
@@ -261,7 +297,7 @@ agl::env 타입 ID 전역(0x71035d9320, 0x71035d57d0 등록) [판독]: 0x7105999
 
 - 호출자 0x7102b5c250(→0x7102b5c4a8). t 의 출처(시간대 전환 진행도)는 [미확정]. 로비는 낮 세트 하나라 A=B 로 두면 됩니다.
 - 안개 구조체(0x7102b63ce4, 판독 일부): `DepthColor.rgba`, `−Start/(End−Start)`, `1/(End−Start)`(|End−Start| ≥ 0.01 로 보정), `ScatteringCoeff`, RadialFog 값들(+0x50 은 `1/exp2(2x)`), `HeightColor.rgba`, `normalize(HeightFog.Dir)`, `1/(End−Start)`, `−Start/(End−Start)`. 이것이 Env UBO 의 어느 칸으로 가는지(수신자)는 [미확정] — §5.5 의 셰이더 식과 형태가 맞습니다.
-- 5차: 이벤트 객체 오프셋(0x7102b63ce4 지역 변수 배치 + 수신자 읽기로 대조) [판독]: +0x18 DepthFog.Color(rgba), +0x28 −Start/(End−Start), +0x2c 1/(End−Start), +0x30 ScatteringCoeff, +0x34 RadialFog(+0x30 필드), +0x38..+0x47 vec4(0x71010bb2b0 계열 값), +0x48 RadialFog(+0x48), +0x4c RadialFog(+0x50), +0x50 1/exp2(2·RadialFog(+0x50)), +0x54 RadialFog(+0x4c), +0x58 HeightFog.Color, +0x68..+0x70 normalize(HeightFog.Dir), +0x74 −Start/(End−Start), +0x78 1/(End−Start)(높이), +0x7c/+0x7d/+0x7e 블록 유효 플래그. RadialFog 필드 이름은 [미확정](로비 RenderingDay `RadialFog: {}` → 기본값).
+- 5차: 이벤트 객체 오프셋(0x7102b63ce4 지역 변수 배치 + 수신자 읽기로 대조) [판독]: +0x18 DepthFog.Color(rgba), +0x28 −Start/(End−Start), +0x2c 1/(End−Start), +0x30 ScatteringCoeff, +0x34 RadialFog(+0x30 필드), +0x38..+0x47 vec4(0x71010bb2b0 계열 값), +0x48 RadialFog(+0x48), +0x4c RadialFog(+0x50), +0x50 1/exp2(2·RadialFog(+0x50)), +0x54 RadialFog(+0x4c), +0x58 HeightFog.Color, +0x68..+0x70 normalize(HeightFog.Dir), +0x74 −Start/(End−Start), +0x78 1/(End−Start)(높이), +0x7c/+0x7d/+0x7e 블록 유효 플래그. RadialFog 필드 이름은 [미확정] (로비 RenderingDay `RadialFog: {}` → 기본값).
 - **6차: RadialFog 필드 이름·기본값 [판독]**. 방문 함수 0x71011d4ddc(문자열 `game__gfx__parameter__RadialFog` 참조 0x71011d5cd8 의 클래스, vtable 0x710556a1f0), 생성자 0x71011d4d04:
 
 | 오프셋 | 이름 | 기본값 | 안개 이벤트 칸 |
@@ -297,6 +333,8 @@ agl::env 타입 ID 전역(0x71035d9320, 0x71035d57d0 등록) [판독]: 0x7105999
 | 249/243/1293/337 | 사이니지(blitz_calc_color 네트워크, [shaders.md §3.6.4](shaders.md)) | |
 
 공통 renderInfo: `gsys_static_depth_shadow 1`(대부분), `gsys_dynamic_depth_shadow 0`, `gsys_cube_map 1`, `gsys_env_obj_set TPS`, `gsys_priority_hint field_wall`, `spl_model_type 1`. 베이크 샘플러 `_b0 = bake0`, `_b1 = bake1` 에 자리표시 텍스처 `BakeDummy00`/`LightBakeDummy00` 가 꽂혀 있고 런타임에 bkres 텍스처로 바뀝니다 [추정: 교체 코드 미판독, 이름·형식 일치].
+
+**r8 정정(2026-10-03)**: 원본344af54 모듈31→3cf9ba0→3ccfcd4→3ccadd0/3ccaf2c로 DataType3/4가 bake0/bake1을 선택해 실제 텍스처 핸들2개와 gsys_bake_st0/1 vec4를 기록함을 확인했다 [실행]+[판독]. [bake_material_binding.md §3~§11](bake_material_binding.md). 합성32/32 핸들·uniform비트일치, 실제 로비 GPU는 미실행.
 
 ### 5.2 정점 셰이더 (1714) [판독]
 
@@ -374,7 +412,7 @@ fogC  = mix(Env[10].rgb, scat, [53].w)
 out   = mix(col, fogC, df)
 ```
 
-Env[10] = DepthFog 색(a = 최대 농도 A), Env[11].w/[12].x = −Start/(End−Start), 1/(End−Start), Env[13] = HeightFog 색, Env[14].xyz = HeightFog 방향 [추정: §4 안개 구조체의 값 형태와 일치, 실제 복사 코드 미판독]. BlitzUBO0 [53]~[55]의 기록자는 [미확정](후보 0x7102c5a3c8 이 holder+0x13e8 기록 — 다른 에이전트가 디컴파일 `analysis/decomp/phys4/p4_world_ctrl.c` 에 둠).
+Env[10] = DepthFog 색(a = 최대 농도 A), Env[11].w/[12].x = −Start/(End−Start), 1/(End−Start), Env[13] = HeightFog 색, Env[14].xyz = HeightFog 방향 [추정: §4 안개 구조체의 값 형태와 일치, 실제 복사 코드 미판독]. BlitzUBO0 [53]~[55]의 기록자는 [미확정] (후보 0x7102c5a3c8 이 holder+0x13e8 기록 — 다른 에이전트가 디컴파일 `analysis/decomp/phys4/p4_world_ctrl.c` 에 둠).
 
 정정(2026-10-03): BlitzUBO0 [53]~[55] 기록자는 0x7102c5a3c8(접지 판정, 무관)이 아니라 SceneCommonUBOHolder 의 안개 이벤트 콜백 **0x7101185af4**(등록 0x7101183ab8 안 0x71011857a4)다 [판독]. 멤버 값 주소 → UBO 칸은 BlitzUBO0 레이아웃(원본 실행, `analysis/render/blitzubo0_layout.tsv`, 멤버 기준 = holder+0x2b0, 값 = 멤버+0x38)으로 대응시켰다:
 
@@ -441,7 +479,7 @@ Env UBO 쪽(5차): Env[10..15] 의 원천은 env 의 agl `Fog` 두 객체다 —
   → 수신: 팀색 관리자 0x71011767f8(skyUp = SH(0,1,0), team_color.md §5.3), 조명 UBO 0x7101135000
 ```
 
-- 대체 경로 0x7101029f6c: 환경광 관리자 +0x5c8 이 켜져 있거나 조건이 맞으면 **SH = 주 광원을 위(0,1,0)에서 비춘 것**으로 만든다 — `0x7101033b78(sh, (0,1,0), 0.1·Intensity·DiffuseColor.rgb, 1)`(방향광 → SH 투영) [판독]. 로비에서 어느 경로가 쓰이는지는 [미확정](IlluminateEnvMap 캡처가 끝나면 리드백 경로).
+- 대체 경로 0x7101029f6c: 환경광 관리자 +0x5c8 이 켜져 있거나 조건이 맞으면 **SH = 주 광원을 위(0,1,0)에서 비춘 것**으로 만든다 — `0x7101033b78(sh, (0,1,0), 0.1·Intensity·DiffuseColor.rgb, 1)`(방향광 → SH 투영) [판독]. 로비에서 어느 경로가 쓰이는지는 [미확정] (IlluminateEnvMap 캡처가 끝나면 리드백 경로).
 - 가중 식: 0x7101033b78 = `k = 4π/n`, Y1 = 0.488603, Y2 = 1.092548, Y20 = 0.315392(3z²−1), Y22 = 0.546274(x²−y²), Y00 = 0.282095 에 위 변환 상수를 곱해 cAr..cC 를 만든다(디스어셈블 결합 순서는 `web/tools/r5_gfx_stage_emu.py` re_dirlight_sh).
 - SH 평가 0x7101033dc0 = 채널마다 `max(0, (A3 + ((x·A0 + y·A1) + z·A2)) + (((xy·B0 + yz·B1) + zz·B2) + xz·B3) + (x² − y²)·C)`, 4번째 반환 1.0.
 - SH→큐브 역변환 `IrradianceSHToCubeMap`(조사도 큐브)의 상수는 0.429043, 0.743125, **0.866227**(통상 0.886227 와 다름 — 원본 그대로), 0.247708, 1.023328, 0.858086, × `cEnvCubeMapIntensity`·(1/π) [판독: `analysis/r5_gfx_stage/proc/`].
@@ -482,6 +520,8 @@ Env UBO 쪽(5차): Env[10..15] 의 원천은 env 의 agl `Fog` 두 객체다 —
 | `textures.bntx` | `0_bktex0` BC5_UNORM 2299×1777 mip 12 (comp RG01) / `1_bktex0` BC6H_UFLOAT 1532×1184 mip 11 (comp RGB1) |
 
 `DataElements[k] = {BindingSpace 0, DataType, TextureNames[], ModelElements[]}`: DataType **3 = AO/그림자(→ `_b0` cTexBakeAOShadow)**, **4 = 빛(→ `_b1` cTexBakeLight)** [추정: 형식(BC5 2채널 / BC6H HDR)과 셰이더 사용(.xy / .rgb·a·32) 일치]. `ModelElements[] = {Guid, ModelName, OriginalMaterialCount, MaterialElements[]}`, `MaterialElements[] = {MaterialName, OriginalMaterialIndex, TexcoordScale{X,Y}, TexcoordOffset{X,Y}, TextureIndex}`.
+
+**r8 정정(2026-10-03)**: DataType3/4→bake0/bake1, 즉 기존 BFRES 슬롯_b0/_b1의 연결을 원본 등록·소비 식 및32건 원본 실행으로 확정한다 [판독]+[실행]. TexcoordScale/Offset은 vec4(Sx,Sy,Ox,Oy)로 실제 모델 vt158에 전달된다. [bake_material_binding.md §3~§10](bake_material_binding.md).
 
 - `Guid = "<배치 Hash>_<액터 안 모델 번호>"`: Fld_VSLobby 배치 Hash 4825244811554112121 → `_0` = Fld_VSLobby(47/50재질), `_1` = FldBG_LobbyDV(3/8). DObj_FldObj_DoorLobby(15205139476108028325) `_0` = FldObj_DoorLobby 등 [데이터]. 같은 bfres 를 여러 번 배치하면 배치마다 다른 UV 영역을 가집니다.
 - 베이크가 없는 재질(MaterialElements 에 없는 것)은 bake 옵션이 꺼진 재질과 일치합니다(Glass·발광 등) [데이터 일부 확인].
@@ -553,8 +593,12 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 - 격자 원점·역셀 크기 = BlitzUBO2 data[0x226]/[0x227]. RenderingDay `DynamicLight.GridSize (10,1,10)` 와 셀 20개 → 200×200 범위로 보임 [추정]. 셀당 최대 4개, 전체 최대 30개.
 - CPU 기록자(BlitzUBO2 = `*0x7105810020 + 0x1398` 블록, [shaders.md §3.9](shaders.md))는 [미확정]. 후보: holder+0x35f8/0x3608(=0x1398+0x2260/0x2270)을 함께 쓰는 0x71029b6698, 0x71034da0c8, 0x71034dc9dc, 0x710369bf40(`render_storescan.py`).
 - 5차 후보 정리(`analysis/decomp/r5_gfx_stage/b1.c`) [판독]: 0x71029b6698 = 상태머신 객체 생성자(무관), 0x710369bf40 = agl 라이트맵(`"agllmap"`) 생성자(무관), 0x71034dc9dc = 버퍼 교대 토글(무관). 0x71034da0c8(vtable 0x710571c350, 0x2430 B 버퍼 할당)만 남았다 — 9024 B 블록과 크기가 가까운 후보이며 쓰기 함수는 미확인.
-- 감쇠 지수 ↔ 데이터(`DampParam`/`DistDamp`/`AngleDamp`), 반경 ↔ 배치 `Scale`/`Radius` 대응은 [추정](이름이 맞을 뿐 복사 코드 미판독).
+- 감쇠 지수 ↔ 데이터(`DampParam`/`DistDamp`/`AngleDamp`), 반경 ↔ 배치 `Scale`/`Radius` 대응은 [추정] (이름이 맞을 뿐 복사 코드 미판독).
 - 6차 [판독, 기록자는 여전히 미확정]: 0x71034da0c8 은 vtable 0x710571c350 객체의 생성자다. 0x2430 B 버퍼 두 개를 힙에 잡아 0 으로 채우고 0x71034e1674 로 초기화해 배열(+0x10)에 넣고, 자기 안(+0x30)에도 같은 구조를 하나 더 둔다(이중 버퍼 + 현재). 버퍼 크기 0x2430(9264 B)은 BlitzUBO2 데이터 영역과 크기가 가깝지만, 이 객체가 holder+0x1398 블록에 쓰는 함수는 아직 찾지 못했다. 다음 볼 곳: vtable 0x710571c350 의 갱신 슬롯, 그리고 holder 전역(`*0x7105810020`, GOT 0x7105792048)을 읽는 함수 32개 가운데 0x710104668c(+0x1398 에 포인터를 저장함). GfxSpotLightDynamic/GfxPointLightDynamic 액터 등록(0x7101d259c0 → 0x7101044848·0x7101044f90)도 같은 관리자 쪽이다.
+
+### r8 동적 광원 CPU 기록자·격자 정정 (2026-10-03)
+
+원본manager1045f18/1046f20→accumulator104560c/10457dc→memberwriter1045218→GPUupload10471e4등을연결했다 [판독]. 원본15멤버선언,384upload·2048격자설정·8192점광원삽입 전수비트일치 [실행]. 이전inline UBO가정의 후보4개는잘못된구조였고+1398은UBO객체다. RenderingDayGridSize(10,1,10)·GridOffset0→extent(200,1,200)/origin(-100,-.5,-100)은1151a74/1044f90식으로확정한다. 셀당first4/전체30·packed400u32→GPU400vec4를 [dynamic_lighting.md](dynamic_lighting.md) §3~§10에정리했다. 감쇠·Radius 명명및rig전체는계속미확정이다.
 
 ## 9. 웹 포팅 (three.js) — 근사안
 
@@ -578,8 +622,21 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 | 동적 그림자 (6차) | `DirectionalLight.shadow` 를 캐스케이드 2(경계 1.5–20, 20–60 [추정]), 각 1024², 깊이 바이어스 polygon offset 0.3·scale 5.0(WebGL `polygonOffset(5.0, 0.3)` 에 해당 — 원본 인자 순서 factor/units 대응은 [추정]), PCF 오프셋 0.5 텍셀로. 정적 메시는 베이크 그림자(§6) | 설정 값 [실행]+[데이터], 필터 식 [미확정] |
 | 하늘 SH·팀색 (6차) | 팀색 Ink/InkBright 는 skyUp 을 0 으로 둬도 원본과 같다(로비 조명에서 포화). 맵 간접광 SH 는 계속 근사 | 팀색 [실행] |
 | RadialFog (6차) | 로비는 기본값 BlendFactor 0 → 산란 항 생략이 원본과 같다 | [판독]+[데이터] |
+| 색 보정 곡선 (7차) | `(X,Y,M)` Hermit2D, 정규 접선에 X 구간 폭을 곱하지 않음. §2.2.1의 8점 f32 표본과 원본 결합 순서 반영; 최종 LUT 연산은 별도 | [실행]+[판독] |
 
 구현 순서 권장: (1) 맵 glb + 베이크 두 장 + 주 광원 + 고정 환경광 → (2) 잉크 분기 → (3) 안개·색 보정 → (4) 동적광·그림자.
+
+### 2026-10-03 정정: 환경 보간 t의 생산 [판독]+[실행]
+
+§4의 기존 t 출처 [미확정] 기록을 보존하고 정정한다. 요청2b5af20은 N=int(duration),c=0과old/new포인터를 설정한다. 준비 완료 tick2b5c250은 N==1이면1, 그외f32(c)/f32(f32(N)-1)을apply에 넘긴뒤c++하고 c>=N에서old를지운다. 정상3072+조기반환6건 원본실행 모두 일치. 상세·실행경계는 [environment_transition.md](environment_transition.md) §3~§11. 2b5c4a8은 tick 내부주소며시간대시각 자체가 아니다.
+
+### 2026-10-03 정정: 광원 Rig의 실제 뼈·필드 공급 [판독]+[실행]+[데이터]
+
+§2.3의C32F024E는실제BonePrefix다. 네float는CycleA/B/AR/BR로이름·offset·소비를확인했다.37A1AA8이뼈worldmatrix의Offset/Direction을계산하고37A038C이Radius/Intensity/DampParam/Angle*.5/AngleDamp*(radius/Radius)를기록,1048D98이enable이중gate후104560C에공급한다.2,048건原本bitmatch. PointRig와배치Point/Spot Scale·감쇠공급도새writer/기존typedreflection/실제provider를연결해§8복사추정과§9Rig대응을해소했다.로비enabled는1,2,5,6,7이다. 상세 [light_rig_runtime.md](light_rig_runtime.md) §3~§11. 비Dynamic배치사용여부·실제GPUframe전체는별도미확정이다.
+
+### 9.8 r8 DOF 접근자 정정 (2026-10-03) [판독]+[실행]
+
+§4의 env+2AC8 “자동 노출 계열”은 이전 추정이다. 실제 vt90=`10C4C20`은 PostEffect.DOFGaussian을 반환하며, `2B68EF4`는 Level(clamp0..15)/Start/End/FarCancel/Enable을 DOF 객체에 쓴다. 원본1024건·typed getter4096건 비트 일치. 새 클래스 등록 DepthOfFieldObj/agldof와 범위·실패·남은 Shadow target은 [renderparam_runtime.md §3~§11](renderparam_runtime.md)에 기록했다. 적용 함수 전체 묶음은 아직 부분이다.
 
 ## 10. 검증
 
@@ -600,6 +657,8 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 | (6차) 팀색 Ink/InkBright 의 skyUp 의존 | `r6_gfx_stage_inkcorr_emu.py 500`: 0x7101174afc 전체 원본 실행(powf/fmodf = SDK 원본), 로비 주광 + skyUp 5종 | 500/500 색에서 출력 비트 동일, 대조군(I 4, Diffuse 1) 485/500 달라짐 [실행] |
 | (6차) gsys 장면 설정 이름 | `r6_gfx_stage_cfgparams.py`: 생성자 0x7103705fec 원본 실행(bl 10종·형식화 1개 스텁), crc32b 사슬 추적 + zlib 재계산 | 이름 약 175개 복원, 0x710370c15c 에서 중단 [실행] |
 
+| (7차) Hermit2D 0x710358CFE0 | `r7_graphics_hermit2d_emu.py`: 로비 RGB36 + 증가 X 합성2091, 경계·비단위 X폭 | **2127/2127 비트 일치**, 함수 스텁 없음. reader 단독; GPU LUT 미실행 |
+
 원본 실행 대조·화면 비교는 하지 않았습니다. 셰이더 식은 역번역 판독이고, CPU 쪽 UBO 칸 대응 중 [추정] 표시는 복사 코드를 보지 않은 것입니다.
 
 정정(2026-10-03): 위 문장 이후 5차에서 CPU 쪽 다섯 함수를 원본 실행으로 대조했다(위 표 (5차) 행, 결과 `analysis/completion/r5/gfx_stage_emu.json`). 스텁은 없고, 실행 범위는 각 함수 단독(호출자·GPU 결과는 합성 입력)이다. 화면 비교는 여전히 하지 않았다.
@@ -615,7 +674,7 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 | ~~RadialFog 필드 이름·기본값~~ | 해소(6차, §4): BlendFactor/Color/Intens/LobeCtrl/ShadowInfluence/SizeCtrl. 남은 것: 이벤트 +0x38 vec4(0x71010bb2b0 MainLight 쪽 계산)의 식 |
 | ~~톤매핑 변형·노출 계산~~ | 해소(5차): 톤매핑 4, 노출 = White2D.w × exp2(Value)(§3.2·§3.3) |
 | 감마 변형의 로비 값 | 6차: 블룸 = finalblend 1(가산) 해소, 장면+0x1c0 +0xf00 = `linear_lighting_enable` true 해소(§3.2·§3.0). 남은 것: 장면+0x523c bit4 / +0x5239 bit4(장면+0x4918 하위 객체 +0x924/+0x921) 기록자 — 정적 스캔 0건, 장면 객체 갱신 함수 동적 추적 필요 |
-| 색 보정 LUT 내용 | 6차: bit4 해소(생성 시 0x71035db354, CC = 1). LUT 는 0x71035dc218 이 12칸 연산 UBO 를 만들어 GPU 로 8³ 를 그린다 — agl 색 보정 셰이더 역번역 + 0x710115567c 가 채우는 연산 칸(종류 0~9) 대응이 필요 |
+| 색 보정 LUT 내용 | **7차: Hermit2D Data6·reader·로비 8점 표본은 해소(§2.2.1), 원본2127/2127 [실행]. 전체 LUT는 조사중 유지.** 6차: bit4 해소(생성 시 0x71035db354, CC = 1). LUT 는 0x71035dc218 이 12칸 연산 UBO 를 만들어 GPU 로 8³ 를 그린다 — agl 색 보정 셰이더 역번역 + 0x710115567c 가 채우는 연산 칸(종류 0~9) 대응이 필요 |
 | 블룸 셰이더 식 | agl `bloom_mask/gaussian/reduce/compose` 역번역(`agl_technique_pfx.sharcb`) |
 | 적용 함수의 구조체 이름 | 6차: 세 함수 동작 판독(§4). 남은 것: 0x7102b66c54 의 vt+0x80 구조체·env+0x2800 객체 이름, 0x7102b68ef4 의 vt+0x90 구조체(ShadowPPBlur/DynamicShadowMap 후보), 0x7102b60200 = GlobalWind 대응 확인(RenderingDay 접근자 vt+0xc8 구현) |
 | DynamicLight.GridSize 기록 위치 | 0x7102b61c20 이 아니었음(§4 정정). 적용 목록 미판독분 또는 0x71010bxxxx 안개 관리자 쪽 |
@@ -649,3 +708,15 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 | `web/tools/r6_gfx_stage_cfgparams.py` | 6차: gsys 장면 설정 생성자 실행 + crc32b 이름 복원 → `analysis/r6_gfx_stage/gsys_cfg_params.tsv` |
 | `web/tools/r6_gfx_stage_offscan.py`, `r6_gfx_stage_addimm.py`, `r6_gfx_stage_adrpscan.py`, `r6_gfx_stage_vtof.py` | 6차: 오프셋 접근 전수 스캔(바이트·하프·q·쌍 포함), add 즉시값 공통 함수, 넓은 창 ADRP 참조, vtable 칸 → vtable·슬롯 |
 | `analysis/decomp/r6_gfx_stage/` | 6차 디컴파일: c1_envmap(큐브 캡처 0x710102ce04 등), c2_envubo(Env UBO 기록 0x71036b35c0·0x71036b1300), c3_bloom(agl 블룸 파라미터 0x71036eb47c), c4_cclut(색 보정 LUT 0x71035dc218), c5_radialfog, c6_shadowpp |
+| `web/tools/r7_graphics_hermit2d_emu.py` | 7차: Hermit2D 원본 reader vs 독립 f32 대조 → `analysis/completion/r7/graphics_hermit2d_emu.json` |
+| `analysis/decomp/r7_graphics/hermit2d.c`, `analysis/completion/r7/graphics_evidence.json`, `graphics_commands.md` | 새 함수 디컴파일·원본 명령/enum 연결·실제 명령과 실패 기록 |
+
+
+### 11.1 r8 시각 도색 속성 생성 경로 (2026-10-03)
+
+`_pu0/_pu1/_pu2`의생성은2bcb6b0→2bd00a4→2be2b8c(삼각형panel배정)→2be50fc→2be2de4다 [판독]+[실행]. 실제BFRES_p0조회/xyz읽기/삼각형u16+basevertex→panel후보0..11→세정점후처리를판독했고, 새후처리384입력/3456정점 UV/접선일치·비교4096nostub를확인했다. 기존 ColPaint작업으로보임 추정을 [../paint/model_panel_mapping.md §3~§11](../paint/model_panel_mapping.md)으로해소한다. 기존writer검증은재사용하며 GPU화면전체를실행한것은아니다.
+
+
+### 11.2 r8 ProjShadow 자원·필드·렌더 소비 (2026-10-03)
+
+[판독]+[실행] vt80은Shadow→ProjShadow이며 Density/Rotate/Scale/Trans/ScrollAnim/RotateAnim 전체writer와 native 렌더의matrix48B·Density clamp두개·texture slot14 gate를 확인했다. [projected_shadow_runtime.md §3~§11](projected_shadow_runtime.md)의 apply/direct/consumer3,072건 mismatch0이다. 기존 적용 구조체 질문중 DOF와GlobalWind getter는renderparam_runtime.md에서 정정했으나 env2800 targetaglprojsdw/VT572CC18·배정은추가생성구간64건/126레코드에서해소했다. live로비config·frame matrix/factor생산과ColorGrading전체연산칸 등큰묶음남은부분은별도여서조사중을유지한다.

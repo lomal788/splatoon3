@@ -397,6 +397,10 @@ d = 거리(+0x8C) / 전역 단위 × 지향성 배율(+0x90) × (1 / DistCoef) �
 
 남은 것 [미확정]: 전역 단위(`*(*0x710599a3f8+0x10)+0x20`) 값과 writer, 사용자 +0xB8 인덱스의 속성 이름, 사용자 리소스 +0xE4(이미터 +0xDC를 끄는 값)의 의미.
 
+#### 4.2.8 전역 단위 writer 해소 (r8, 2026-10-03) [판독]+[실행: 원본 블록]
+
+기존 “전역 단위 값/writer 미확정” 기록을 정정한다. Alto 초기화 `3e06d8c→3915e44→383f9d4`에서 **38402F4**는 새 parameter+20=**1.0f**를 쓰고 **3840368**은 그 포인터를 System+10에 넣는다. `37e11d8→38551f4`와 거리 소비자가 같은 칸을 읽는다. 제품 AltoConfig는 parent만 있으며 게임 적용·매틱 시간 갱신은 단위+20을 변경하지 않는다. 원본 초기화/getters/60Hz설정256건 및 갱신블록40건 비트일치0. 자세한 11절 근거·실행 경계는 [sound_global_unit.md](sound_global_unit.md). **User+B8 이름·리스너 실제 위치 공급자 질문은 계속 미확정**으로 유지한다.
+
 ### 4.3 그룹 (`GroupName`) — AGST v9 [데이터]
 
 | 섹션 | 위치(해제 파일 기준) | 내용 |
@@ -503,6 +507,10 @@ alloc(pool):                                   // 0x71037d790c
 - 원본 실행 `web/tools/r6_fx_voiceserial_emu.py`: 합성 풀(보이스 1~12개, 순번 시작값 1·2·0x7FFFFFFE·0xFFFFFFFE·0xFFFFFFFF·무작위, 검색 시작 무작위, 중간 해제 포함) 300경우 **2,445회 할당이 독립 재구현과 전부 일치**(반환 보이스·각 +8·pool+0x20/+0x38/+0x50). 스텁: 뮤텍스 PLT만. 결과 `analysis/completion/r6/fx_voiceserial_emu.json`.
 - 남은 것: pool+0x20 초기값(풀 생성자)은 확인하지 않았습니다. 웹은 1부터 세면 되고, 제한기 순서에는 상대 순서만 쓰입니다.
 
+### 4.3.3 r9: 제한기4종·0.016 정지 시간·우선순위 연결 정정 (2026-10-03)
+
+[사운드 제한기 런타임](sound_limiter_runtime.md) §3–10: 새 원본 전체4종 적용4096경우/168710필드 비트0bad; timer와 실제CPU stop/pause/fade까지검증. 그룹1B8→wrapper1C→37f9790→원본pool/queue/envelope768생성·10284진행 비트0bad. renderer37e1834의tick차이×f32(0.005)→37ee58c→37fdd18→37e9be8로초단위를확정, 슈터그룹0.016은정지duration이다. 새38655dc의AUDCout18→weightedmaxaggregate18→limiterkey및3885564defaultP_D4=1을붙인native2048SLink/8192집계/2048비교0bad. Priority만내림차순인설명은종류1/2에만맞고종류3/4는순번우선이다. group+1B8 reader3121ca4는객체오류로§4.8및이문서§8에정정. SLinkUserLimitType/PlayableLimitNum·모든customspatial·SDK음성buffer는별도미확정이다.
+
 ### 4.4 BusSetting [데이터]
 
 `analysis/effect_sound/BusSetting.json`: `BusGraphPreset` 18개(Default, VS_City/VS_Hall/VS_Outdoor, Mission_*, Scene_*)와 이펙트 정의 29개.
@@ -556,6 +564,14 @@ bit0 꺼짐: 기록+0x1C = +0x20 = size, 각 = 0 (또는 인자 bit0이면 (−2
 
 **남은 것 [미확정]:** SLink 보이스의 필터 종류(보이스 +0x44/+0x48 → 합성 뒤 +0x144/+0x148)를 쓰는 곳(`0x7103887e3c`는 +0x48 = 핸들 파라미터 +0xD8을 씀, 이 +0xD8 writer 미확인), 슬롯 1·3(기본 종류 1·3)에 등록된 필터 객체, 보이스 +0x180 공간 객체의 정체. 그래서 "감쇠 필터 커브 값 → 실제 주파수 응답"은 위 세 필터 중 무엇이 쓰이는지에 달려 있고, 아직 하나로 고르지 못했습니다. 다음에 볼 곳: 필터 표 슬롯 1~5에 객체를 넣는 코드(`*0x710599a408`+0x180 +0x10..+0x30 저장), 핸들 파라미터 +0xD8 writer, `0x71037d8cfc`(종류 번호 목록).
 
+### 4.7 중간 피치 합성 확정 (r8, 2026-10-03) [판독]+[실행]
+
+[원본 합성 명세](sound_parameter_composition.md) §3–10: 새 `37ded4c`/`37debc0` 판독·원본 `383836c`→`383df38` 연결 실행32,768건비트일치0. Pitch는 local×spatial→dynamic→group 순 f32 곱이며 비양수는0. 기존 §5/§6의 “중간 합성 미판독”을 정정한다. 필터kind는 voice에서 음수일때1/3을 대체하지만 실제슬롯객체와override는 별도 미확정이다.
+
+### 4.8 원본 기본 계수표·그룹 필드 정정 (r9, 2026-10-03) [실행]+[판독]+[데이터]
+
+새 [사운드 런타임 필터 명세](sound_runtime_filters.md) §3–10: 원본37e4424가 실제48k/32k 필터 객체30개를 등록하고 기본종류1·3은37e4278/42bc가 Q14표를 선택한다. 원본18,682건/93,410계수필드비트0bad. 기본kind1/3의 객체등록 미확정은 해소했으나 모든음원 최종필터선택·P+D8/voice180 공급은 조사중이다. 3128bf4→3129718 순서의kind6→64 덮어쓰기 [판독]. 그룹1B8 reader로적었던3121ca4는 PingPongDelay 인터페이스의동일오프셋이며, 실제그룹값은383d238→wrapper1C→37dfd10/37e019c→37f9790이다. 이전결론을날짜와객체기준으로정정한다.
+
 ## 5. 웹 재생 파라미터 (SLink 에셋 → WebAudio)
 
 | SLink 파라미터 | 원본 근거 | WebAudio 대응 | 확정 |
@@ -565,7 +581,7 @@ bit0 꺼짐: 기록+0x1C = +0x20 = size, 각 = 0 (또는 인자 bit0이면 (−2
 | Pitch | 같음 | `playbackRate`(음높이 비율, 1.0 = 원음) | 비율 해석 [추정]. **6차:** 보이스 피치 = 핸들 Pitch × Pitch2(`0x7103887e3c`, §4.2.7)이고 최종값은 `nn::audio::SetVoicePitch`(`0x71037fe730`)에 그대로 들어감 [판독]. SDK 피치는 재생 속도 비율이라 playbackRate 대응은 맞음. 중간 합성(`0x71037ded4c`)의 곱/합 여부는 미판독 |
 | Delay | ParamDefine Float | `start(ctx.currentTime + delay/60)`, 프레임 단위로 봄 | 단위 [추정] |
 | Lpf | 기본 0.0 | BiquadFilter lowpass, 0이면 끔 | [미확정]. **6차:** 컷오프(Hz)가 아니라 보이스 필터 ch 0 amount(0..1)에 더해지는 값(§4.6) [판독]. amount → 응답은 필터 종류에 달림(내장 1차 저역 −40·a dB @8 kHz / 피킹 3150 Hz −21·a dB / 하이 셸프 19.5 kHz −80·a dB), 종류 선택 [미확정] |
-| DistanceParamSetName + DistCoef | §4.2 | PannerNode 대신 매 프레임 `evalAROC` 직접 gain 계산 | AROC 수식·컬링 [판독], 거리 배율 +0x90 = 리스너 지향성 [실행], FriendDistCoef 1.5 [데이터], **DistCoef: 확장+4 = 1/DistCoef [실행 219,680건, §4.2.7]**, 전역 단위 [미확정] |
+| DistanceParamSetName + DistCoef | §4.2 | PannerNode 대신 매 프레임 `evalAROC` 직접 gain 계산 | AROC 수식·컬링 [판독], 거리 배율 +0x90 = 리스너 지향성 [실행], FriendDistCoef 1.5 [데이터], **DistCoef: 확장+4 = 1/DistCoef [실행 219,680건, §4.2.7]**, **전역 단위 1.0f [판독]+[실행: 블록, r8 §4.2.8]** |
 | (리스너 위치) | §4.1.2 | 청자 = 주시점 + Rᵀ·(0,0,1.5) | [실행] 공식, 주시점 공급원 [미확정] |
 | GroupName | §4.3 | 그룹별 동시 발음 제한 큐, 덕킹(MAND) | 무기 그룹 제한기 없음 [판독+데이터], 덕킹 표 [데이터], 정렬 뒤 앞쪽 limitCount 생존 [실행] |
 | Priority | 기본 0.5 | 제한 초과 시 낮은 것부터 정지 | 제한기 키 = int(C4·CC·factor·255) [실행], C4·CC와 SLink Priority의 연결 [미확정] |

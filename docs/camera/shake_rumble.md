@@ -132,6 +132,19 @@ ELink 처리 함수는 시스템 파라미터 인덱스 표(`*x28 + 0x3b0..`)로
 
 Fuwa 계열 Hermit 데이터는 (값, 접선) 쌍이 전부 값 0이고 접선만 있어, 키 사이에서 부호가 바뀌는 감쇠 진동이 됩니다. FuwaStrong은 첫 접선이 1.58로 Fuwa(4.58)보다 작아서, Scale이 0.3으로 더 큰데도 gain 1 기준 최대치(0.1228)가 Fuwa(0.2422)보다 작습니다. 이름과 반대이지만 데이터 그대로입니다 [데이터+재구현 계산]. 실제 세기는 gain에 따라 달라집니다.
 
+
+### 3.2e 실제 플레이어 포저·청자 위치 — 8차(2026-10-03) [판독]+[실행]
+
+정정: §3.2b·§10의 PlayerCamera 연결/모듈+0x1c8 청자 정체 미확정은 아래 새 원본 근거로 해소합니다. 기존 촬영 포저 후보를 플레이어 포저로 되돌리지 않습니다.
+
+`class_info.py spl::Spectator`의 factory **0x710275949c**는 크기0x760의 S에 포저 **P=S+0x288**, vtable0x71056467f8, P+8=S를 만듭니다. 초기화0x710275b600은 활성 포저가 없으면0x7101010de0(M,P)로 등록합니다. 요청0x710275fc08도 같은 P를 등록하고 보간 이름이 없으면 P.vt+0x30을 M+0xd4로 복사합니다. vtable+0x28의0x71027602e4는 빈 갱신이며 **+0x30=0x71027600c8**이 S+0x2fc 포즈를 출력합니다.
+
+Spectator frame **0x710275c1ac**(기존 `analysis/decomp/ui/hud_batch2.c` 원문 재사용)의 모드2/3은 별도 S+0x348 관전카메라, 일반 선택 플레이어는 핸들→Actor→PlayerBehavior B→**B+0xa878 PlayerCamera C**입니다. **0x71024e50c0(C)**으로 포즈를 받아 **0x7101017d5c(S+0x298,pose)**를 호출하며 보간 결과 S+0x2fc를 포저가 읽습니다. getter는 일반 C+0x88, 연결 액터(C+0x1698)가 살아 있고0x7102676548 결과 활성 byte가 켜지면 C+0xd4를 반환합니다. 후자는 사망 메시지 수신 액터의 실제 계산까지 확정한 것이 아닙니다.
+
+M의 frame0x7101010150은 P.vt+0x28 다음+0x30(M+0xd4)을 호출하고, 기존 쉐이크 계산으로 M+0x144 위치에 월드 오프셋을 더한 뒤0x7101017434(pose,&M+0x190,&M+0x220)를 실행합니다. 투영 함수의 LookAt 위치 저장은 두 번째 인자+0x38, 즉 **M+0x1c8**입니다. 따라서 기존 gain 거리식이 읽는 M+0x1c8은 **셰이크가 적용된 활성 카메라의 LookAt 위치**입니다. 주시점은 pose quaternion과 거리로 계산되므로 같은 월드 이동이 반영됩니다.
+
+새 근거 `analysis/decomp/r8_camweapon/{spectator.c,spectator_pose.c,poser_consumer.c,death_camera.c}`; 논리 투영/쉐이크 원문은 r7 및 기존 CameraModule 판독 재사용. `web/tools/r8_camweapon_emu.py`의 원본 **24e50c0→1017d5c→27600c8** 사슬은 raw 포즈512개에서 copied ranges `[0,0x2d),[0x30,0x45),[0x48,0x4c)`의 모든 비트 일치, padding 보존도 일치했습니다. 이 실행은 C+0x16a8=-1·보간 비활성인 조건이며 Spectator 프레임 선택과 device posture는 실행하지 않았습니다. 최종 화면 좌우 부호는 별도 미확정입니다.
+
 ## 4. ELink 연결
 
 `camera_rumble_map.py SplPlayer` 발췌 (전체는 `rumble_map.json`) [데이터]:
@@ -239,6 +252,49 @@ for 각 연결 i:  c = 컨트롤러별 이득 표[i], m = 노드 기본 변조 {
 
 즉 **Gain은 진폭 배율, Pitch는 주파수 배율, Stretch는 재생 속도의 역수**입니다 [판독]. 핸들 +0x28/+0x38이 보이스 +0x60..+0x6c 중 어느 칸으로 복사되는지는 따라가지 않았습니다 [판독-부분]. `CtrlRumbleExtra`는 `0x710130f0b8` 셋째 인자(진동 종류 bool)이고 의미는 [미확정]입니다.
 
+
+### 7.3 진동 거리·핸들 전달·Limiter — 8차(2026-10-03) [판독]+[실행]
+
+정정: §2의 설정 의미 [추정], §3.2d의 거리식 미판독, §7.2의 핸들 복사와 `CtrlRumbleExtra` 미확정은 아래 원본 근거로 해소합니다. 이전 기록은 조사 경위를 보존하기 위해 남깁니다. `CtrlRumbleExtra`를 디컴파일 인자 번호로 "셋째 인자"라 부른 것은 ABI의 float/정수 인자가 섞인 표현입니다. 원본 `w1`은 **범주(category)**, `w3`은 **루프 여부**입니다.
+
+`0x710130d764(listener, emitter)`에서 d=두 위치의 거리, A=파라미터+0x68(`RumbleMinPowerDist`), B=+0x64(`RumbleMaxPowerDist`), F=+0x60(`RumbleDistFactor`)입니다. `ramp(d,a,b)`는 d≤a에서0, d≥b에서1, 그 사이 `(d-a)/(b-a)`입니다. A≤B이면 `ramp(d,A,B)*F`, A>B이면 `(1-ramp(d,B,A))*F`입니다. A=B에서는 d≤A가0, d>A가1인 원본 경계 순서를 유지합니다. 실제 데이터 A=30/B=4/F=1: 거리≤4는1, ≥30은0, 그 사이는 `(30-d)/26`입니다. 값 순서가 뒤집힌 합성 입력도 원본 그대로 검증했습니다.
+
+`0x710130fffc(h)`는 h+0x40 보이스와 h+0x48 세대가 보이스+0x10 세대와 일치할 때 아래를 씁니다. category=h+0x10(u32)가0..2이면 계수는 mgr+0x108+8*category, 범위 밖이면 category0 계수입니다.
+
+```
+voice+0x64 = max((((h+0x24)*(h+0x28))*(h+0x2c))*categoryGain, 0)
+voice+0x6c = max((h+0x34)*(h+0x38), 0.01f)
+```
+
+곱은 표시한 왼쪽 결합 순서의 f32입니다. ELink Gain은 h+0x28, Pitch는 h+0x38이며, 거리 켜짐(h+0x14)에는 h+0x2c를 거리식으로 갱신합니다. 세대가 어긋나면 위 칸을 쓰지 않습니다. `CtrlRumbleExtra`는 `0x710137b000 → 0x710130f0b8(w1) → 0x710130fe58 → h+0x10`으로 전달되어 **기본 범주0/추가 범주1의 계수·범주 플래그**를 선택합니다. 파형 ID나 루프 선택이 아닙니다. 추가 범주 계수는 §7.4의 Agent가 갱신합니다.
+
+h+0x30>0인 공간 분배는 `x=max(h+0x30*dot(emitter-listener,mgr+0x12c),0)`를 만들고, 연결2개 이상이면 첫 연결 gainLow/gainHigh=`1-x`, 둘째=`x`입니다 [판독]. **x의 위쪽1 제한이 없습니다**. 이 분기는 이번 gain/Pitch 실행에서 h+0x30=0으로 제외했습니다.
+
+Limiter 초기화 `0x710130e5f4`는 32개의 0x68B 핸들을 free pool에 만들고 `LimiterParams` 각각을 stride0x18의 `{counter(+0), parameterHandle(+8), generation(+0x10)}`로 mgr+0x168에 둡니다. Limiter 파라미터+0x30은 PatternName, +0x38은 LimitFrm입니다. 시작 `0x710130f0b8`은 이름이 같은 항목의 counter>0이면 **시작 거부(null)**, ≤0이면 free 핸들을 꺼내 시작하고 해당 counter=LimitFrm으로 재설정합니다. 다른 이름은 그 제한을 받지 않습니다. 매 갱신 `0x710130ee98`의 0x710130ef5c..0x710130efbc는 양수 counter만1 줄입니다. 따라서 실제 `GMBT_ToSquidMix00.bnvib, LimitFrm8`은 같은 패턴의 재시작을 8회의 관리자 갱신 동안 막습니다. 음수/0은 감소하지 않습니다.
+
+근거: `analysis/decomp/r8_camweapon/{rumble.c,rumble_manager.c,rumble_distance.asm,rumble_update.asm}`. 원본 실행 `web/tools/r8_camweapon_emu.py`, 결과 `analysis/completion/r8/camera_emu.json`: 거리1,152/1,152, Gain/Pitch1,152/1,152, Limiter admission32/32·감소 경계7/7 비트 일치. 거리 리소스/RTTI와 해제, 진동 active 검사는 스텁; Limiter mutex와 파형 생성은 스텁입니다. 기기 출력·SDK mixer는 실행하지 않았습니다.
+
+### 7.4 spl::RumbleAgent 갱신 — 8차(2026-10-03) [판독]+[데이터]
+
+정정: §2·§10의 "코드 미판독/미착수"를 해소합니다. `class_info.py spl::RumbleAgent`로 이름 함수0x7102757b24, vtable0x71056464b0, frame slot19=**0x7102757b38**을 확인했습니다. 생성0x710275778c(0x13e8B)와 갱신 전체3,192B의 분기·상수·쓰기 순서를 판독했습니다(`analysis/decomp/r8_camweapon/agent.c`). 이름 없는 전역 조건은 주소와 비교식 그대로 기록하며 상태 이름을 추정해 붙이지 않습니다.
+
+Agent는 진동 관리자 `R=*0x710582a710`에 listener(R+0x120), 방향(R+0x12c), **범주1 계수(R+0x110)**를 공급합니다. 선택 플레이어 핸들(`*0x710580e340+0xd470`)이 유효하면 액터 root pose(위치+0x28c·축+0x298..0x2b8)를 사용합니다. 유효 플레이어가 없으면 활성 카메라 모듈 `M=*(*0x710580c3b0+0xe8)`의 M+0x144 위치·M+0x150 쿼터니언으로 행렬을 만들고, 변환0x7101254324 뒤 위치/첫 축을 사용합니다. 하드웨어 플래그 `*0x71059aab20+0x2f0 bit1` 또는 `*0x710582d908+0x2a9`가 켜지면 Agent+0x10c latch=0, +0x110/+0x114/+0x118=1, 질의 type=2·flag|0x02000000을 초기화하고 출력 계수0으로 갑니다.
+
+계수 결정 분기는 다음 순서입니다(기본 f32값0/1; 참인 앞 분기에서 반환).
+
+| 조건 | 범주1 계수 |
+|---|---|
+| `0x7101323040()` 결과+0x224의 비트셋, 키 descriptor0x71058e9450으로 고른 비트가1 | 1 |
+| `*0x71058e87d0 != 0` | 1 |
+| `Scene_Versus(*0x71058e877c) != 0` | 기본1. `*0x71058e8774!=0`이면 latch/경과 분기 |
+| 앞 조건 거짓, `*0x71058e8784==0`, `*0x71058e87a4!=0` | Agent+0x118을 `!0x7102d3ac20()`인 목표0/1로 매회1/300씩 이동·넘으면 목표로 고정 |
+| 위 비활성 경로에서 `*0x71058e87a4==0` | 0 |
+| `Scene_Mission(*0x71058e8784)!=0` | 아래 공간 계수 `min(Agent+0x110,Agent+0x114)` |
+
+latch는 선택 플레이어의 본체 B+0xc0<`*(0x71058bbc1c+4)`, B+0x73c≤0.001, B+0x184≥`*0x71058bbb60`, GameFrame≥0일 때 Agent+0x108=GameFrame·+0x10c=1을 저장합니다. 그 뒤 e=max(GameFrame,0)-저장Frame: e≤60은1, 60<e<300은`1-(e-60)/240`, e≥300은0입니다.
+
+공간 분기에서 Agent+0x110은 `*(*(*0x71058dbd88+0x20)+0x20)+0x188 <1`이면1, 아니면0으로 매회1/60씩 접근합니다. listener 중심·시작=끝의 질의(Agent+0x120, flag+0x218|0xC)를0x7103a5f074에 전달해 허용된 결과의 위치까지 최소 거리²를 구합니다. 결과의 형상 점은 플래그에 따라 `pos` 또는 `pos+direction*distance`입니다. 여기에 플레이어 인덱스1부터 끝까지의 위치(기본 root+0x28c, 해당 상태면+0x5d0)를 함께 최소화합니다. 최소거리²≥900이면 Agent+0x114가1로 매회0.1 접근, 그보다 작으면 거리≤10에서0/≥30에서1/그 사이`(d-10)/20`을 즉시 씁니다. 최종 min을 R+0x110에 저장합니다. 해당 분기가 사격장에서 선택되는지, 키·전역 상태의 제품 이름은 별도 런타임 생산자 질문이며 여기서는 함수의 주소 조건을 확정했습니다.
+
 ## 8. 웹 포팅
 
 | 모듈 | 책임 |
@@ -270,4 +326,10 @@ for 각 연결 i:  c = 컨트롤러별 이득 표[i], m = 노드 기본 변조 {
 | (해소) 슈터 발사 진동 — 직접 호출 없음(§4). 명중 진동 ELink 에셋은 여전히 못 찾음 | 피격자 쪽 진동은 SplPlayer `敵塗り踏み振動` 등 ELink |
 | `spl::RumbleAgent`, `RumbleModuleParam.LimiterParams` 동작 | 클래스 vtable 판독 (2026-10-03 미착수) |
 | ~~bnvib 루프·샘플 순서·주파수·진폭 해석~~ | **해소**(2026-10-03 [실행]+[판독]): §7.1. 남은 것: 게임 진동 관리자가 VibrationPlayer를 호출하는 주기(샘플 요청 간격)와 Mixer 압축기(sdk+0x2504dc) 적용 여부 |
-| PlayerCamera → 모듈 포저 연결 | 진행(§3.2b): setPoser 0x7101010de0. 6차 정정: 0x710233dbd4 계열·0x710233c414는 촬영(사진·amiibo) 컨트롤러 포저. 다음: 인라인 writer 0x7100fc7654(가상, 요청+0x28 포저)·0x7102121034, PlayerCamera+0x88 포즈를 읽는 포저 |
+| ~~PlayerCamera → 모듈 포저 연결~~ — 해소(8차 §3.2e) | 진행(§3.2b): setPoser 0x7101010de0. 6차 정정: 0x710233dbd4 계열·0x710233c414는 촬영(사진·amiibo) 컨트롤러 포저. 다음: 인라인 writer 0x7100fc7654(가상, 요청+0x28 포저)·0x7102121034, PlayerCamera+0x88 포즈를 읽는 포저 |
+
+## 11. 실행 범위·명령 기록 — 8차(2026-10-03)
+
+실제 명령·실패·스텁 경계: [camera_commands.md](../../../analysis/completion/r8/camera_commands.md), [camera_emu.json](../../../analysis/completion/r8/camera_emu.json). 최초 gyro 실행은 input manager 전역 누락으로 UC_ERR_READ_UNMAPPED, Limiter 최초 실행은 mutex 해제주소 오인으로 UC_ERR_FETCH_UNMAPPED였고, 원본 주소에 맞춰 수정한 뒤 위 검사 전부 일치했습니다. Agent 전체는 [판독]이며 실행으로 분기 선택·실제 컨트롤러 진동을 검증한 것은 아닙니다. 남은 별도 범위: device posture·최종 화면 부호, 자기 탄 명중 ELink, SDK mixer 압축 적용. Focused는 기존 effect_sound.md §3.5·27b5430의 조작 플레이어 기준을 재사용하며 새 확정 수에 넣지 않습니다. 웹 반영: 원본 거리식·Limiter·범주 계수 전달·Agent 주소 조건을 근사치와 대조할 필요가 있습니다.
+
+8차 추가 실행: 포저복사512/512를 포함하여 camera_emu.json 합계3,451건, mismatch0. 3.2e·7.3의 합성 실행 경계를 유지합니다.

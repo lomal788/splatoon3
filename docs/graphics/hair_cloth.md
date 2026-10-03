@@ -113,3 +113,18 @@ MeshBone: 입자 → 머리카락 뼈 회전(체인 방향 맞추기)
 | Havok 감쇠·Bend·LocalRange 정확한 식 | SDK 내부(판독 불가 시 근사 유지) |
 | TBDY flags 0x80 추가값 의미 | 다른 TAG0 파일 비교 |
 | ~~다른 Har 의 상수~~ | 해소(2026-10-03): §3.3 표 [데이터]. 남은 것: 팩별 solver 설정·제약 강성 표(요약 경로 확장 필요) |
+
+
+### 5.1 r9 신규 소비자 판독·호출 경계 (2026-10-03)
+
+[cloth_frame_runtime.md §3~§11](cloth_frame_runtime.md)에서 실제 hclWorld 및 모델 프레임 경로를 추적했다. 정상 스텝 `3C0C0BC→CD3EAC`는 전달 dt×instance row48 배율, 초기화4000플래그는f32bits3D088889로30회(pre29회)다 [판독]+[실행:768/0]. 원본frameInfo writer와CullFrame4 최종solver gate,캡슐순서가남아§5의복합질문은 **부분해소/미확정유지**다. World+24의1/60을모델frameInfo+0으로동일시하지않는다.
+
+- r9 추가(2026-10-03) [판독]+[실행:2048/0]: 실제 solver gate `0F73368`은 등록 period/phase로 frame을 걸러 `dt=f32(period*incomingDt)`를 `3DB1704`로 전달한다. bit2 또는 period<2는 unscaled 매호출, manager null은 scaled 매호출이다. `12CF69C` 뼈 후처리는 원래 incomingDt를 받는다. §5.1의 “CullFrame 최종 gate 미확정”은 이 신규 근거로 정정한다. **frameInfo writer·instance 배율 writer·capsule 순서가 남아 복합 질문 전체는 미확정 유지**. 상세 §7/§10은 [cloth_frame_runtime.md](cloth_frame_runtime.md).
+
+### 5.2 r9 감쇠 식 해소 (2026-10-03)
+
+고정 질문 L63의 `(1-damping)^dt` 해석을 신규 native8A63E0/DC42A0/EE41F0로 해소했다 [판독]+[실행: helper4096 + 계수/적분1024, mismatch0]. 상세 [cloth_damping_runtime.md §6~§10](cloth_damping_runtime.md). c는 damping≥1에서0, damping0에서1, 그 외 자체 f32 log/exp 다항식이다. damping=.001, effectiveDt=f32(1/60)는 bits3F7FFEE8. 적분은 `current+c*(current-previous)+dt²*((force+gravity*mass)*invMass)`의 별도 f32 연산 순서다. 기존 §4의 “globalDampingPerSecond 해석 [추정]”은 이 신규 근거로 정정한다. L79 복합 질문의 Bend/LocalRange·충돌은 여전히 미확정이다.
+
+### 5.3 r9 저장 강성 해석 정정 (2026-10-03)
+
+L45의 수치 해석은 새 native Standard D47BD0/Bend D1C354로 확정했다 [판독]+[실행]+[데이터]. 실제 Standard1054/Bend2060 f32bits0bad, raw SQD000 Standard30와 Bend12의 양쪽 coefficient 모두 stored×(invMassA+invMassB)=f32(1). 원본 소비자는 normal×거리오차×stored×입력scalar를 만든 후 각 endpoint invMass를 곱하며 다시 invMass 합으로 나누지 않는다. 상세 [cloth_link_runtime.md §4~§10](cloth_link_runtime.md). 기존 §3.1의 “Havok이 저장 시 미리 나누었다”는 오프라인 작성 경위의 추정을 원본 runtime의 미리 가중된 coefficient 의미로 정정한다. offline exporter 자체는 원본 배포물에 없어 작성 방법까지 단정하지 않는다. §4 Bend의 정확한 양쪽 경계·강성 식도 새 consumer로 확보했지만 L79의 LocalRange는 미확정 유지다.

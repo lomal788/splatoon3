@@ -229,6 +229,8 @@ Player00 M_Body(프로그램 5549)에서 관찰한 대응 [판독, 일반화는 
 | source(A..D) | 0 = cTexAlbedo, 2 = cTexMetalness .x (1727), 9/10 = cTexResource0/1, 50 = my_team_color (2162), 54/55 = BlitzUBO0.data[15]/[16] = 중립 세트 Original/Bright (2164, 5199, 5201), 59/60/62 = my_alpha/bravo/charlie_team_color (5138/5140/5142), 100~102 = const_color0~2, 110/111 = const_value0/1, 200+k = calc_color k 결과. 1 = 거칠기, 4 = 투과는 [추정] (위 관찰) |
 | replace_color | 0 = 알베도, 1 = 투과, 2 = 방출 색(× emission_intensity, 2162), 4 = 거칠기, 5 = 금속도 (1727), 6 = 불투명도 output.w (5197), 100 = 대상 없음(임시, 200+k 로 참조), 7 = 필름 아래 색 [추정] (3623) |
 
+**정정(2026-10-03 r8) [판독]+[데이터]:** 위 source1/4 및replace7 추정은 해소했다. 새원본program1279/227은 거칠기·투과값을 다른target인알베도에 소비한다. source1은 max(Rgh.R,.0001)의현재scalar(브로드캐스트),source4는 TransRGB×Mat.transmission_color_backlight의현재투과RGB다. rawtexture만공급하면원본과다르다. replace7은 필름아래색으로, 새295의반사↔underfilm 혼합consumer까지확인했다. 몸/얼굴ThcR은1−R의투과·산란마스크다. 실제식/프로그램행/남은ID전체/검증경계는 [calc_thickness_runtime.md §3~§11](calc_thickness_runtime.md)에 기록한다.
+
 미확인: source 1·3·4·5·8·51~53·56~58·61·65·70·112·201~207·300, calc_type 4·5·7·12 이상(단일 옵션만 다른 쌍이 키 표에 없음).
 
 ### 3.7 UV 세트 선택 [판독]
@@ -242,6 +244,9 @@ normal = texture(cTexNormal, uv2)        // 프래그먼트: in_attr0.zw
 ```
 
 - 선택지 `0` → `_u0`(aTexCoord0, location 8) + `tex_mtx0`, `2` → `_u2`(aTexCoord2, location 10) + `tex_mtx1`. `3` → `_u3` + `tex_mtx2`로 추정 [추정 — 샘플에 없음].
+
+
+**r8 정정(2026-10-03)**: 선택3은 활성 발광맵 프로그램2485에서 `_u3(aTexCoord3,location11)→tex_mtx2→out_attr1.xy→cTexEmission` 양단을 판독해 [판독]으로 해소했다. 첫 후보121/155/310/2659는 해당 텍스처가 제거되어 증거에서 제외했다. [shader_uv_selection.md §3~§11](shader_uv_selection.md).
 - `tex_mtx`는 vec4 2개: `[0] = (m00, m01, m10, m11)`, `[1].xy = 평행이동`. 기본은 단위행렬.
 
 ### 3.9 BlitzUBO0 (gsys_user0, 1104 B) — CPU 레이아웃 [판독 + 실행]
@@ -425,3 +430,7 @@ OUTPUT = c * vColor;   // 이후 CalcAlphaProcess(알파 처리), FinalAdjustmen
 | ~~소유 판정·점수 집계 임계~~ | 해소([paint]): 집계도 0.3·최대 규칙(스텐실 경유) | paint_and_score.md §3.5.6 |
 | `texcoord_select = 3` | `_u3`+`tex_mtx2` [추정] | 값 3을 쓰는 재질 프로그램 역번역 |
 | fur 계열 셰이더 모델 심볼 | 라이브러리 판독 어긋남 | SymbolData 판독 수정 |
+
+### 11.8 calc source/replace와Thc 정정 — 2026-10-03 r8
+
+새원본5프로그램역번역과cross-targetdataflow로 source1/4,replace7의기존추정을해소했다. GPU실행으로표시하지않고[판독]+[데이터]다. source/calc_type 전체묶음은남으며 rawtexture·currentvalue 구분을보존한다. 근거 [calc_thickness_runtime.md](calc_thickness_runtime.md).

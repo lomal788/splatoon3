@@ -278,9 +278,9 @@ f32 순서: 각 내적 ((a·b + c·d) + e·f), FMA 없음(명령 판독)
 - 키 범위: 오프라인 `frame×11/16`, 온라인 `(frame×11 + 플레이어)/16`. 최대 `0x1745d0×11+7 = 16 777 207 < 2^24`이므로 f32에 정확히 들어가고, ×1/16 하면 1048575.4로 카메라(1048575.875) 아래입니다. 0x1745d1 특수값은 0xfffffb/16 = 1048575.6875로 가장 가깝습니다.
 - 쓰임은 §3.5.4의 깊이 테스트입니다(모드 0~11 깊이 비교 값 4 = 게임 문자열 표의 `lequal`). 같은 텍셀에서 **더 늦은 프레임의 요청이 이기고, 이미 늦은 요청이 소유를 차지한(모드 7이 깊이를 쓴) 텍셀에는 더 이른 요청의 재그리기(애니 프레임)·색 칠이 들어가지 않습니다**. 온라인에서 같은 프레임이면 플레이어 번호가 큰 쪽이 가깝습니다.
 
-InkTexInfo 런타임 표 = `*0x71058eeae8`+0x40, 행 0xd0 B × 50(InkTexType 순서). 행 필드: +0x00 텍스처 수, +0x08 텍스처 배열(0xf8 B), +0x10 나눗수(PatternNum), +0x14/+0x18 AnimationFrame/Step, +0xb8 HeightRangeType, +0xbc/+0xc0 높이(max,min), +0xc4 HeightRangeRate, +0xc8 DisableSlopeScale. +0x14/+0x18/+0xb8/+0xc8은 소비 코드와 이름이 맞고, +0x10·+0xbc·+0xc0·+0xc4 이름은 쓰임(나눗수·(max,min) 쌍·배율)으로 붙인 **[추정]**입니다. 파서(0x71013c3fd0)의 임시 구조체는 다른 배치(+0x10 AF, +0x14 AS, +0x18 Rate, +0x1c Type, +0x20 PatternNum, +0x24 Max, +0x28 Min, +0x2c Disable)입니다.
+InkTexInfo 런타임 표 = `*0x71058eeae8`+0x40, 행 0xd0 B × 50(InkTexType 순서). 행 필드: +0x00 텍스처 수, +0x08 텍스처 배열(0xf8 B), +0x10 나눗수(PatternNum), +0x14/+0x18 AnimationFrame/Step, +0xb8 HeightRangeType, +0xbc/+0xc0 높이(max,min), +0xc4 HeightRangeRate, +0xc8 DisableSlopeScale. **정정(2026-10-03 r8) [판독]:** 파서 0x71013c3f54와 로더 0x7102c2362c가 모든 필드를 직접 연결한다. +0x10·+0xbc·+0xc0·+0xc4 이름 추정을 해소했다. 로더는 PatternNum=0이면 1로 바꾸고 **AnimationStep 양수는 1로 제한**한다. [ink_texture_loader.md §4](ink_texture_loader.md)에 writer/reader 기준 객체를 정리했다. 파서(0x71013c3fd0)의 임시 구조체는 다른 배치(+0x10 AF, +0x14 AS, +0x18 Rate, +0x1c Type, +0x20 PatternNum, +0x24 Max, +0x28 Min, +0x2c Disable)입니다.
 
-**패턴 변형 번호 선택 규칙(해소)**: `Shot00_<k>`의 k = `sead::Random(D+0x54).getU32() % PatternNum`. sead::Random 초기화는 `s0=(x^x>>30)·0x6c078965+1 …+4`, 첫 값 `t=s0^(s0<<11); t^(t>>8)^s3^(s3>>19)` (SHARED [bullet] 난수식과 같음). 예: 시드 0 → 0x4807714d → Shot00_5 [재구현]. 텍스처 배열 순서가 `_0, _1, …` 이름 순서인지는 로더를 보지 않아 **[추정]**.
+**패턴 변형 번호 선택 규칙(해소)**: `Shot00_<k>`의 k = `sead::Random(D+0x54).getU32() % PatternNum`. sead::Random 초기화는 `s0=(x^x>>30)·0x6c078965+1 …+4`, 첫 값 `t=s0^(s0<<11); t^(t>>8)^s3^(s3>>19)` (SHARED [bullet] 난수식과 같음). 예: 시드 0 → 0x4807714d → Shot00_5 [재구현]. **정정(2026-10-03 r8) [판독]:** 0x7102c2362c가 N>1일 때 `%s_%d`로 이름을 만들어 같은 n번째 배열 칸에 기록한다. Shot00[0..11] = Shot00_0..11. [ink_texture_loader.md §6](ink_texture_loader.md).
 
 #### 3.5.4 큐·패스·모드·렌더 상태
 
@@ -620,7 +620,7 @@ const playerP = (n: number) => Math.trunc(Math.fround(n / Math.fround(211.2)));
       out.w = (처음이면 max(w, 0) 아니면 max(out.w, w))
       out[i] = fcvtzu(f32(w · f32(캐시[i])) + f32(out[i]))        // 곱·합 따로(FMA 없음)
     ```
-    PlayerStepPaint 는 out[3](전체) ≠ 0 이면 팀 i 비율 = out[i]/out[3], 덮임 = min(out[3]/15, 1) 을 씁니다(위 판독 그대로). out.w 는 읽지 않습니다.
+    PlayerStepPaint 는 out[3] (전체) ≠ 0 이면 팀 i 비율 = out[i]/out[3], 덮임 = min(out[3]/15, 1) 을 씁니다(위 판독 그대로). out.w 는 읽지 않습니다.
 
     - 원본 실행 `web/tools/r6_paint_footmon_emu.py`: 델리게이트(0x7102c5ec74 + 0x7102c71bc4 + 모니터 vt 0x7102c260c8/0x7102c26258 원본)와 가중치 갱신 0x7102c71330 을 무작위 상태 각 4000건 실행해 위 재구현과 **4000/4000, 4000/4000 일치**(유효 바이트·캐시·가중치·해제 알림 횟수 포함). 스텁: PLT 없음, 해제 알림 0x7100f3e094 만 즉시 반환(호출 수만 셈), 그 인자용 전역 `*0x71058150c0`은 빈 객체. GPU 카운트 자체·배치 함수 0x7102c71650·접촉 선택은 실행하지 않았습니다(판독). 결과 `analysis/paint/r6_footmon_emu_out.json`.
     - 결론: **발밑 샘플은 접지 접촉점 아래 대상(지형 패널/바닥/오브젝트)에 그린 1×1 `Disk` 스탬프 안의 소유 스텐실 카운트(모드 14~17)를 최대 4개 모니터에 걸쳐 가중 합한 값**입니다. 같은 0.3·최댓값 소유 규칙을 따른다는 이전 추정은 스텐실 경유가 확인되어 [판독]으로 올립니다.
@@ -670,7 +670,7 @@ const playerP = (n: number) => Math.trunc(Math.fround(n / Math.fround(211.2)));
 |---|---|
 | ~~마스크 임계~~ / ~~요청 → 렌더 패스 큐 연결~~ / ~~모드 0..17 ↔ 도색 종류~~ / ~~회전 인덱스~~ / ~~텍셀 A 채널~~ / ~~집계 임계~~ | 해소(2026-10-02 [paintgpu]): §3.5 전체, §3.1 A 채널, §4.1. 남은 것: 텍스처 비트 폭(8비트 UNORM)은 NVN 열거값 이름 추정, 카운터 종류 1 = SAMPLES_PASSED 추정, 모드 3·7·13의 용도, 회전 행렬 곱 순서 식 정리, 애니 프레임마다 바뀌는 값 |
 | ~~PaintTextureData size 출처·단위~~ | 해소(§3.1): 대상+0x390, 오브젝트는 AABB 변 길이 올림(월드 단위), 8 텍셀/단위. 남은 것: ColPaint(kind 2) 대상의 size·아틀라스 밀도 |
-| ~~패턴 변형 번호(Shot00_0~_11) 선택~~ | 해소(§3.5.3): sead::Random(시드).getU32() % PatternNum, 원본 실행 600/600. 남은 것: 텍스처 배열 순서 = 이름 번호 순서인지(로더) |
+| ~~패턴 변형 번호(Shot00_0~_11) 선택~~ | 해소(§3.5.3): sead::Random(시드).getU32() % PatternNum, 원본 실행 600/600. r8 해소(2026-10-03) [판독]: 2c2362c의 `%s_%d` 순서, [ink_texture_loader.md §6](ink_texture_loader.md) |
 | 0x7102c44e18 다른 호출자(폭발·롤러 등)의 C+0/C+1/C+8 | 15개 호출자 디컴파일 — 게이지 제외·지우기·InkTexType 값 |
 | ~~레코드 풀 크기(칠시스템 +0x2d8)~~ | 해소(2026-10-03 [r5 paint], §3.5.4): 2560개, 초기화 0x7102c130a0. (정정: 이전 판이 가리킨 0x7102c48110 에는 +0x2d8 쓰기가 없음) |
 | ~~벽 낙하 방울 반경 출처~~ | 해소(§3.0) |

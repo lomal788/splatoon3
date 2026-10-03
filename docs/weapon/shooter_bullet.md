@@ -234,6 +234,131 @@ Ground, n.y <= 0.64144969            → 슬롯 59  (벽·천장)
 
 하위 풀 크기와 `WeaponShooterNormal` ActorReservation의 BulletSplashShooter 32의 연결은 [미확정]입니다(다음: `*0x71058014d8`+0x60 트리 삽입 함수와 하위 풀 생성).
 
+### 3.5.1 사격 입력 카운터의 로컬 writer — 7차(2026-10-03) [판독]+[실행]
+
+기존 `impl/weapon.md`의 B+0x4d0 로컬 writer 미발견을 정정한다. 원본 입력 함수 `0x710249f494`의 **0x71024a0ce0~0x71024a0ec8**가 B+0x4d0을 기록한다. 기존 전체 디컴파일 `analysis/decomp/move/move_input.c`를 재사용하고 원본 명령을 대조했다. B+0x4d0은 단순 bool이 아니라 **허용된 메인 입력의 연속 호출 카운터(s32)**다. B+0x4d4와 별개다.
+
+기준: B=본체, Sender=[B+0xa890], Side=[B+0xa678], Ink=[B+0x588]. Sender+0x54는 이미 우선순위 선택을 거친 메인 사격 입력이다. ZR 비트와 우선순위 생산은 기존 [player_state §6.1.1](../player/player_state.md)을 재사용한다.
+
+```text
+# 일반 메인 슈터 경로, 활성 특수 0x1a 예외는 이번 범위 밖
+blocked = any(B[0x532..0x535]) || B[0x788] || B[0x784]
+main = Sender[0x54] != 0
+if main:
+    main = (Ink == null || !(Ink.vt[0x130](Ink) & 1))
+    if B.i32[0x4e0] > 0 && B.u8[0x4f0]: main = false
+    if B.i32[0x518] > 0 && B.u8[0x528]: main = false
+if 0x71024c9324(B+0xa5f9, B+0x925c, SM, ..., 1, 0) & 1:
+    main = false
+    B.u16[0x530] = 0
+mode = Side.i32[0x38]
+sideAllowed = mode in {0,3} || (mode == 2 && (0x710268662c(Side) & 1))
+if !sideAllowed: B.u16[0x530] = 0
+B.i32[0x4d0] = (!blocked && main && sideAllowed) ? B.i32[0x4d0]+1 : 0
+```
+
+명령의 `add w8,#1`은 32비트 덧셈이다. 포팅에서 bool 또는 임의 상한으로 바꾸지 않는다. 원본의 다른 입력 초기화 경로 `0x710249f958`는 B+0x4d0과 +0x4d4를 함께 0으로 쓴다 [판독]. 위 식은 정상 입력 writer 구간이며 함수 전체의 행동 차단·다른 형태 분기를 모두 실행한 것은 아니다.
+
+같은 함수의 **0x710249fcb0~0x710249fdc0**에서 B의 `ab4/ab8/abc/ac0/ac4/ac8/acc/ae0/ae4/ae8/aec`를 각각 `max(s32값,1)-1`로 쓴다 [실행]+[판독]. 음수도 0으로 회복한다. 순서는 입력·오징어 요청 조건에서 감소 전 값을 소비한 다음 공통 감소 블록이다. 이는 `abc/ab4`의 단순 -1 근사에 하한 처리를 추가할 근거지만 **adc 감소 또는 a90의 상태 집합을 해소한 것은 아니다**. `ac4` 감소는 기존 판독을 실행 연결한 것이며 별도 신규 질문으로 세지 않는다.
+
+검증 도구 `web/tools/r7_weapon_input_emu.py`: 입력 writer **1680/1680**(카운터와 530/531 래치), 감소 **1030사례×11필드=11330필드** 불일치0. 원본 분기를 실행하되 Ink vt+0x130, 24c9324, 268662c의 bool 반환은 경계 스텁으로 각각 변경했다. Sender+54는 입력으로 공급했고 특수 무기 활성은 없으며 R/A 카운터는0이다. 전체 입력 우선순위→발사→탄 생성 프레임 연결 실행은 아니다. 결과는 `analysis/completion/r7/weapon_input_emu.json`.
+
+
+### 3.3.4 래퍼+0x28의 요청0 의미 — 8차(2026-10-03) [판독]+[실행]
+
+정정: §3.3·§11의 “소멸 요청 [추정]”은 **액터 비활성 전이 요청0**으로 확정합니다. 원본은 여기서 객체를 free하지 않습니다. 요청 자체와 관리자가 활성 작업을 끊는 시점을 구분합니다.
+
+래퍼0x7100f79574→0x7100f721b8(A,0)는 A+0x24 lifecycle4/5에서만 받습니다. A+0x28 bit11/9, A+0x4d4 bit0, A+0x4d0==3이면 거부합니다. 허용 시 A+0x4d4 bit0을 원자적으로 켜고 A+0x5c8=0을 저장해 컴포넌트34에 요청을 알립니다. bit14가0이면 **0x7103c7e8cc(A,0)**을 직접 호출합니다. bit14가1이면 원본이 형식키0x56b5ad00의 작업을 액터+0x350 메시지 큐에 넣습니다. 이 비동기 큐 분기는 기존0f721b8 판독을 재사용하며 이번 실행에서는 제외했습니다.
+
+새 함수3c7e8cc는 lifecycle1..6에 대해 requestbit=`1<<(n&31)`을 A+0x28에 넣습니다. low8이0이고 lifecycle≠6이면 `(flags|requestbit)&~0x1800|0x800`; lifecycle6이면 `&~0x1000`입니다. 최초요청이면 관리자 대기목록에 깨우기0x7103c88cd8을 요청하고 A.vt+0xf0(A,n)으로 통지합니다. 같은 requestbit가 이미 켜지면 추가 큐 통지를 하지 않습니다.
+
+다음 관리자 처리0x7103c7f810에서 요청0의 bit11(0x800) 경로는 **0x7103c897cc로 실행 작업을 분리**, 활성 액터 목록에서 제거, **A+0x24=6**, A.vt+0xc0을 호출합니다. 실제 게임 액터VT0x7105540368의+c0=**0x7103cc74dc**는 고유 컴포넌트 각각에 vt+0x58 종료 통지를 하고 액터vt+0x218 후처리를 수행합니다. bit9(삭제 큐·lifecycle7) 경로와 구별됩니다. 탄의 낙하/접촉 이후 “소멸”은 이 비활성화로 화면·갱신에서 빠지는 의미이며 malloc 객체 즉시삭제 의미로 쓰지 않습니다.
+
+새 근거 `analysis/decomp/r8_camweapon/{actor_material.c,lifecycle.c,actor_end.c,body_actor.c}`; 기존 request·manager 원문은r6 actor_life.c/r5 mgr4.c 재사용. 원본 request0→flag setter→manager 전이 **80/80** 일치. 합성 lifecycle3/4/5/6·원본거부flags·pending/ownerphase를 검사하고 허용·flags·pendingbit·큐횟수, 순수flags0 허용시 lifecycle6/분리callback 순서를 대조했습니다. 스텁은 thread/mutex/enqueue·작업분리·최종callback이며 실제 컴포넌트 그래프·비동기 bit14 처리는 실행하지 않았습니다.
+
+### 3.3.5 두 구 반경 setter 경계 — 8차(2026-10-03) [판독]+[실행]
+
+기존VT0x710559f3f8의 **+0xd0=16cb590→wrapper+0x20(GroundOnly)**, **+0xd8=16cb5ec→wrapper+0x28(ExceptGround)** 이름 대응은 phive_batch1.c의 초기화16cb660을 재사용했습니다. 이번에는 새 **3a72f84** 전체 원본을 연결 실행했습니다. `delta=f32(new−shape+0xe4)`가 ±2^-23 안이면 그대로 두고, 그 밖(순서없는NaN 포함)은 radius setter로 전달합니다. setter의 순서: 최솟값=`world+0x21c`(월드없음0.05), 그 최솟값과 input 중 큰 값→2000 상한→결과NaN/∞이면1. +∞ input은 **2000 상한 적용 후 유한값**이므로1이 되지 않습니다. 설정 뒤 dirty처리는 shape flags와등록 상태에 따릅니다 [판독].
+
+실행 `r8_camweapon_lifecycle_emu.py` sphere setter2개→3a72f84 **474/474** 비트 일치. shape dirtybit5를 켜 dirty큐를 제외하고 월드없음의 원본최솟값0.05 경계를 실행했습니다. 실제형상 cast·필터·월드리소스를 실행하지 않았습니다. 이 검증을 TOI 또는 stage충돌 전체 실행으로 넓히지 않습니다.
+
+### 3.3.6 생성 헬퍼와 스플래시 벽 낙하 표 연결 — 8차(2026-10-03) [판독]+[실행]
+
+`0x71015315d0`은 이름 hash로 등록된 **factory를 찾은 뒤 새 객체를 생성**합니다. 호출 순서는 `spl::KnockBackHelper` → `spl::BulletHitEffect` → `spl:DamageHelper`이고, factory는 각각 `0x7101e65a7c`(56바이트), `0x71016d994c`(64바이트), `0x7101e3d53c`(544바이트)입니다. 새 주소를 탄 +0x11b0/+0x158/+0x160에 저장하고 컴포넌트 intrusive list에 넣습니다. 세 번째 이름의 콜론 한 개도 원문 그대로입니다. registry 검색 자체와 객체 조회를 혼동하지 않습니다. 어느 단계에서 이름이 없으면 0을 반환하고 이미 생성한 앞 단계 객체·목록은 남습니다.
+
+**2026-10-03 정정**: §8의 2026-10-02 문장은 DamageHelper를 탄의 헬퍼와 배타적인 HitPointHolder라고 해석했습니다. 원본은 동일 factory `0x7101e3d53c`의 새 객체를 탄 +0x160에도 소유시킵니다. 다른 액터에서 쓰인다는 사실은 이 생성 경로를 부정하지 않습니다. 이전 결론은 이 생성자를 실행하지 않고 클래스의 다른 사용처를 일반화했기 때문에 정정합니다.
+
+`BulletSplashShooter`의 실제 VT는 `0x71055af4c8`입니다. 새 초기화 writer `0x7101811a74`는 공통 초기화 `0x7101762d44` 성공 후 탄 +0x170의 GameParameterTable `vt+0x80`에서 정확히 **WallDropMoveParam**, **WallDropCollisionPaintParam**을 찾습니다. `0x71038b3510`이 반환하는 세대 핸들을 +0x11c8/+0x11d8에, 그 핸들 +0xc의 generation을 +0x11d0/+0x11e0에 저장합니다. VT 슬롯62 `0x7101812574`는 두 쌍을 그대로 출력하고 1을 반환합니다. 슬롯61 `0x7101646b10`의 벽 낙하 생성정보 작성은 이 슬롯62를 호출하므로, 표의 이름이 있다는 사실을 넘어 **실제 슬롯61이 읽는 표**까지 연결되었습니다. 이름 검색에 실패하면 해당 포인터만 0으로 지우며 generation은 보존합니다. 공통 초기화 실패이면 두 필드는 그대로 두고 0을 반환합니다.
+
+검증: `web/tools/r8_camweapon_helper_splash_emu.py`의 helper registry 존재 여부 8조합×16회 **128 PASS**, 벽 낙하 초기화·존재 여부·이전 값 **128 PASS**, 불일치 0. 원본 hash/tree/factory/list 저장 및 `1811a74→38b3510→1812574`를 실행했습니다. 메모리 할당·libc memset과 표의 이름 lookup은 경계 스텁이고, 핸들은 사전 할당한 정상 레코드를 공급했습니다. registry 전역 등록 생성자, 핸들 pool 느린 경로·mutex, 벽 낙하 탄의 실제 시뮬레이션은 이 실행에 포함하지 않습니다. 근거: `analysis/decomp/r8_camweapon/helper_splash.c`, `splash_bind.asm`, 기존 `bullet/BulletShooterBase_vt.c`, `analysis/completion/r8/weapon_helper_splash_emu.json`.
+
+### 3.3.7 생성 정보의 팀·반복 필드 writer — 8차(2026-10-03) [판독]+[실행]
+
+새 공통 binder `0x7102552da0`의 실제 호출자는 슈터 주 VT `0x71056376a0` 슬롯55(+0x1b8) `0x710258801c`입니다. 원본 ABI는 `(I, S)`이며 binder에는 `(S, I+0x2c0, I+0x2c8, I+0x38)`을 넘깁니다. Behavior가 있으면 `S+0x2c = [ [[Behavior+0x108]+8] +0x668 ]`, 즉 발사 플레이어 액터의 팀 번호를 **s32 그대로 복사**합니다. Behavior가 없으면 기존 S+0x2c를 보존합니다. 0~2로 clamp하지 않습니다. 같은 호출에서 Actor+0x798와 배치 기록+0x39로 소유 액터 ID(S+0x1c)를 만들고, 컴포넌트가 있으면 owner type(S+0x10/+0x14/+0x18)을 기록합니다. 마지막 Weapon vt+0x238의 실제 슈터 대상은 `0x7102865f18` **RET**이므로 이 슬롯에서 반복 필드를 추가 변경하지 않습니다.
+
+**정정(2026-10-03)**: §4.5의 팀 필드는 이전에 슬롯15/106에서 배열 인덱스로 쓰인다는 소비만으로 [추정]이었습니다. 이제 위 원본 writer와 실제 슈터 호출을 연결했습니다. -1/3의 무효 처리와 0~2 팀 배열 선택은 기존 소비자 `0x71016444ec`, `0x71013405e0`, `0x7101753bb4`의 근거를 재사용합니다. writer가 잘못된 값을 교정한다는 해석은 하지 않습니다.
+
+생성 정보 S의 +0x91/+0x92/+0x94는 I의 동명 오프셋과 다른 필드입니다. `0x71025817c8`의 `0x7102581898/0x71025818d0`은 halfword 0x0100을 S+0x91에 써 **S91=0, S92=1**로 초기화하고, `0x71025818d4`는 **S94=-1**을 씁니다. 실제 `0x71025823b0`의 `0x71025827d8..0x71025827fc`는 `0x7102580354(I)`가 참일 때만 **S94=I9c**, **S92=u8(I80)**으로 바꿉니다. 이 조건은 선택된 WeaponShooterParam의 **TripleShotSpanFrame(+0x80)>0**입니다. S91은 이 블록에서 바꾸지 않습니다. 스플래시슈터의 TripleShotSpanFrame=0(원본 파라미터)이므로 1인 연습의 해당 생성 필드는 **0/1/-1**을 유지합니다 [판독]+[데이터]. S91을 ExtraInfo 열거 VariableRepeat(8)에 대응시키는 소비자는 기존 `0x7101753b90`이며, 발사 공유 경로에서 실제 VariableRepeat를 켠다는 근거는 없습니다.
+
+I80은 RepeatTimer(I+0x68)의 +0x18 **limit**입니다. 실제 factory `0x7102580190`의 `0x7102580230..0x7102580244`는 999를 씁니다. reset `0x7102582e3c`는 I68..I7f를 지우고 I80은 보존합니다. I9c는 reset에서 0이고, `0x710258295c` 말미 `0x7102582dc8` 주변에서 TripleShotSpanFrame>0 && I98>0이면 1 증가한 뒤 I98을 0으로 지웁니다 [판독]. **미확정 경계**: TripleShotSpanFrame>0인 다른 무기의 I80 limit 재설정 writer·그 원본 파라미터명은 아직 확보하지 못했습니다. 오프셋+80 저장 검색은 보조 인터페이스(+30), 타이머(+68) 상대 주소를 놓칠 수 있으므로 부재 증명으로 쓰지 않습니다. 다음은 슈터 초기 바인드 `0x7102395340`의 I68 타이머 설정 소비/호출자를 보되, 다른 무기의 실제 동작은 이번 범위에서 제외합니다. 이 경계는 TripleShotSpanFrame=0인 스플래시슈터 생성값 결론을 바꾸지 않습니다.
+
+검증: `web/tools/r8_camweapon_geninfo_emu.py`, 결과 `analysis/completion/r8/weapon_geninfo_emu.json`. 원본 `258801c→2552da0→WeaponShooter vt238 RET`의 팀 6값×owner 2종×기존값16종 **192/192** 일치; 원본 조건부 writer→2580354의 Span 4값×shot 3값×limit 4값 **48/48** 일치(불일치0). ActorID pack146cb20, 형식 검사 및 자원 핸들 공급은 경계 스텁이고 조건부 실행은 정상 기본 자원(I38=null, 가변 파라미터 분기 제외)을 공급했습니다. 전체 발사 함수·자원 로더·풀/생성 복사는 실행하지 않았습니다. 근거 원문 `analysis/decomp/r8_camweapon/geninfo_common.c`, 기존 `analysis/decomp/camera/batch1.c`·`weapon/shooter_ink_action.c`, 원본 생성자 ASM입니다.
+
+### 3.3.8 조준 예측 단계 수의 원본 이름 — 8차(2026-10-03) [판독]+[실행]
+
+조준 예측 `0x7102548c3c`가 PlayerInkActionFree **I+0x40**의 유효 세대 핸들에서 읽는 단계 수는 **spl__WeaponFreeParam.ShotGuideFrame**입니다. 실제 factory `0x71027f3f64`는 0x38바이트 객체(VT `0x710564b668`)를 만들고 P+0x30에 **s32 8**, P+0x34에 설정됨 플래그 0을 씁니다. `0x71027f4670`의 원본 이름은 `spl__WeaponFreeParam`입니다. 원본 메타데이터 reader `0x71027f4018`은 정확히 **ShotGuideFrame** 이름, P+0x30의 int, P+0x34의 bit0, 필드 index0, 원본 기본값 포인터 `0x7104aa1b34`(8)를 연결합니다 [판독].
+
+타입 연결은 vtable 값만으로 판정하지 않았습니다. predictor의 `0x71025490e8/0x7102549104`가 검사하는 고유 RTTI 싱글턴은 **0x71058bd9d8**이며, 실제 WeaponFreeParam의 RTTI 함수 `0x71027f4338`이 동일 객체 주소와 비교합니다. `0x710555cdc0`는 여러 RTTI 싱글턴이 공유하는 메타데이터 vtable입니다. 그 값이 같다고 파라미터 타입까지 같지는 않습니다.
+
+**2026-10-03 정정 근거**: combat/damage_hit.md §6.7의 이전 후보 `0x71010aa70c`는 factory가 아니라 `0x71010aa5dc` 내부 ADD 명령입니다. 이 함수의 필드 reader는 **FadeType**, RTTI는 **0x71058122a0**입니다. 따라서 이를 단계 수 파라미터의 이름·factory로 연결한 결론은 잘못된 RTTI 동일시였습니다. 기존 후보의 원문은 `analysis/decomp/r8_camweapon/prediction_param.c`에 보존하고, 올바른 클래스는 `shotguide_param.c`로 구분합니다. 이름이 비슷한 타 무기 `ShotGuideShooterFrame`도 이 I+0x40 객체의 키가 아닙니다.
+
+원본 소비 구간 `0x71025490c0..0x7102549230`은 I+0x40 핸들의 +0xc와 I+0x48 generation 일치 여부를 확인합니다. P+0x34 bit0이 켜져 있으면 P+0x30을 사용합니다. 꺼져 있고 P+0x10 연결과 P+0x18 핸들의 P+0x20 generation이 유효하면 실제 RTTI 검사 뒤 부모 객체를 따라갑니다. 명시 플래그가 켜지거나 부모 연결이 끊어진 객체의 +0x30을 `0x7102549228/0x710254922c`에서 q.steps(sp+0x88)에 복사합니다. 임의로 0~60 또는 양수로 clamp하지 않습니다 [판독]. 이후 예측 루프 `0x710175779c`는 기존 §3.3·combat §6.7 근거를 재사용하며 이번에 다시 실행한 것으로 세지 않습니다.
+
+검증 `web/tools/r8_camweapon_shotguide_param_emu.py`, JSON `analysis/completion/r8/shotguide_param_emu.json`: 원본 factory/getName/RTTI/metadata **64 PASS**, 단계 수 소비 구간 **512 PASS**, 불일치0. 같은 메타 vtable을 쓰는 FadeType RTTI는 원본 타입 검사에서 거부됨을 확인했습니다. 자체·부모 플래그, 부모 세대의 유효/무효와 64개 s32 비트값을 조합해 q.steps의 원본 비트를 대조했습니다. 메모리 할당 및 metadata 조회 callback만 경계 스텁이며 실제 RTTI 함수는 실행했습니다. 정상 I+0x40 핸들과 부모 레코드를 합성했으므로 **I+0x40의 실제 설정 writer, 전체 2548c3c/175779c 궤적, 자원 로딩·Havok 질의는 실행하지 않았습니다**. 8은 factory 기본값이며 모든 실행 시점의 오버라이드 값이 8이라는 결론은 내리지 않습니다. 다음은 I+0x40 핸들 setter와 자원 binder입니다.
+
+### 3.3.9 실제 슈터의 조준 표시 호출 — 8차(2026-10-03) [판독]+[실행]
+
+**2026-10-03 정정**: §3.3.8의 Free 타입·함수 판독은 공통 Free 경로의 사실입니다. 1인 스플래시슈터의 실제 활성 객체는 Shooter이고, B+0x588이 가리키는 보조 vtable **0x7105637898의 +0x60 = 0x7102586aa0**입니다. 기존 combat §6.7이 이 호출을 Free `2549b38→2548bec`에 곧바로 연결한 것은 파생 클래스 override를 빠뜨렸습니다. 실제 슈터는 `24c0fbc→2586aa0(this−0x30)`를 호출하며, show=0이면 I+0xf0의 가운데/히트마커와 I+0x120의 바이어스를 정지합니다. show=1,predict=1이면 **2585bd8** 예측 뒤 **258683c** 표시 갱신, show=1,predict=0이면 **25864e4** 뒤 같은 표시 갱신입니다. 보조 vt+0x158 **253c9a0은 실제 RET0**이므로 이 슈터에서는 h 반전이 없습니다.
+
+스플래시슈터의 예측 단계 수는 **I+0x48(일반)/+0x58(가변)**의 WeaponShooterParam **P+0x64 = ShotGuideFrame**, 설정 플래그 **P+0x96 bit0**입니다. 가변 자원이 활성이고 I+0x98>0, I+0xac==0일 때만 +0x58을 고르고, 그 밖에는 +0x48을 고릅니다. `25860c4..2586264`는 세대 핸들과 원본 RTTI `2813b24→1643a58`을 확인하고 부모 세대/명시 플래그를 따라간 뒤 +0x64를 q.steps(sp+0x80)에 복사합니다. 이름·공장 기본값8은 기존 reflection `analysis/param_reflect/spl__WeaponShooterParam.json` 및 FUNCS의 `2811104` 판독을 재사용하며 새 분석 수로 세지 않습니다. Free의 I+0x40/P+0x30을 실제 슈터 필드로 쓰면 안 됩니다.
+
+정상 Main 슈터이고 활성 특수가 없는 구간의 **원본 표시 식**은 아래와 같습니다(B=플레이어 본체, G=[B+0xa898] PlayerShotGuideXLink).
+
+```text
+h = (s32(B+0xab8) <= 0) && (
+    s32(B+0x4e0)>0 || B532 || B533 || B4f2 ||
+    s32(B+0x518)>0 || B534 || B535 || B52a)
+show = predict = !h && !b && (G+0x30 != 0)
+```
+
+b의 원본 항은 T+8>0(T=B+0xd58), PlayerDemo+0x34==0, PlayerPeriscope+0x38!=0 또는 +0xb0!=0, 리스폰 관리자 조건, PlayerVehicleSpectacle의 유효 연결 대상, PlayerPipeline+0x38!=0입니다(전체 원문은 기존 `r6_combat/c1.c`). 이번 실행은 관리자 null·차량 handle generation=-1을 공급하고 나머지 6개 gate를 각각 변경했습니다. b에 의미를 보태거나 B+0x784(오징어 요청)·메인 ZR 카운터 B+0x4d0을 위 h 식에 임의로 넣지 않습니다. 공격 입력의 정확한 raw 필드와 원본식이 근거이며 부수적인 메뉴/특수 실제 동작은 범위 밖입니다.
+
+**G+0x30 생산자** 신규 `267f934(G,enabled)`는 rawenabled bit0를 G+0x30에 쓰고 XLink 사용자 `[G+0x38]+0xf8`의 **bit12를 enabled의 반대로** 씁니다. 이전에 enabled가 켜졌고 새 값이 꺼지면 G+0x48 ring의 유효 세대 이펙트를 정지하고 G+0x54/+0x58을 0으로 비웁니다. 기본 상태에서 enabled = **B+0x1054!=0 && s32(B+0x1058)==0**이며, down timer/행동 불가 분기에서는0, Bf34∈{2,3,4} 등의 특수 분기는 원문의 숫자를 보존합니다. B1054/B1058의 메시지 writer는 기존 PlayerBehavior `234f518`의 메시지 **0x6c2b6a01**, 새로 연결한 `234ffa8/234ffb0`에서 payload+0x40 byte/+0x44 s32를 그대로 복사합니다. payload의 게임상 이름·모든 실제 생산자는 아직 미확정입니다. Bf34 상태명도 여기서 새로 확정하지 않습니다.
+
+실제 `258683c`는 I+0xcc 예측 종류가 바뀌거나 중앙·히트마커 핸들 둘이 모두 무효일 때 **Shooter_Center / Shooter_HitMarker**를 `2677578`에, 바이어스 종류가 바뀌거나 양쪽 핸들 둘이 모두 무효일 때 **Shooter_BiasLeft / Shooter_BiasRight**를 `267d090`에 보냅니다. 유효 핸들과 같은 종류면 새 발생을 생략하고 위치만 갱신합니다. 종류0/1/2→NoHit/HitConstant/HitEffective 키·ELink 리소스 대응은 기존 r5 근거를 재사용합니다. 이 예측 마커를 실제 명중 뒤 `16d99f4/16d9c60` HitEffect 이벤트와 혼동하지 않습니다.
+
+검증 `r8_camweapon_shooter_shotguide_gate_emu.py`, JSON `shooter_shotguide_gate_emu.json`: **24c0fbc 전체→267f934→실제Shooter vt→258683c 876 PASS**, 실제 단계 수 소비 구간 **512 PASS**, 불일치0. 입력8bit×타이머−1/0/1, enabled/대기값/6gate/종류0·1·2를 대조했습니다. `24c7234` 및 Ink-vt140의 반환은 경계 스텁(허용), 2585bd8은 예측 종류를 공급하는 경계 스텁이며 XLink 발생·위치·정지는 요청을 캡처했습니다. 실제 renderer·전체 탄/Havok·SDK 입력 생산은 실행하지 않았습니다. 원본 RTTI는 실행하고 초기화 guard는 초기화된 정상 객체로 공급했습니다. 이 실행에서 **리스폰/차량 전체·ring 정지의 비어 있지 않은 목록·자원 오버라이드 생산자**까지 해소했다고 넓히지 않습니다. 다음은 `234f518` 메시지6c2b6a01의 실제 sender, `24c7234`의 정상 사격장 입력 연결과 원본 ELink 실행입니다.
+
+### 3.3.10 실제 명중 요청 패킷의 접촉 선택 — 8차(2026-10-03) [판독]+[실행]
+
+`16d99f4`의 실제 접촉 선택부터 `16d9c60`의 HitEffect 요청 생성까지 원본을 연결 실행했다. 이 절은 §3.3.9의 조준 예측 표시와 별개다. 결과 enum이 0이면 두 함수 모두 바로 돌아온다. 1~7은 접촉의 blocking bit가 없어도 첫 접촉으로 요청한다. 목록에서 P+0x68 bit1이 켜진 **첫 접촉**이 있으면 그 접촉을 택하며, 없으면 목록 첫 접촉을 쓴다. 비어 있는 목록을 안전하게 무시하는 분기는 이 함수에 없으므로 호출자가 유효 접촉을 제공해야 한다.
+
+점 wrapper 두 side byte의 같음 `equal`과 pair record+8 bit0 `rb`를 비교한다. `rb == equal`일 때만 `position = P.position + P.depth * P.normal`로 보정하고 material=P+0x38, 나머지는 원래 위치와 P+0x48이다. `info+0x10`의 X가 NaN이면 원본 `12d4f8c`가 wrapper+0x0c(equal) 또는 +0x18(unequal)의 캐시 법선을 복사한다. X가 NaN이 아니면 info 방향 Vec3를 그대로 복사한다. 위치 보정의 float32 곱셈·덧셈 순서를 포함해 1,024건에서 패킷의 초기화된 모든 필드가 비트 일치했다. 목록·법선은 합성 입력이고 실제 Havok 접촉 생산자는 이번 실행 경계 밖이다.
+
+| 요청 offset | 원본 내용 |
+|---|---|
+| +0 / +0x0c / +0x18 | 접촉 위치 / 선택 방향 / 호출자가 준 이동 방향 Vec3 |
+| +0x24 / +0x28 / +0x2c | material / DamageResultType / HitEffectorType |
+| +0x30 / +0x34 / +0x38 | info+0x20 / 소유 플레이어 번호 / -1 |
+| +0x3c / +0x3d / +0x3e | 접촉 도색 가능 / 탄 vt+0x208 bit0 / SpawnInfo+0x6d |
+| +0x40 / +0x48 / +0x50 | info+0x1c / 선택 참조 ptr / info+0x30 |
+
+스플래시슈터의 탄은 실제 VT55a5030+0x208→`1649ba0`의 true 반환, actor wrapper VT5540810+0x78→`0f796ec`의 actor+8 반환을 실행했다. actor+0x208이 null이면 SpawnInfo+0x1c ID를 사용한다. ActorID→플레이어 인덱스 가상 호출은 0 공급 경계이고, 이후 `26437d0`은 실제 1인 SceneSetting ring을 읽어 요청+0x34=0을 냈다. Shooter40의 HitEffectorType=1 및 critical extra=17에서도 같은 값은 기존 RSDB/r6 reader 근거를 재사용한다. 기존 36,900건 데이터 reader 결과를 새 성과로 다시 세지 않는다.
+
+추가 2,688건(7모드×384)의 원본 `12d68cc→12ed800→2c71e50→12ac5e0` 연결에서 도색 가능 플래그를 확인했다. body+0x230 없음, PaintInfo+7 disabled, kind0은 false다. PaintInfo kind2인 ObjPaint 입력은 결과 kind3이며, material null 또는 material+0x0e bit2=0이면 true, bit2=1이면 false다. material의 다른 bit는 이 분기에 영향이 없다. 원본이 material null을 true로 취급하는 것도 그대로 보존한다. RTTI vt+0x28 true와 shape native/fallback vtable, SDK mutex는 명시적인 경계 스텁이다. 실제 FieldRigidBody 타입 대응과 지형 ColPaint 결과 kind2 경로를 이 실행으로 확정하지 않는다.
+
+근거: `analysis/decomp/r8_camweapon/hit_direction.c`(새 12d4f8c), 기존 combat/batch1·2.c/phys4/p4_resultplayer.c/r5_paint/r5_a.c 및 r8_physics/material_reader.c. `web/tools/r8_camweapon_hit_packet_chain_emu.py` → `analysis/completion/r8/hit_packet_chain_emu.json`: **1,024+2,688 PASS, 불일치 0**. `27b4704`에서 요청을 캡처했으므로 큐/컨트롤러의 실제 방출·최종 화면 히트마커 조건은 이 절에서 해소했다고 하지 않는다. nonnull 참조 ptr의 수명 관리도 이번 fixture에서는 제외했다.
+
 ## 4. 구조체·필드·상수
 
 ### 4.1 `spl::BulletSimpleMoveParam` (`$type spl__BulletSimpleMoveParam`, GameParameterTable 키 `MoveParam`)
@@ -301,7 +426,7 @@ Ground, n.y <= 0.64144969            → 슬롯 59  (벽·천장)
 | 오프셋 | 타입 | 의미 | 근거 |
 |---|---|---|---|
 | +0x94, +0x98 | f32 | 부모 탄 속도의 x, z (스플래시 생성정보, weapon 구현 판독 — 이전 "분할 관련" 해석 정정) | 스플래시 생성 | 스플래시 도색 방향 |
-| +0x2c | s32 | 팀 번호(0~2, -1/3은 무효) | 슬롯 15·106에서 팀 배열 인덱스로 사용 **[추정]** |
+| +0x2c | s32 | 팀 번호(0~2, -1/3은 무효) | §3.3.7 원본 writer: 발사 플레이어 Actor+668 복사, 원본192PASS **[판독]+[실행]** |
 | +0x30 | vec3 | 발사 위치 | 슬롯 15에서 꼬리 위치 초기값 |
 | +0x3c | vec3 | 발사 방향(단위 벡터로 추정) | 슬롯 15에서 `dir × speed` |
 | +0x48 | f32 | 발사 속력 | 슬롯 15, 슬롯 54의 age 1 재정규화 |
@@ -625,7 +750,7 @@ f32 정밀도는 `Math.fround`로 매 연산마다 맞춥니다. 재구현 `bull
 |---|---|---|
 | 도색 | 이동 거리 +0x1200으로 도색 폭(Near/Middle/Far) 보간(슬롯 84), 스플래시 탄 생성. 슬롯 84는 생성 정보 +0x6d(로컬 플래그)가 0이면 바로 돌아가므로 **복제 탄은 칠하지 않음**(칠은 발사 기기가 PaintRequest로 송신) [판독, paint] | [paint](../paint/paint_and_score.md) |
 | 데미지 | 감쇠 `0x71017506d0`: `t=clamp01((age-Start+1)/max(End-Start,1))`, `dmg=trunc(Max+(Min-Max)t)` — age는 이 문서의 +0x134(슬롯 18에서 이동 전 증가). 단위 1 = 0.1 HP | [combat](../combat/damage_hit.md) |
-| 헬퍼 | 슬롯 36 `0x71015315d0`이 "spl::KnockBackHelper", "spl::BulletHitEffect", "spl:DamageHelper" 이름을 참조합니다. `spl:DamageHelper`는 탄 쪽 헬퍼가 아니라 피해를 받는 액터의 HitPointHolder 컴포넌트입니다([combat](../combat/player_life.md), 2026-10-02 정정). 슬롯 36에서 각각을 생성하는지 조회하는지는 **[미확정]** | combat |
+| 헬퍼 | 슬롯 36 `0x71015315d0`이 "spl::KnockBackHelper", "spl::BulletHitEffect", "spl:DamageHelper" 이름을 참조합니다. `spl:DamageHelper`는 탄 쪽 헬퍼가 아니라 피해를 받는 액터의 HitPointHolder 컴포넌트입니다([combat](../combat/player_life.md), 2026-10-02 정정). 이 문장의 배타적 HitPointHolder 해석과 생성/조회 미확정은 **2026-10-03 §3.3.6에서 정정·해소**했습니다. 원본 factory가 탄에 세 객체를 새로 생성합니다 [실행] | combat |
 | 충돌 | 반경 = ChangeFrame 0이면 End, 아니면 `max(lerp(Init,End,clamp01(age/Change)),0.02)` (`0x71018a6b68`) | [combat](../combat/damage_hit.md) |
 | 벽 | Ground 벽·천장 접촉 → 슬롯 59: 4프레임 정지 + 슬롯 69로 자식 탄 생성(BulletWallDrop로 추정, ActorReservation 16개) — §3.3 | [physics](../physics/phive_controller.md) §6.6 |
 | 네트워크 | 발사자 기기만 `PlayerNetEvent::Bullet*` 송신(`0x71018b7f30`), 수신 기기는 같은 발사 함수를 비소유 플래그로 호출해 복제 탄을 시뮬레이션하며, 경과 프레임만큼 앞당기는 지연 보정은 없음(+0x64를 읽는 79곳 전수 분류, [판독]). 명중 판정은 공격자 쪽. 탄 액터에는 Net 컴포넌트가 없음 | [network](../network/network.md) |
@@ -640,6 +765,8 @@ f32 정밀도는 `Math.fround`로 매 연산마다 맞춥니다. 재구현 `bull
 6. 꼬리 점 — 표시 전용으로 보이므로 뒤로 미뤄도 됩니다.
 
 브라우저·서버가 공유해야 할 로직: 이동 상태 머신(결정적), 난수 생성기. 물리 충돌은 서버 권한 여부를 네트워크 문서와 맞춰 결정합니다.
+
+7차 웹 반영 필요: `impl/weapon.md`의 `Fire && !Squid`를 그대로 B+4d0으로 쓰지 말고, Sender 우선순위 이후의 원본 차단/래치 조건과 연속 카운터를 보존한다. ab4/abc 등은 §3.5.1의 포화 감소를 적용한다. a90/adc/4d4와 총구 기준 B+58 연결은 아직 미확정이므로 이 결과로 대체하지 않는다. 코드와 impl 문서는 변경하지 않았다.
 
 ## 10. 검증 [재구현 계산]
 
@@ -683,7 +810,15 @@ f32 정밀도는 `Math.fround`로 매 연산마다 맞춥니다. 재구현 `bull
 
 스텁·가정: 이 표의 위치는 `pos += vel` 근사(원본식은 판독 완료, 위 참조)이고 충돌 없음, 발사 방향은 고정, 플레이어 속도 가산(§5.5)은 0으로 둠(정지 상태 발사). 함수 단위 식 검증이며 전체 탄 동작 검증이 아닙니다.
 
+7차 원본 실행 추가: `r7_weapon_input_emu.py`의 메인 입력 카운터1680건·타이머1030건(11330필드) 모두 일치. §3.5.1에 경계 스텁과 제외 조건을 명시했다. 재구현 단독 테스트와 구분한다.
+
+8차 원본 명중 요청 추가: §3.3.10의 1,024건 접촉/패킷 및 2,688건 ObjPaint 재질 분기, 초기화 필드 비트 일치. 큐와 실제 방출은 캡처 경계이고 지형 kind2/nonnull 참조 ptr은 제외한다.
+
 ## 11. 미확정 사항과 다음 근거
+
+8차(2026-10-03): §3.3.10은 실제 탄 명중 요청의 접촉·방향·재질·요청 플래그를 연결했다. 최종 히트마커/효과 키의 전체 질문은 아직 부분이다. 다음은 `27b4704` 큐→`27b877c` 컨트롤러→Focused/ELink/SLink 소비의 실제 요청 필드 조건이다. TypedBody vt+0x28의 실제 FieldRigidBody 대응과 ColPaint kind2는 별도 생산자 추적이 필요하다. 이 미확정을 ObjPaint 기본 재질 fixture로 대신 채우지 않는다.
+
+7차(2026-10-03): B+4d0 로컬 writer는 §3.5.1에서 해소했다. B+4d4의 writer 전체, a90 상태 집합, adc 감소·갱신, B+58 위치 연결은 남았다. `r5_player_storescan.py 58`로 찾은 슬롯19의 2483db0은 x23 기준이며 본체라고 입증하지 못했으므로 총구 writer로 채택하지 않았다. 다음은 249f494의 B+4d4 생성과 24a2c98/슬롯19 위치 인자 추적이다.
 
 | 항목 | 필요한 근거 |
 |---|---|
@@ -695,5 +830,5 @@ f32 정밀도는 `Math.fround`로 매 연산마다 맞춥니다. 재구현 `bull
 | ~~꼬리 길이 제한(TailLengthParam의 나머지 필드)~~ | **해소**(2026-10-03 [판독]+[실행 445/445]): 슬롯 108·슬롯 47(§3.4) |
 | ~~OnlineVersusSetting 시드 → 대전 설정 객체 복사 경로~~ | **해소**(2026-10-03 6차 [실행]+[판독], §5.3): 전환 슬롯42 0x7103029330의 0x7103029ca8 `C8.copy(D0)`(묶음 복사 0x7102ae5810). 사격장 = 부팅 뒤 첫 진입 13, 대전 뒤에는 직전 대전 시드(LobbyVersus에 Scene_Versus 없음). 남은 것: 로비 GameFrame 시작값 |
 | 탄 생성 실패 | **해소**(2026-10-03 [판독]): 예약 풀 고갈이면 0x7100f7f39c가 0 → 메인 탄 생성 안 됨(§3.5). 스플래시 실패 조건 해소(6차 [판독], §3.5: 허용 함수 거짓·관리자 없음·해시 없음·하위 풀 빈 칸 0). 남은 것: 스플래시 하위 풀 크기와 ActorReservation 32의 연결(`*0x71058014d8`+0x60 트리 삽입), 생성 정보 → 탄 +0x108 저장 명령 |
-| 0x28 컴포넌트 = 소멸 요청 | 0x7100f721b8(액터 상태 전이 요청) 인자 0의 의미 — 미판독 |
+| ~~0x28 컴포넌트 = 소멸 요청~~ — 해소(8차 §3.3.4) | 0x7100f721b8(액터 상태 전이 요청) 인자 0의 의미 — 미판독 |
 | ~~새 탄의 슬롯 19/21이 생성 프레임에 도는지~~ | **해소**(2026-10-03 6차 [판독], §3.3): 돌지 않음. 활성은 관리자 대기 목록에만 넣고(0x7103c88cd8), 다음 프레임 구동이 그래프 구성 전에 연결(0x7103c85b40 → 0x7103c85fbc) |

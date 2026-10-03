@@ -28,7 +28,7 @@ PlayerCamera vtable
       ├ 수직 추종(+0x1518 비율) → 카메라/주시점 y
       ├ 0x71024d8f94  붐 정의(피벗·방향·길이·최소거리) → 형상 질의 2회 → 거리 비율 (§6.8)
       └ 출력: *(this+0x60)=pos, this+0x70=at, this+0x7c=FOV(도)→+0xac(rad), +0xa4/+0xa8=near/far,
-              0x7101016d0c(this+0x88, pos, at, up(0,1,0)) 뷰 행렬
+              0x7101016d0c(this+0x88, pos, at, up(0,1,0)) 포즈(위치·쿼터니언·거리)
 ```
 
 슬롯 번호와 생성 흐름은 vtable 덤프(0x7105633960)로 확인했습니다.
@@ -94,7 +94,7 @@ PlayerCamera vtable
 | +0x1d0..+0x320 | 객체 | 붐 형상 질의 Q (§6.8; +0x1d8 구 형상 래퍼, +0x1e0 시작, +0x1ec 끝, +0x21c 적중, +0x224 적중 거리, +0x230 필터 객체 포인터 → +0x2d8, +0x318 결과 목록) | 0x71024d5c6c(생성), 0x71024d9ae8 | 0x7103a5f36c |
 | +0x14c4 / +0x14c8 / +0x14cc | f32 | 붐 거리 비율(평활) / 목표 비율 / 붐 길이 len (`boomRatio`/`boomRatioTarget`/`boomLength`) | 0x71024d9ae8 | 위치 반영, 0x71024d8f94 |
 | +0x14c0 / +0x14ec / +0x14f0 / +0x14f4 | f32 | 비율 평활 rate / 전진 오징어 계수 / 최소거리 미달 정도 / 복귀 속도 평활 | 0x71024d9ae8 | 〃 |
-| +0x1698 (+0x16a0 객체, +0x16a8 번호) | 핸들 | 연결 액터(사망 시 포즈 메시지 대상, §7) | [미확정] | 0x71024d9ae8 |
+| +0x1698 (+0x16a0 객체, +0x16a8 번호) | 핸들 | 연결된 다른 플레이어 액터(사망 포즈 대상; r9 §7.5) | 0x71024e5f6c [판독] | 0x71024d9ae8 |
 | +0x16ee | u8 | 사망 포즈 메시지 보냄 | 0x71024d9ae8(1), 리셋(0) | 〃 |
 | +0x1920 | ptr | `spl::PlayerDokanWarp`(슈퍼점프) 컴포넌트 | 0x71023555f0(형 태그 0x71058bd040) | 갱신·입력 |
 | +0x1928 | ptr | `spl:PlayerInputSender` 컴포넌트(자이로 원천 +0x60) | 0x71023555f0(형 태그 0x71058bf568) | §6.9 |
@@ -216,9 +216,9 @@ yawMax   = (4.0 + k·(k ≥ 0 ? 3.0 : 1.6)) °/프레임      → +0x14fc (rad)
 pitchMax = (1.8 + (k ≥ 0 ? k : 0.8k)) °/프레임         → +0x1508 (rad)
 ```
 
-세이브 정수 0..20이 UI −5..+5(0.5 단위)에 대응한다고 봅니다 [추정 — UI 코드 미확인].
+정정(2026-10-03, 8차) [판독]+[데이터]+[실행]: 원본 옵션 UI→Volume 애니 연결로 정수 v=0..20은 표시 s=(v−10)/2=−5..+5(0.5 단위), 카메라 k=s/5로 확정했습니다(§6.9.3). 이전 “대응한다고 봅니다 [추정 — UI 코드 미확인]”은 아래 원본 근거로 해소합니다.
 
-| UI(추정) | 세이브 | k | yaw °/f | yaw 느린 끝 °/f | pitch °/f |
+| UI [데이터] | 원본 정수 | k | yaw °/f | yaw 느린 끝 °/f | pitch °/f |
 |---|---|---|---|---|---|
 | −5 | 0 | −1.0 | 2.40 | 1.44 | 1.00 |
 | 0 | 10 | 0.0 | 4.00 | 2.40 | 1.80 |
@@ -253,12 +253,12 @@ aimDir(+0x18c) = rotateY(aimDir, yawVel)      // x' = x cos + z sin, z' = z cos 
   - w: `0x71024e0a20` C = `*(0x71058bbb78)+0x230` = 0x71058bbda8 = **0.096**(정적 초기화 writer 0x7102455db0, `analysis/player/bss_consts_58bb000.json` [실행 — 기존 player_initemu]). 0x71024e0a38~0x71024e0aec: C ≥ 0.001이면 `v ≤ 0.001 → 0`, `v ≥ C → 1`, 그 사이 `(v − 0.001)/(C − 0.001)`; C < 0.001 분기는 거울꼴. 결과는 [sp+0x38]에 두었다가 `0x71024e11b8`에서 `yawDeg += w·(느린 값 − yawDeg)`로 씁니다.
   - v: 기본 경로는 `(본체+0x114 이동 속도 + 보정) × (1 − 본체+0xa38)`를 카메라 this+0x138 법선으로 수평화한 벡터의 길이입니다(0x71024e052c~0x71024e05f8, 보정 = 특수 0x19 활성이면 `[*(본체+0xa7c8)+0x1d8]` 아니면 상수 0x7104a981f4 = (0,0,0)). this+0x16ec 또는 this+0x16ed가 켜져 있으면 v = 본체+0xd2c(속도 상한 cap)입니다(0x71024e0848~0x71024e086c). 즉 **빨리 움직일수록 yaw 최대 속도가 느린 값 쪽으로** 섞입니다.
 - 스틱을 놓으면 yawVel이 0.8 비율로 빠르게 멈추고, 끝까지 밀면 0.3 비율로 서서히 붙습니다(가속감).
-- 오른쪽 입력(x>0)이 음의 각속도입니다. 화면상 좌우와의 대응은 좌표계 확인이 필요합니다 [미확정].
+- 오른쪽 입력(x>0)이 음의 각속도입니다. 2026-10-03 7차 [판독]+[실행]: 포즈 → LookAt → 논리 투영의 부호는 §6.7에서 확인했습니다(+Z 시선이면 월드 −X가 NDC 오른쪽). 최종 화면 부호는 device posture 값과 PlayerCamera → 활성 포저 연결이 남아 [미확정]입니다. 이전 기록: "화면상 좌우와의 대응은 좌표계 확인이 필요합니다 [미확정]."
   - 2026-10-03 6차 시도 [판독] ([r6 camweapon]): 출력 단계의 `0x7101016d0c(this+0x88, pos, at, up)`는 투영이 아니라 **포즈 만들기**입니다.
     - d = normalize(at − pos)를 계산하고, |at − pos|를 this+0x88+0x28에 둡니다.
     - R = normalize(up × d), U = d × R입니다. 열이 [R, U, d]인 3×3을 `0x71010176bc`로 쿼터니언으로 바꿔 +0xc에 두고, 위치 pos는 +0에 둡니다. 길이가 0이면 단위 회전(`*0x71057917b8`)을 씁니다.
     - [R, U, d]는 오른손 기저입니다(R × U = d). 따라서 이 포즈의 로컬 +X(R)는 "앞 d·위 up" 기준으로 up × d 쪽입니다. 앞이 +Z이고 위가 +Y이면 R = +X입니다.
-    - 이 포즈가 화면에서 오른쪽인지 왼쪽인지는 포즈 → 뷰 행렬 변환(카메라 모듈 `0x7101017d5c`·`0x7101017ba8` 쪽)을 읽어야 정해집니다. 아직 [미확정]입니다.
+    - 정정(2026-10-03 7차): 후보 `0x7101017d5c`·`0x7101017ba8`는 뷰 행렬 생성기가 아니라 포즈 보간기의 갱신·대상 설정 함수였습니다. 실제 소비자는 `0x7101017434`(§6.7)입니다. 활성 포저 연결·device posture 실행 중 값은 [미확정]입니다.
     - 이동·발사에 쓰는 기저 X = normalize(up × Z)이고 Z = normalize(pos − at)입니다(§6.7 [실행]). 이 X는 −R과 같은 방향입니다.
 - 자이로 켜짐이면 스틱 입력 전에 방향을 다시 매핑합니다(5953~5990행): θ = atan2(y, x)(sead 각 단위 ×1.4629181e-09), |θ| ≤ 30°이면 0, ≥ 150°이면 π, 사이는 `(|θ|−30°)/120°·π`로 늘이고 부호 유지, `(x, y) ← r·(cos θ', sin θ')`. 즉 거의 수평인 입력은 완전 수평으로 붙고 나머지 범위가 넓어집니다. 그 뒤 y는 0으로 지웁니다(아래 줄) [판독].
 - **반전 설정(IsReverseUD/LR) 적용 위치 — 해소(2026-10-02 [camrest])**. 오른쪽 스틱 값(본체+0xa9c/+0xaa0)을 채우는 함수는 `0x71024a73b8`이고, 플레이어 입력 함수 0x710249f494가 매 프레임 `0x71024a73b8(본체+0xa9c, 본체+0xa890, 본체+0x464)`로 부릅니다(0x710249f9d0, 0x71024a09e8 두 곳. `0x71024c99f0`이 참(조작 불가)이면 대신 +0xa9c/+0xaa4를 0으로) [판독]. 앞 판본의 스캔이 0건이었던 것은 이 함수가 `mov w9,#0x4001; add x8,save,x9; ldrb [x8]`, `ldrb [x8,#1]`처럼 **더한 주소에 즉시 오프셋**으로 읽기 때문입니다(`mov #0x4000/#0x4001` 뒤 8명령 안 `ldrb [..,#1|#2]` 재스캔: 0x710249fac0(IsEnableGyro)·0x71024a7428 두 곳뿐) [실행: 자체 스캔].
@@ -353,6 +353,31 @@ else:
 - 발사 정보 `0x71025823b0`는 `a = −M.Z = normalize(at − pos)`를 초기 속도 `0x71026beed0`에 넘깁니다. 수직 시선 예외에서는 이전 기저의 −Z를 씁니다([../weapon/shooter_bullet.md](../weapon/shooter_bullet.md) §5.5).
 - 정정(2026-10-03): SHARED의 이전 `[weapon impl]` 기록 "카메라 +0x3c 기저 Z"는 `*(C+0x68)+0x18` 간접 접근을 C+0x3c 자체로 잘못 읽은 주소 설명입니다. +0x3c는 X, Z는 +0x54입니다. 발사 축의 결론 `normalize(at−pos)`는 그대로입니다.
 
+#### 출력 포즈의 소비자·수직 FOV — 7차(2026-10-03) [판독]+[실행]
+
+PlayerCamera는 `C+0x88`에 포즈를 쓰며, 포즈 기준 +0 위치, +0xc 쿼터니언(x,y,z,w), +0x1c near, +0x20 far, **+0x24 FOV 라디안**, +0x28 주시거리입니다. 카메라 모듈 `0x7101010150`은 활성 포저에서 받은 포즈에 쉐이크 위치를 더한 뒤 **`0x7101017434(pose, M+0x190, M+0x220)`**를 부릅니다. PlayerCamera 포즈가 어느 포저를 거쳐 들어오는지는 여전히 §11 미확정입니다.
+
+모듈 생성자 `0x710100f980`은 M+0x190에 vtable 0x7105721238(LookAt), M+0x220에 0x71057213b8(Perspective)를 설치합니다. `0x7101017434`는 쿼터니언으로 로컬 +Z를 회전해 `at=pos+거리·forward`, 로컬 +Y로 up을 만들고, LookAt vt+0x20 = **0x710358857c**를 실행합니다(이 함수 자체의 기존 원본 실행 근거는 [../paint/paint_and_score.md](../paint/paint_and_score.md) §10 재사용). 이어 Projection +0x98/+0x9c=near/far, +0xa0=FOV, +0xa4/+0xa8/+0xac=SDK sinf/cosf/tanf(FOV/2)를 씁니다. 모듈은 Projection vt+0x58 = **0x7103589d74**로 논리 투영을 만듭니다.
+
+```text
+// 중앙 투영(offsetX=offsetY=0), 행 우선. 각 곱/합/나눗셈은 f32.
+height = (near+near)·tanf(FOV/2)
+width = height·aspect                       # Projection+0xb0; 모듈 생성 기본 4/3
+left/right = −width·0.5, +width·0.5
+top/bottom = +height·0.5, −height·0.5
+invW = 1/(right-left); invH = 1/(top-bottom); invDepth = 1/(far-near)
+P00 = (near+near)·invW; P11 = invH·(near+near)
+P02 = (right+left)·invW; P12 = (top+bottom)·invH
+P22 = −(near+far)·invDepth; P23 = invDepth·((far·−2)·near)
+P32 = −1; 그 밖 = 0
+```
+
+따라서 **FOV는 수직 전체각**입니다. 정확한 비트 재현에는 위 near를 거쳐 산출하는 순서를 유지해야 하며 `1/tan(FOV/2)`로 대수적으로 약분하면 반올림이 달라질 수 있습니다. offsetX(+0xb4)/offsetY(+0xb8)가 0이 아니면 좌우/상하 경계에 `width·offsetX`/`height·offsetY`를 더한 뒤 같은 식을 씁니다. 실제 aspect는 모듈 갱신에서 뷰포트/출력 크기로 다시 써서 생성 기본값 4/3을 고정 화면비로 쓰면 안 됩니다(`0x71010104ac` 뒤 M+0x2d0).
+
+원본 실행 `r7_camweapon_emu.py`: 포즈 설정→0x7101017434→원본 LookAt→0x7103589d74를 이어 **256/256 행렬이 독립 f32 식과 16원소 모두 비트 일치**(near 0.01~1, far 50~2500, 수직각 20~110°, aspect 0.7~2.5, 양축 오프셋 −0.25~0.25). 단위 쿼터니언·위치 0·거리 1의 뷰는 diag(−1,+1,−1)입니다. 즉 +Z를 보는 논리 화면에서 월드 −X가 NDC +X(오른쪽), +Y가 위입니다. 스틱 오른쪽이 음의 Y 회전인 기존 결론과 이 논리 화면의 방향은 일치합니다.
+
+최종 화면 부호를 확정하지 않은 이유 [미확정]: 모듈은 뒤에 vt+0x60 = 0x7103589b48로 **device posture**(M+0x2ac)를 적용합니다. posture 1~5는 논리 투영 x/y행의 교환·부호 변경을 포함합니다(기존 r5 paint 판독 재사용). 생성 시 posture=*0x7105997898이며 런타임 writer는 이번에 추적하지 않았습니다. `1017d5c/1017ba8` 후보를 디컴파일했으나 포즈 보간기로 밝혀졌고, `xref.py addr 0x7105997898` 결과 0x710317e480은 디스어셈블상 0x7105916898을 참조해 이 값의 근거로 사용하지 않았습니다. 다음: M+0x2ac writer와 전역 0x7105997898 초기화/변경, PlayerCamera 포즈를 넘기는 활성 포저의 vt+0x30. logical projection만 실행한 결과를 최종 화면 검증으로 올리지 않습니다.
+
 ### 6.8 벽·지형 회피 — 카메라 붐(boom) 질의와 거리 비율 [판독] (2026-10-02 [camrest] 갱신)
 
 PlayerCamera 안에 **질의 객체 Q가 this+0x1d0에 내장**되어 있고(소멸자 0x71024e6974가 이 위치 vtable `*(0x7105798018)+0x10` = 0x710559ab08을 재설정), 메인 갱신이 매 프레임 이 객체로 **두 번** 질의합니다 [판독]. 아래 행 번호는 전체 분석 재디컴파일 `analysis/decomp/camrest/cam_main_full.c`(0x71024d9ae8 = 1~3652행) 기준입니다.
@@ -387,10 +412,12 @@ hitDist = hit2 ? max(minDist, off + Q+0x54) : len                  // ★ 거리
 hitN    = hit2 ? −(첫 결과 법선) (방향 플래그면 +) : —
 
 // 거리 비율 (2932~3256행)
-this+0x14f0 = (현재 비율 this+0x14c8 이 minDist/len 보다 얼마나 작은가, 0..1)
+this+0x14f0 = invLerp(현재 비율 this+0x14c8; minDist/len → 0, 1 → 1)  // 7차 정정: 최소거리보다 큰 정도
 spd   = max(플레이어 이동량(this+0x120 − 지난 값)·조건, 시선 회전 변화 this+0x14bc 기반 …)  → this+0x14f4 로 평활(감소 2%/프레임)
-this+0x14c8 = min(this+0x14c8 + spd / max(minDist, len·this+0x14c8),  clamp01(hitDist/len))   // 목표 비율: 막히면 즉시 줄고, 풀리면 천천히 늘어남
-this+0x14c8 = min(lerp(this+0x14c8, 1, b1760), hitDist/len) ;  b1760 = clamp((this+0x1760 − 0.1)/0.9)
+pre = this+0x14c8 + spd / max(minDist, len·this+0x14c8)
+limited = min(pre, clamp01(hitDist/len))       // rate 분기에서 쓰는 목표
+this+0x14c8 = min(lerp(pre, 1, b1760), hitDist/len) ; b1760 = clamp((this+0x1760 − 0.1)/0.9)
+// 7차 정정: 최종 보정은 limited 대신 pre에서 시작(§6.8.1). 이전 요약은 중간·최종 목표를 같은 칸으로 적었음.
 rate(this+0x14c0) = (늘어날 때) 0.1 + 0.15·clamp(차이) → +목표·(1−rate) → 이전 rate 보다 크면 5%씩만 증가
                     (줄어들 때) 접점 법선 hitN·이동 방향으로 만든 값(최소 0.1 계열, 1.5146/1.7370 지수 곡선) ; lerp(…, 0.25, b1760)
 this+0x14c4 += rate·(this+0x14c8 − this+0x14c4)                     // 실제 쓰는 비율(평활)
@@ -423,10 +450,94 @@ pos, at = lerp(pos/at, 리그 값, this+0x1760)
   - Q+0x60 필터 객체의 클래스(vtable 0x71057451a0, 슬롯 5개)는 형식 정보(0x7103a60078/0x7103a60160)와 소멸자만 있고, 판정용 가상 함수가 없습니다. 이 객체는 Phive 공용 캐스트 0x7103c37768이 결과 레이어 플래그를 세울 때 쓰는 데이터 칸일 뿐입니다.
   - 남은 것 [미확정]: W+0xd0 writer(필터 객체 종류). 이것이 공용 쌍 필터(0x7103af44e8/0x7103c4dd30, [../physics/collision_runtime_completion.md](../physics/collision_runtime_completion.md))와 같은지, 그리고 hknpWorld vt+0x3f8 안에서 필터를 부르는 지점을 확인해야 합니다.
 - 이전 기록(2026-10-03 앞 판, 정정 이유 보존): "Q+8은 hknpSphereShape 래퍼이며 반경은 생성자의 `max(config候補,0.3f)`다. 실제 사격장 config 값과 필터는 여전히 [미확정]." — 2000 상한과 NaN 처리를 빠뜨렸고, config 값은 위에서 0.01로 확정했습니다. 그보다 앞의 미확정 기록(형상과 필터를 함께 묶어 둔 이유): 질의 형상(구·캡슐·레이)과 반경, 충돌 필터는 Q의 형상 포인터(Q+0x8, 0x7103a66ea4가 준비)와 생성자(팩토리 0x71024d5c6c 안)를 읽지 않아 [미확정]입니다. `Q+0x54`가 거리이므로 웹에서는 레이/구 캐스트 중 하나를 고르고 거리만 같은 의미로 쓰면 식은 그대로 씁니다 [추정: 형상 차이로 접촉 거리가 달라짐].
-- 줄어들 때의 rate 식(3100~3240행, 법선·이동·0.35/0.25 상한)과 spd 식(2960~3050행)은 항목이 많아 위에 구조만 옮겼습니다. 웹 이식은 해당 행을 그대로 옮기는 것을 권합니다 [판독-부분: 식 전사 미완].
+- 이전 기록(7차 정정 이유 보존): "줄어들 때의 rate 식(3100~3240행, 법선·이동·0.35/0.25 상한)과 spd 식(2960~3050행)은 항목이 많아 위에 구조만 옮겼습니다 [판독-부분: 식 전사 미완]." 2026-10-03 7차에 아래 §6.8.1로 식·분기·순서를 전사하고 원본 구간 실행을 대조했습니다. 질의 필터는 계속 미확정입니다.
 - 슈퍼점프 비행 중(PlayerDokanWarp 단계 3, 진행률 < 1)과 this+0x1760 > 0.1에는 두 질의를 모두 건너뛰고 hitDist = len(막힘 없음)으로 비율 계산만 합니다 [판독]. Pipeline(+0xa6d0)+0x38 != 0 이면 붐 계산 전체를 건너뛰고 리그 위치·주시점(this+0x1770/+0x177c)을 그대로 출력합니다(2309~2315행) [판독].
 - 별도로, 가까운 물체를 반투명하게 하는 `game::FadeOutCameraXluHelper`(getName 0x7101243c38)와 잉크레일 파라미터의 `CameraAlphaStartDist 1.0 / CameraAlphaEndDist 0.1 / CameraAlphaMin 0.5 / AlphaFrame 30`(방문 0x7102061c5c)이 있습니다. 이 페이드는 **물체 쪽** 처리로 보이며 카메라 위치 계산과는 별개입니다 [추정].
 - 최종 근접 보정(§6.7, 0.16)은 위치 반영 뒤에 적용됩니다(3360행 이후) [판독].
+
+#### 6.8.1 전진 계수·복귀 속도·감소 rate — 7차(2026-10-03) [판독]+[실행]
+
+아래 C는 카메라, B는 본체이며 모든 기본 산술은 명령마다 f32, FMA 없음입니다. `L(a,b,t)=a+(b−a)·t`, `clamp01`, `invLerp(x;lo,hi)`는 범위 밖 0/1, 역순 끝점도 원본대로 처리합니다. `pow0(x,e)`는 |x|<0.001이면 0, 그 밖 sign(x)·SDK expf(SDK logf(|x|)·e)입니다. SDK를 Math.log/exp로 바꾸는 마지막 비트 차이는 [camera_feel.md](camera_feel.md) §4.2 기존 검증에 따릅니다.
+
+**전진 오징어 계수 C+0x14ec** (`0x71024dd4d8..0x71024dd68c`) — 앞 요약의 bias(·,0.8)는 다음 순서입니다.
+
+```text
+v = B+0xe4..+0xec; speed = sqrt((vx²+vy²)+vz²)
+c = clamp(dot(speed>0 ? v/speed : v, aim(C+0x18c)), −1, +1)
+b = pow0(abs(c), bits 0x3ea4d3c1 = 0.3219280540943146)
+h = min((speed·b + bits 0xba83126e) / bits 0x3d48b43a, 2.5)
+    # −0.0009999999310821295 / 0.049000002443790436
+if c<=0: k = k·(1 + h·bits 0xbcf5c280)           # −0.029999971389770508
+elif k<h and state∈Sq: k = L(k,h,0.2)           # Sq는 §6.2 상태 집합
+k = k·0.97; C+0x14ec = k
+```
+
+원본은 내적의 **절댓값**에 지수 곡선을 적용하므로 뒤로 움직일 때도 b≥0입니다. `h`의 상한 2.5는 `0x71024dd5cc fmin`이며, 이전 전체 디컴파일가 빠뜨린 항입니다. k를 0..1로 따로 자르지 않고, 질의 2의 시작 오프셋 계산 단계에서만 k를 포함한 값을 0..1 경계로 처리합니다. 속도 0일 때 c=0, h<0라 이 분기는 k를 조금 올린 뒤 ×0.97을 합니다. 이것도 그대로 유지합니다. **480/480** 유한 합성 입력이 원본 결과와 비트 일치했습니다.
+
+**복귀 속도·목표 비율** (`0x71024dde2c..0x71024de218`). minDist=m, boomLength=len, 기존 목표 t=C+0x14c8, 기존 평활 r=C+0x14c4, 이전 복귀속도 s=C+0x14f4입니다. N=질의 2의 변환된 적중 법선(미적중이면 질의 전 aim), D=붐 방향, a=현재 aim, Δp=(C+0x120)−(C+0x12c). B+0xc0≥4이면 Δp.y에서 **B+0x73c를 뺍니다**. 조준 회전량은 이전 Z(C+0x14b0)와 현재 기저 Z(*(C+0x68)+0x18)의 cross 크기·dot을 original atan2Idx(0x7101252998)에 넘겨 라디안으로 바꾼 값입니다.
+
+```text
+q = invLerp(t; m/len, 1)                       # C+0x14f0
+    # 이전 "minDist/len보다 작은 정도"는 반대로 적은 설명이라 정정
+wall = B+0x7a0 != 0 && C+0x13c < bits0x3f24360c # 0.6414496898651123, bVar9
+moveTerm = wall ? max(length(Δp)·0.5,0) : 0
+angle = atan2Idx(|currentZ×previousZ|, dot(currentZ,previousZ))·bits0x30c90fdb
+angle = angle>π ? max(angle−2π,−π) : angle
+wAngle = clamp01(angle/0.01)
+C+0x14bc = L(C+0x14bc,wAngle,0.2)
+base = (1−(1−C+0x14d0)²)·0 + 0.05             # 0곱도 원본 명령에 남음
+rotateTerm = (C+0x14bc)·L(base,0.01,q)
+s0 = max(moveTerm,rotateTerm)
+if B+0xad0>0 && C+0x15d9==0: s0=max(s0,length(Δp)·(0.5−0.4q))
+s = s0>oldS ? s0 : L(oldS,s0,0.02); C+0x14f4=s
+projection = dot(Δp,D)·(1−0.7·B+0xdc)
+projection *= projection<0 ? −0.5 : +0.5       # 원본의 부호 선택 순서
+pre = t + max(s,projection)/max(m,len·t)
+limited = min(pre,clamp01(hitDist/len))
+C+0x14c8 = pre                                # 다음 rate 계산은 pre와 limited 둘 다 씀
+```
+
+bVar9의 이름을 추측해 벽 상태 전체로 대체하지 않았습니다. B+0x7a0 의미의 나머지 부분은 [player] 미확정과 별개이며, 정확한 바이트/법선 조건은 `0x71024dd3f0..0x71024dd414`의 ldrb·fcmp·cset mi로 확정했습니다. 상수는 기존 정적 초기화 `analysis/player/bss_consts_58bb000.json`의 writer 0x71024d5a60 근거를 재사용했습니다. B+0xad0은 슈터 사격 후에도 올리는 타이머(기존 shooter_bullet.md §3.5, 0x71024b28b0)지만 다른 상태의 writer 의미를 이번에 이름으로 단정하지 않았습니다.
+
+**rate 분기·적용 순서** (`0x71024de218..0x71024de70c`). Δc=리그 카메라(C+0x1770)−직전 리그(C+0x1498), Δa=리그 주시점(C+0x177c)−직전 리그(C+0x14a4). 이 직전 리그 칸들은 메인 갱신 앞부분에서 보관한 값입니다.
+
+```text
+if r<=limited:                               # 늘어날 때; 같아도 이 분기
+    d = limited−r
+    baseRate = d<=0 ? 0.1 : d>=1 ? 0.25 : 0.1+0.15d
+    rate = baseRate + limited·(1−baseRate)
+    if oldRate<=rate: rate=L(oldRate,rate,0.05) # 증가만 5%; 감소는 바로
+else:                                        # 줄어들 때
+    diff = Δc−Δa
+    perp = diff−N·dot(N,diff)
+    turn = dot(a−N,perp)
+    approach = max(turn,0)·(max(dot(a,B+0x114),0)·0.5) − dot(N,Δc)
+    atApproach = dot(N,Δa)
+    z = (r−0.5)/(−0.45) − max(r−limited,0)
+    w = clamp01((1−clamp01(z))·clamp01(approach/0.3))
+    wa = clamp01(atApproach/(−0.2))
+    rate = 0.1+0.9·pow0(w,bits0x3fc1dd88)       # 1.514573097229004
+    h = atApproach<−0.001 ? −1−approach/atApproach : 1
+    cap = h<0 ? 0.35 : 0.35+0.35·min(h,1)
+    rate = min(rate,cap)
+    lower = min(0.1+0.9·pow0(wa,bits0x3fc1dd88),0.35)
+    rate = L(rate,0.25,pow0(abs(dot(N,a)),bits0x3fde54e3)) # 1.736965537071228
+    if rate>0.25 && limited<pre: rate=L(rate,0.25,pow0(pre−limited,bits0x3fde54e3))
+    rate=max(rate,lower)
+C+0x14c0=rate
+b = clamp01((C+0x1760−0.1)/0.9)
+    # 원본: <=0.1→0, >=1→1, 사이에서는 (x+f32(-0.1))/f32(0.9)
+target = min(pre + b·(1−pre), hitDist/len)       # limited를 대입한 값이 아님
+rate = L(rate,0.25,b)
+C+0x14c0=rate; C+0x14c8=target
+C+0x14c4 = r + rate·(target−r)
+```
+
+정정 이유(2026-10-03 7차): 디컴파일 0x71024de590의 **`fmin s8,s9,s8`**(lower 후보를 0.35로 제한)가 전체 C 출력에 빠져 있었습니다. 감소분기의 `lower=0.1+0.9·pow0(wa,…)`만 옮기면 원본과 달라집니다. 또 목표 기록은 pre→rate 계산→b 보정 target 순서이고, 최종 b 보정에서 **limited 대신 pre**를 읽습니다. 두 조건을 판독한 뒤 독립 f32 구현이 원본과 일치했습니다.
+
+실행 범위: 원본 `0x71024dde2c..0x71024de70c`를 Unicorn으로 **640/640**, C+0x14f0/0x14bc/0x14f4/0x14c0/0x14c8/0x14c4 **6필드 모두 비트 일치**; bVar9 원본 조건 구간도 640/640. 원본 atan2Idx를 실행했고, logf/expf PLT는 별도 Unicorn에서 **원본 SDK 함수**로 실행해 반환했습니다(근사 libm 스텁 아님). 질의·필터·리그 상태 선택·전체 게임 프레임은 실행하지 않았습니다. 유한 입력을 대조했으며 NaN/inf 상태를 사격장 runtime 값으로 가정하지 않습니다.
+
+웹 반영 필요: impl/camera.md §2.2/§3의 bVar9=0 생략을 위 조건으로, 14ec와 질의 1·시작 오프셋 연결을 복원하고, 감소rate의 lower 0.35 상한과 pre/limited 순서를 유지해야 합니다. 코드는 수정하지 않았습니다. 미확정은 브로드페이즈 필터(§11), B+0x7a0/+0xad0의 상태별 생산자 의미, 실제 프레임에서의 입력 값 분기 선택입니다.
 
 ### 6.9 자이로 경로 (0x71024d9ae8 2241~2262행, 0x71024e0178) [판독-부분]
 
@@ -455,6 +566,54 @@ this+0x15e8 = −57.29578 · atan2f(G 행렬 성분)      // 자세에서 바로
 - 자이로를 켜거나 끈 프레임(본체+0x4ce/+0x4cf)에는 피치 속도·누적(+0x1504/+0x150c)과 보정 칸, p 추종 비율(+0x168=0.2)을 초기화합니다(5937~5966행) [판독].
 - 이 경로는 원본 실행으로 검증하지 않았고, 평활 누산기의 정확한 순서는 판독-부분입니다. 웹 이식 시 DeviceOrientation/Generic Sensor의 자세·각속도를 같은 형태(행렬·각속도)로 맞춘 뒤 위 식을 적용해야 합니다.
 
+
+#### 6.9.1 런타임 옵션·G 생산자 — 8차(2026-10-03) [판독]+[실행]
+
+정정: §4.2·§6.3에서 전역 `*0x71058ab398`(GOT0x710579df10)을 "세이브 데이터"라 부른 것은 객체 정체 오인입니다. 이것은 **현재 입력 런타임 I**이며, 0x71026c1dd0가 전역에 I를 등록합니다. PlayerInputSender 초기화0x7102631930는 sender+0x60=I+8을 저장합니다. 실제 생성0x71027cc960의0x71027cca54..0x71027ccb20은 I+8 입력 버퍼를 초기화하고 **O=I+0x3f88**에 옵션 vtable0x7105661000을 설치합니다. 그 슬롯7(+0x38)=**0x7102a0b044**입니다. 이 원본 함수는 source+0x70/+0x74 정수·+0x78/+0x79/+0x7a 바이트를 O의 같은 오프셋으로 복사합니다.
+
+| 원본 이름 | 옵션 O | 런타임 I | 소비 |
+|---|---|---|---|
+| CameraSpeedStickDigital | +0x70 | +0x3ff8 | 감도 k |
+| CameraSpeedGyroDigital | +0x74 | +0x3ffc | 감도 kG |
+| IsEnableGyro | +0x78 | +0x4000 | 본체+0x4cc |
+| IsReverseUD | +0x79 | +0x4001 | 스틱y 부호 |
+| IsReverseLR | +0x7a | +0x4002 | 스틱x 부호 |
+
+원본 이름은 옵션 방문/읽기0x7102a0b478·0x7102a0c68c의 문자열·각 저장 주소에 직접 대응합니다. 따라서 §6.4의 이름↔오프셋 [추정 — 강함]을 **[판독]**으로 정정합니다. 반전이 스틱에만 적용되는 기존 소비자 판독은 그대로입니다.
+
+갱신 **0x71026c1c38(I)**은 입력 관리자 `K=*0x71059a57d0`에서 `K+0x164 bit2`에 따라 K+0xd0/K+0x20 컨트롤러를 선택하고 그+0x17d를 읽습니다. 프로필 관리자 `S=*0x71058e2dc0`를 read-lock한 뒤 `profile=*(*(S+0xc8)+0x40)`를 고릅니다. +0x17d==1이면 source=profile+0x48, 아니면 profile+0xc8을 O.vt+0x38에 넘깁니다. 이것이 모드별 ControlOption 블록에서 **I+0x3ff8..0x4002까지의 복사 경로**입니다. 기록 객체0x710295b8a8의 Handheld+0x700/Other+0x780은 같은 프로필을 직렬화하는 다른 객체의 배치이고 I의 직접 오프셋이 아닙니다. UI 표시−5..5↔원본 정수0..20 변환은 이 복사와 별개로 여전히 미확정입니다.
+
+이후 `0x71026bf9f8(U=I+8)`가 센서 core0x71026c01d0을 호출하고, **G=U+0x3f50**의 자세9칸과 벡터3칸을 채웁니다. debug0x71058bbb8b/0x71058bbb8c가0이면 U+0x5ac의9 f32를 G+0x00..0x20에 그대로 복사, U+0x5a0의3 f32에 정확 상수비트**0x3d6e4baf**(≈0.058177646)를 곱해 G+0x24..0x2c에 씁니다. debug1이면 0x3cB ring(U+0x6e8/0x6f0/0x6f4/0x6f8)의 최신 항목+0x18/+0xc를 각각 사용합니다. core 전체는 6축 계열 샘플의 축 재배치·행렬·角速度 처리로 연결되지만 nn::hid 생산자 이름/물리 단위와 필터 전체의 실행 비트 일치는 아직 확인하지 않았습니다. 필드 복사만 확인하고 전체 자이로를 [실행]으로 승격하지 않습니다.
+
+근거 `analysis/decomp/r8_camweapon/{options.c,input.c,input_core.c,agent.c,options_vt_stores.asm,gyro_output.asm}`. `web/tools/r8_camweapon_emu.py`: 옵션복사84/84·필터 출력 버퍼→G 복사512/512 비트 일치(`analysis/completion/r8/camera_emu.json`). 옵션은 원본 전체함수 실행, 자이로는 입력core0x71026c01d0을 스텁한 합성 filtered buffer·debug0 검사입니다. 실제 컨트롤러 샘플/필터/pose/화면은 검사하지 않았습니다. 다음: typed plugin563fb38/563fb50의 샘플 writer와 SDK 6축 import, UI 감도 표시 변환.
+
+
+### 6.9.2 실제 nn::hid 6축 생산자와 G 배치 — 8차(2026-10-03) [판독]+[실행(복사)]
+
+정정: §6.9·§11의 G 행렬/각속도 필드 [추정]은 아래 생산자 연결로 해소합니다. §6.9.1의 “nn::hid 생산자 이름 미확인”은 이번 추적으로 정정하며, 필터 전체 실행·물리 단위의 SDK 정의는 여전히 별도 범위입니다.
+
+원본 main의 MOD0 dynsym/DT_JMPREL에서 `nn::hid::GetSixAxisSensorStates`(import794)→GOT0x71057706e8→PLT0x7103e9cd90을 찾았습니다. 직접 호출0x7103587b78의 함수 **0x7103587930**은 하드웨어 plugin vtable0x7105721158의 slot4입니다. RTTI0x7103587ce4가 태그0x71058c46f8을0x710563fb50으로 초기화하고 검사합니다. 이는 입력 core0x71026c01d0이 입력 관리자 plugin 목록에서 찾는 태그와 동일합니다. 단순한 구조체 배치 유사성으로 연결한 것이 아닙니다.
+
+생산자는 plugin P의 `P+0x58+index*0xe98`을 장치 Q로 사용합니다. 마지막 장치는 NpadID0x20이며, 스타일 선택 우선순위는 JoyDual(bit2)→FullKey(bit0)→Left(bit3)→Right(bit4)→Handheld(bit1)→없음입니다. 스타일이 바뀌면 Q+0x288에 최대2개 SixAxisSensorHandle, Q+0x280에 개수를 받고 센서를 시작합니다. 각 핸들의 최신16개 샘플을 **Q+0x290+i*0x600**에 GetSixAxisSensorStates로 받습니다. 샘플 stride0x60이며 i=0/1의 배열은 서로 겹치지 않습니다. core는 동일 Q의 첫 배열(+0x290), 또는 두 핸들 조건의 둘째(+0x890)를 읽습니다.
+
+원본 core의 샘플 오프셋은 가속도+0x10/+0x14/+0x18, 각속도+0x1c/+0x20/+0x24, 각도+0x28/+0x2c/+0x30, 자세 행렬+0x34..0x54입니다. 벡터 축은 `(−x,z,y)`로 옮기며 각도 ring은×360, 회전 적분에는×0.005와×2π가 있습니다. core의 행렬·각속도 필터 출력이 U+0x5ac(9 f32), U+0x5a0(3 f32)이며 §6.9.1 writer가 **G+0x00..0x20=자세3×3, G+0x24..0x2c=필터 각속도 벡터×0x3d6e4baf**로 전달합니다. G의 후반3칸을 필터 이전 센서값이라고 해석하면 안 됩니다.
+
+근거: `analysis/decomp/r8_camweapon/sixaxis.c`(생산자 전체664B), `input_core.c`, `input.c` 및 원본 vtable/RTTI·PLT 판독. 원본 writer 복사512/512는 §6.9.1 실행을 재사용합니다. 실제 센서 샘플·필터 전체·실제 입력값은 실행하지 않았고 물리 단위를 임의로 rad/s나deg/s로 붙이지 않습니다. 이 두 stable 질문은 G 생산자와 필드 배치에 관한 질문으로 해소하며, 전체 자이로 실행 검증 완료를 의미하지 않습니다.
+
+### 6.7.3 PlayerCamera 출력→활성 포저 — 8차(2026-10-03) [판독]+[실행]
+
+정정: §6.7·§11의 포저 연결 미확정은 [shake_rumble.md](shake_rumble.md) §3.2e의 새 원본 연결로 해소했습니다. `spl::Spectator`가 선택 플레이어의 B+0xa878 PlayerCamera에서0x71024e50c0으로 포즈를 얻고, S+0x298 보간기→S+0x2fc→내장 포저P=S+0x288(vt0x71056467f8)→CameraModule M+0xd4로 전달합니다. 일반 getter는 C+0x88이며 연결 액터가 활성화된 대체 포즈는 C+0xd4입니다. 실제 원본 getter→보간기→포저 복사 사슬512/512 비트 일치. device posture0x7105997898의 실행 중 값·최종 화면 좌우 부호는 이 연결로 해소되지 않습니다.
+
+### 6.9.3 감도 UI 표시와 원본 정수 — 8차(2026-10-03) [판독]+[데이터]+[실행]
+
+원본 **0x710341ef14(H,O)**는 gyro=O+0x74, stick=O+0x70 각각을 `u=clamp(f32((f32((v−10)/10)+1)×0.5),0,1)`로 바꿔 H+0x28/H+0x30의 게이지+0x1f0에 씁니다. **0x710314b05c(G)**는 게이지 방향+0x1b0==1이면 1−u, 그 밖이면 u를 선택해 Volume 애니 프레임을 `f32(frameSize×u)`로 설정합니다. 일반 옵션 경로0x710341f3d8도 프로필 블록을0x7102a0b044로 복사한 뒤 같은 변환을 적용합니다. §6.9.1의 UI 변환 미확정은 이 경로로 정정합니다.
+
+원본 `extracted/romfs/Layout/GuageScrollOption_00.Nin_NX_NVN.blarc.zs`(Guage 철자 그대로)의 bflyt는 `SplScrollBar`이며 T_Num_005..T_Num_05의 표시가 −5..+5입니다. Volume bflan은 frameSize100, P_Arrow_00의21단계가0,5,...100프레임에 있고 정수 라벨은0,10,...100에 배치됩니다. 따라서 v=0/10/20은 표시−5/0/+5이며, v 한 단계는 표시0.5입니다. `k=clamp((v−10)/10,−1,1)=s/5`가 카메라 원본 식과 연결됩니다. 실제 f32 프레임을 단순 정수5v로 바꾸면 반올림 순서가 달라질 수 있어 원본 연산 순서를 유지합니다.
+
+`web/tools/r8_camweapon_sensitivity_emu.py`로341ef14→314b05c 전체 원본을 vStick/vGyro=−2..22의625조합 실행했습니다. 정규화 값과 애니 프레임 **625/625 비트 일치**, mismatch0입니다(`analysis/completion/r8/sensitivity_emu.json`). frameCount getter0851c78은 원본 데이터100을 반환하는 스텁,341f050은 GUI 탐색/활성화 스텁이며 입력 버튼·프로필 저장·메뉴 동작은 실행하지 않았습니다. UI 전체 동작의 분석으로 확장하지 않습니다. 데이터 판독 결과는 `sensitivity_data.json`, 신규 원문은 `analysis/decomp/r8_camweapon/camera_sensitivity.c`입니다.
+
+웹 반영 필요: impl/camera.md의 감도UI/5 대응은 원본으로 확인되었습니다. 저장값은0..20, 표시값은−5..+5를 구분하고 f32 계산 순서를 보존합니다. 웹 코드는 수정하지 않았습니다.
+
 ## 7. 연출 카메라와의 연결
 
 - `this+0x1878` 모드 1: 곡선 표(0x7105738610)로 `t = frame/MaxX` 보간하며 현재 포즈에서 목표 포즈(this+0x1898.., 0x18c4..)로 이동(0x71024dc… 4010행 부근) [판독-부분]. 보간 곡선 이름은 `CameraModuleParam.Interpolation`(Linear30, EaseInOut30, Spectator30 등)으로 보입니다 [추정].
@@ -470,6 +629,39 @@ this+0x15e8 = −57.29578 · atan2f(G 행렬 성분)      // 자세에서 바로
   - (2) 벽 질의 생략: `DokanWarp+0x30 == 3`이고 진행률 `+0x110 / (float)+0x104 < 1`이면 붐 질의 두 번을 모두 건너뜁니다(§6.8) [판독].
   - (3) 조준 yaw 자동 회전(입력 함수 0x71024e0178, cam_main_full.c 5594~5790행): `+0x30 ∈ {1,2}`이고 `+0x124 != 0`이면 조준 방향을 `(+0xe8, +0xf0)` 쪽으로 각도 차 × rate(본체+0x26c 프레임 0이면 0.05, 1~5면 0.05+0.05·n/6, 6 이상 0.1)만큼 돌리고, `+0x30 == 3`(비행)이고 +0x88 != 0이면 `(+0x90, +0x98)` 쪽으로 진행률 t에 따라 `+0xc0 == 2`면 rate = 0.1·(t≤0.4 ? 0 : t≥0.85 ? 1 : ((t−0.4)/0.45)^2.4094), 그 밖이면 0.2·(t≤0.1 ? 0 : ((t−0.1)/0.9)^2.4094) [판독-부분; 지수 = 1/0.4150375. 디컴파일의 분기가 겹쳐 있어 `+0xc0 == 2`이고 t ≤ 0.4인 구간은 목표가 (+0xe8, +0xf0)·rate 0.1(LAB_71024e3554)일 수 있음 — asm 확인 필요]. 회전량 = 그 밖 입력 계수 × rate × (−부호 있는 각도 차), Y축 회전(사인표) [판독]. 같은 자리에서 본체+0x9314(→ +0x9304/+0x930c 쪽, rate = 본체+0xdc·0.04+0.03)와 this+0x1940(+0x38 ∈ {1,2,4} → +0xec/+0xf4 쪽, rate 0.15)도 같은 방식으로 덮어씁니다 [판독], 의미 [미확정].
   - DokanWarp+0x30 단계 값 1·2·3의 이름(준비·발사·비행)과 착지점 선택 화면은 미니맵([../ui/ui_minimap.md](../ui/ui_minimap.md) §6.5) [단계 이름 추정].
+
+### 7.1 첫 재시작의 방향 반전 조건 — 8차(2026-10-03) [판독]+[실행]
+
+§7과§11의 재시작 번호는기존원본열거함수0x710349fe34 근거([../combat/player_life.md](../combat/player_life.md) §6.11)로 cRespawn0,cFirst1,cWarp_CameraReset2,cWarp_CameraNoReset3,cVanish4,cCoopZombie5,cPlayGamePadRecorder6입니다. 이번신규원본은 **0x71027c9190·0x71027c9424**로, 기존27c95f0의조건을닫습니다.
+
+27c9190은현재scene문자열에따라LobbyVersus(group6528)+30==1, LobbyCoop(group6530)+30==1, LobbyLocal(group6538)+34∈{1,2}이면참입니다. 각그룹은`*(*(G=*58e42f8)+c8)` 아래이며출력index는Versus6520,Coop2c78,Localkind2=9170/kind1=6520입니다. 이 함수가참이면27c95f0도참입니다. 그밖현재scene가Plaza이면27c9424의문자열을검사합니다. Group6518+30==4는FromWalkSingle, ==2는이전scene(*582d908+168)에따라LobbyVersus/Coop/Local 또는BigWorld/SmallWorld/StaffRoll→Mission, 그밖빈문자열입니다.27c95f0는이문자열이비어있지않고접두From이아닐때만참입니다. 따라서Plaza의FromWalkSingle은거짓이고 위Lobby/Mission반환은참입니다. 이원본의주소/정수조건을상황이름으로넓혀해석하지않습니다.
+
+`r8_camweapon_main_restart_emu.py`로27c95f0→27c9190/27c9424 전체원본 **1512/1512** 일치,mismatch0(`restart_emu.json`). scene조회1323040만스텁하고scene6종·이전scene7종·그룹상태의모든조합을실행했습니다. 전체249cb60리셋과실제Lby초기값은실행하지않았습니다. 따라서param40==1에서방향−180°를선택하는정확한predicate가해소되며 실제씬에서어느입력이들어왔는지는별도입니다. 이전§7의각호출자상황이름미확정은이결과로일괄승격하지않습니다.
+
+### 7.2 Dokan 단계 생산자와 yaw 분기 정정 — 8차(2026-10-03) [판독]+[실행]
+
+D = PlayerDokanWarp(this+0x1920, VT0x5634ff8). 단계 값의 **동작 정의**를 원본 producer로 확정합니다. 아래 이름은 공식 열거 문자열을 새로 만들지 않고 번호별 동작을 설명한 것입니다.
+
+| D+0x30 | 원본 writer·동작 |
+|---|---|
+| 0 | 생성·reset/취소(250f4a4/250f6c8/2513bc0). 목표·타이머·궤도 상태를 초기화합니다. |
+| 1 | **요청·발사 전 준비**: 새2512e84가 D+100/f4 준비 countdown, 목표 위치/상대 액터, 옵션 b0..cc를 기록하며1을 씁니다. |
+| 2 | **본체가 준비 신호를 승인한 상태**: 플레이어 메인24818e4..1910은 D가1/2이고 스택+4ec 신호가 참일 때2를 씁니다. 같은 자리에서 D130에 스택+4e8 상태를 저장합니다. 1/2 모두 준비 countdown이 끝나면2513764로 갑니다. 이 설명은 신호의 공식 열거명·메뉴 이름을 추정하지 않습니다. |
+| 3 | **궤도 비행**: 새2513764가 궤도 구성, 감쇠 D11c, 총 가중 프레임 D104, 초기 진행량0, 남은 프레임 Df4를 설정하고3을 씁니다(2513834). 250f6c8은 궤도 위치로 본체 속도를 만들며110/114에 진행량을 누적합니다. |
+| 4 | **도착 후 처리**: 250f6c8의25113ac이 비행 종료·도착 갱신 뒤4를 쓰고, 도착 후 countdown과 초기화를 거쳐0으로 돌아갑니다. |
+
+**yaw(24e0178) 정정**: 기존 §7 (3)은 중첩 디컴파일 결과를 식으로 옮기면서 두 가지 분기를 잘못 적었습니다. 새 원본 명령 대조와 구간 실행448건으로 다음을 확정했습니다. 기본 도입 계수는 `initialRate×0.03`이고, target yaw가 설정되는 분기에서만 덮어씁니다.
+
+- D30==3, D88!=0, Dc0==2, `t=min(D110/int(D104),1)≤0.4`: **목표 = (De8,Df0), rate=0.1**(24e3404→24e3554). rate0 또는 착지 목표가 아닙니다.
+- 같은 조건에서 t>0.4: 목표=(D90,D98). rate=`0.1×pow0((t−0.4)/bits0x3ee66667,1/bits0x3ed47fcc)`; t≥bits0x3f59999a(0.85)이면0.1.
+- Dc0!=2이고 t≤0.1: target yaw를 새로 계산하지 않으며 **initialRate×0.03과 기존 angle을 보존**(24e3d18). rate0이 아닙니다.
+- Dc0!=2이고 t>0.1: 목표=(D90,D98), rate=`0.2×pow0((t−0.1)/bits0x3f666666,1/bits0x3ed47fcc)`; t≥1이면0.2. `pow0`는 |x|<bits0x3a83126f이면0, 그 밖 SDK logf/expf로 계산합니다.
+
+원본 atan2 입력 cross/dot, 목표 선택, rate f32가 **448 PASS**, 본체 승인 writer **12 PASS**, 불일치0. SDK 수학 함수도 원본 모듈에서 실행했습니다. 범위는 yaw24e3394..35f4 및 바깥 분기3d08/404c/4064와 승인 writer 블록입니다. 전체 Warp 궤도·장면 전이는 실행하지 않았습니다. 새 디컴파일 `analysis/decomp/r8_camweapon/dokan_state.c`(2512e84/2513764/2511bac/2513878), `splash_wall.c`(250f6c8); 원문과 실행은 `camera_jump_dokan_emu.json`. 기존 PlayerDokanWarp 소비자(오징어 블렌드·붐 질의 생략) 판독은 재사용했습니다. 본체9314·별도this1940의 상황 의미는 이 결과로 해소되지 않습니다.
+
+### 7.3 카메라가 읽는 표면 법선 Y — 8차(2026-10-03) [판독]+[실행]
+
+웹 구현 질문의 B+0x1cc는 **B+0x1c8..0x1d0 표면 법선의 Y 성분**입니다. 8차 새 원본 triangle-plane `0x7103c49f10`이 실제 사격장4mesh의3833face에서15332개f32 field를 계산(불일치0)하고, 기존3c4988c normalize→2c5a3c8의 최소 Ny/가장 높은 접점 선택→PCb8→본체1c8/1cc/1d0 저장으로 이어집니다. 상세와 원본 winding은 [player_state.md §7.3.4](../player/player_state.md), `analysis/completion/r8/player_face_normal_emu.json`에 기록되어 있습니다. 즉 카메라의 표면 경사 소비를 위해 웹 surfN.y와 연결해도 됩니다. 접촉 solver의 manifold normal과 상대 형상 기하의 surface normal은 서로 다른 값이므로 바꾸어 쓰지 않습니다. 실데이터 face와 identity SRT wrapper의 합성 실행이며 전체 native solver 접촉을 실행한 결과는 아닙니다.
 
 ## 8. 다른 기능과의 상호작용
 
@@ -506,7 +698,9 @@ p=0/−1/+1 거리 6.8/7.2/4.0, p=0 높이 2.25, H·F·D·S p=0 좌우 기울기
 
 2026-10-03 [r5 camweapon]: `PY web/tools/r5_camweapon_boom_emu.py` — 원본 팩토리 0x710344af54(case 0xf) → 월드 생성자 복사 구간 → PlayerCamera 팩토리 사슬 실행, 붐 구 반경 0x3e99999a(0.3), 경계 12/12 독립 식과 비트 일치 [실행]. 스텁: malloc 0x710083d2f0, memset 0x7103e99f10, 그 밖 PLT(0 반환), 0x7103585094, 질의 할당 0x7103a62e78, 형상 래퍼 0x7103a72e1c(descriptor 캡처). 실행하지 않은 것: 엔진 모듈 생성 도우미 0x7103dad17c·Phive init 0x7103db346c 전체(판독만), 구 형상 캐스트·필터. 결과 `analysis/completion/r5/camweapon_boom_emu.json`.
 
-검증하지 않은 범위: 원본 실행 화면과의 비교, 입력 경로의 분기 선택(조작 상태 플래그), 자이로 경로 수치, 붐 거리 비율 식 전체(재구현·실행 없음), 출력 좌표계의 좌우 부호, 사망 메시지를 받는 액터 쪽, yaw 축 스케일·블렌드(판독만, 실행 없음).
+2026-10-03 7차 검증: `.venv/Scripts/python web/tools/r7_camweapon_emu.py` → 붐 640/640(6필드 비트), bVar9 640/640, 전진 계수 480/480, 포즈→논리 투영 256/256(행렬 16원소 비트) PASS. 원본 SDK logf/expf/sinf/cosf/tanf를 별도 Unicorn으로 실행해 PLT 반환을 연결했고, 기타 함수 스텁은 없습니다. 출력 `analysis/completion/r7/camweapon_emu.json`; 실제 명령·초기 도구 실패는 `analysis/completion/r7/camweapon_commands.md`. 자세/입력 상태·질의 결과는 유한 합성 값으로 공급했습니다. 기존 LookAt 실행 근거는 r5 paint를 재사용했고 이번에는 새 포즈/투영 사슬만 추가 검증했습니다.
+
+검증하지 않은 범위: 원본 실행 화면과의 비교, 입력 경로의 분기 선택(조작 상태 플래그), 자이로 경로 수치·G writer, 붐 형상 질의·필터 및 전체 프레임, device posture 실행 중 값·PlayerCamera 포저 연결·최종 화면 좌우 부호, 사망 메시지를 받는 액터 쪽, yaw 축 스케일·블렌드(판독만).
 
 ## 11. 미확정
 
@@ -518,11 +712,55 @@ p=0/−1/+1 거리 6.8/7.2/4.0, p=0 높이 2.25, H·F·D·S p=0 좌우 기울기
 | 슬롯 호출 시점 | 해소(2026-10-03, §3 [판독, physics 재사용]): 메인 갱신은 플레이어 슬롯 19 안. 남은 것: 슬롯 19 안에서 카메라 메인과 잉크액션 발사의 앞뒤(0x7102483134) |
 | 사람 FOV 목표 본체+0x6dc | 해소(2026-10-03, §4.2 [판독]): 재시작 0x71023547bc가 55.0 |
 | 붐 질의 브로드페이즈 필터 | Q+0x60 필터 객체 값은 판독(§6.8). 6차 진행(§6.8): 캐스트 대상 월드 = Phive 월드 vt+0x60(층) 결과 W, W+0xc0 = hknpWorld(월드 생성자 0x7103ac78c0, 0x7103ac6a20가 만듦), 질의 구조의 필터 칸 = W+0xd0(생성자 0x7103ac72fc에서 0, 다른 writer 미발견), 형상 태그 코덱 = W+0x110(0x7103acc234). Q+0x60 필터 객체 클래스(vt 0x71057451a0)는 형식 정보만 있고 판정 가상 함수가 없음. 다음: W+0xd0 writer, hknpWorld vt+0x3f8 안 필터 호출 |
-| 감도 UI 표시값 ↔ 세이브 0..20 | 옵션 로더 0x7102a0c68c(+0x70/+0x74) 확인. 6차: main 전체에서 `str w, [x, #0x3ff8]` 저장 0건(읽기 0x71024d660c·0x71024d9788만) → 세이브 +0x3ff8은 묶음 상대 주소(블록 시작+0x70 등)로 쓰일 가능성, 블록 기준 주소 미확인. 다음: 0x7102a0b478·0x7102a0ccb4 호출자가 넘기는 블록 주소, UI 옵션 화면([ui]) |
-| PlayerCamera → 카메라 모듈 포저 연결 | 모듈 setPoser 0x7101010de0(this+0x120 = 포저, 포저 vt+0x30(&this+0xd4)) 판독. 정정(2026-10-03 6차): 0x710233dbd4/0x710233e050/0x710233e270·+0x160 포저(0x710233c414)는 상태 `State::Control/SelfTimer/Capture/Amiibo`를 가진 촬영(사진·amiibo) 컨트롤러의 포저라 플레이어 카메라 경로가 아님 [판독]. setPoser 직접 호출 36곳 + 모듈+0x120 인라인 쓰기 4곳(0x7100fc76ac 가상 함수, 0x7102121bcc, 0x710221e1c8 SupplyPoint, 0x71022221dc) 목록은 shake_rumble.md §3.2b. 다음: 0x7100fc7654(요청 객체+0x28 포저, +0x40 보간 이름)의 vtable·호출자, 0x7102121034 |
+| ~~감도 UI 표시값 ↔ 원본 정수 0..20~~ — 해소(8차 §6.9.3, 원본625PASS+Volume 데이터) | 옵션 로더 0x7102a0c68c(+0x70/+0x74) 확인. 6차: main 전체에서 `str w, [x, #0x3ff8]` 저장 0건(읽기 0x71024d660c·0x71024d9788만) → 세이브 +0x3ff8은 묶음 상대 주소(블록 시작+0x70 등)로 쓰일 가능성, 블록 기준 주소 미확인. 다음: 0x7102a0b478·0x7102a0ccb4 호출자가 넘기는 블록 주소, UI 옵션 화면([ui]) |
+| ~~PlayerCamera → 카메라 모듈 포저 연결~~ — 해소(8차 §6.7.3) | 모듈 setPoser 0x7101010de0(this+0x120 = 포저, 포저 vt+0x30(&this+0xd4)) 판독. 정정(2026-10-03 6차): 0x710233dbd4/0x710233e050/0x710233e270·+0x160 포저(0x710233c414)는 상태 `State::Control/SelfTimer/Capture/Amiibo`를 가진 촬영(사진·amiibo) 컨트롤러의 포저라 플레이어 카메라 경로가 아님 [판독]. setPoser 직접 호출 36곳 + 모듈+0x120 인라인 쓰기 4곳(0x7100fc76ac 가상 함수, 0x7102121bcc, 0x710221e1c8 SupplyPoint, 0x71022221dc) 목록은 shake_rumble.md §3.2b. 다음: 0x7100fc7654(요청 객체+0x28 포저, +0x40 보간 이름)의 vtable·호출자, 0x7102121034 |
 | ~~반전 설정(IsReverseUD/LR) 적용 위치~~ | 해소(2026-10-02 [camrest]): 0x71024a73b8, §6.4 — 원본 에뮬 4 PASS. 남은 것: 이름↔오프셋은 직렬화 순서·축 의미 대응 [추정 — 강함] |
-| 형상 질의(this+0x1d0) — ~~결과가 거리에 주는 영향~~ 해소(§6.8: Q+0x54 적중 거리 → 비율 this+0x14c8/+0x14c4 → pos = 피벗 + dir·len·비율). ~~형상·반경~~ 해소(구, 런타임 0.3 [실행]). 남은 것: 브로드페이즈 필터, 줄어들 때 rate·복귀 속도 식 전사 | 위 "붐 질의 브로드페이즈 필터" 행, cam_main_full.c 2960~3240행 |
-| 자이로 원천 객체 G 필드 배치(행렬/각속도) | `*(this+0x1928)+0x60` 클래스, nn::hid 6축 센서 복사 함수 |
-| 재시작 종류 번호↔이름, 0x71027c95f0 조건 | [life] 재시작 문서 |
+| 형상 질의(this+0x1d0) — ~~결과가 거리에 주는 영향~~ 해소(§6.8: Q+0x54 적중 거리 → 비율 this+0x14c8/+0x14c4 → pos = 피벗 + dir·len·비율). ~~형상·반경~~ 해소(구, 런타임 0.3 [실행]). ~~줄어들 때 rate·복귀 속도 식 전사~~ 해소(7차 §6.8.1, 원본 구간640/640). 남은 것: 브로드페이즈 필터·실제 프레임 질의 | 위 "붐 질의 브로드페이즈 필터" 행, Havok vt+0x3f8 |
+| ~~자이로 원천 객체 G 필드 배치(행렬/각속도)~~ — 해소(8차 §6.9.2) | `*(this+0x1928)+0x60` 클래스, nn::hid 6축 센서 복사 함수. 7차는 붐·투영을 우선했고 G writer 신규 조사 미착수; 근거 없이 필드 이름을 확정하지 않음 |
+| 최종 화면의 좌우 부호 | 논리 뷰/투영은 §6.7로 해소. device posture 전역0x7105997898→M+0x2ac writer, 활성 포저 vt+0x30 연결 미확정 |
+| ~~재시작 종류 번호↔이름, 0x71027c95f0 조건~~ — 해소(8차 §7.1) | [life] 재시작 문서 |
 | 슈퍼점프 비행 중 카메라 — 해소(부분, §7): this+0x1920 = PlayerDokanWarp, 단계 1·2 오징어 블렌드, 단계 3 진행률<1 붐 질의 생략, 착지 방향 자동 yaw. 남은 것: 단계 값 이름, `+0xc0==2`·t≤0.4 분기 목표 | PlayerDokanWarp(vtable 0x7105634ff8) 갱신 함수의 +0x30 writer, 0x71024e0178 해당 asm |
 | 사망 카메라 — 부분(§7): T+8 사망 대기 시작 프레임에 Pos/At/ShotDirXZ 메시지를 연결 액터(this+0x1698)로 1회 전송. 남은 것: 받는 액터·사망 화면 카메라 식, 해시 0x6c2b6a0f 메시지 | 메시지 vtable 0x71056250f8 를 처리하는 수신 함수, this+0x1698 핸들 writer |
+
+### 7.5. 다른 플레이어 핸들과 사망 포즈 수신 (2026-10-03 r9)
+
+[판독]+[실행]: 24e5f6c는 다른 플레이어 번호에서 G+b0 배열의 액터 핸들을 C1698에 연결합니다. 실제 수신자는 SplPlayer 234f518의6c2b6a0e case이며, 수신 PlayerCamera에 Pos/At/ShotDirXZ/Pitch를 복사하고 ed=1, rate0으로 시작합니다. 6c2b6a0f는 ec/ed/ef를 해제합니다. 원본 수신1024·해제3·보간2048, 총51200필드 비트 일치. [r9_lifecycle.md](r9_lifecycle.md) §3~§10에 식·수명·실행 경계를 기록했습니다. 정정 이유: 예전에는 수신자를 찾지 못해 전용 DeadCamera 액터를 후보로 삼았으나 다른 플레이어 액터의 실제 receiver를 찾았습니다. 이전 문장을 보존합니다. 사망 화면 전체는2676548 대체 포즈 생산자 연결이 남아 [미확정]입니다.
+
+### 7.6. mode1 커브 정정 (2026-10-03 r9)
+
+[판독]+[실행]+[데이터] C1970은 spl__PlayerCameraPeriscopeParam입니다. mode1 위치 추종은 P90 PlayerFollowRate, 방향 보간은 P30 CameraAttInterpolateCurve. 진행 인자는 C1894이며 Type<3일 때 MaxX로 나눕니다. 원본 생성자2355fc4+visitor235610c에서 6개 이름·오프셋·기본 커브가 일치했습니다. 실제 SplPlayer의 FollowRate는 Hermit [0,0,0.1,0.1081760972738266], 방향 커브 기본값은 Linear [0,1], MaxX1입니다. 기존 CameraModuleParam.Interpolation 추정 문장은 역사로 보존하며 실제 타입 연결 때문에 정정합니다. 상세·실행 경계는 [r9_periscope_param.md](r9_periscope_param.md) §3~11.
+
+### 7.7. 오징어 전역 모드·수직 속도 비율 정정 (2026-10-03 r9)
+
+[판독]+[실행]+[데이터] G143d0은2643cd4가Scene_Coop 태그 또는 LobbyCoop(58e87cc)를 복사하고, LobbyLocal 종류2이면1로 씁니다. 실제 tag113행+Local 설정452조합 모두 일치하며 LobbyVersus는0입니다. 수직 r의73c는 일반 점프/중력 속도,754는 벽 차지 점프 임펄스, 분모 X28+e8은 카메라가 아니라58bbc60 Jump初速0.115입니다. 신규 원본ratio4096 비트 일치. 원문 §4.1/§6.6의 남은 의미 질문을 정정하고 이전 문장은 보존합니다. 상세 [r9_state_sources.md](r9_state_sources.md) §3~11. B9210/9212 상황을 포함한 큰 묶음은 아직 조사중입니다.
+
+
+### 7.8. 다른 플레이어 snapshot 실제 공급자와 사망 대체 포즈 (2026-10-03 r9)
+
+[판독]+[실행] §7의 기존 “받는 액터·사망 화면 카메라 식 미확정” 및 §7.5의 interface 공급자 미확정은 **새 factory24e6184→snapshot VT5633a90→main publisher24dffd8→Behavior list slot28/30 교환→2676548→C+d4→24e50c0**으로 해소합니다. 해당 수신 액터는 다른 SplPlayer이며 수신 PlayerCamera에서 일반 리그 후 수신 Pos/At을 §7.5의 f32 식으로 보간합니다. 이 객체의 C88 Pose/ec를 snapshot에 게시하며, 원본 getter는 연결 액터의 snapshot 활성일 때 자기 C+d4의 대체 Pose를 선택하고 그렇지 않으면 자기 C88을 선택합니다.
+
+S는0xc8바이트 별도 객체로 front(S18)/back(S6c) 두 상태, 상태+8에Pose(0x4c), c0/c1 교환요청을 둡니다. framecontext의 packed3바이트 조건에 따라 publisher/reader는 반대 버퍼를 고릅니다. 실제 Behavior 디스패처0ffdaa4 slot28=24e7018과0ffdb6c slot30=24e7070이 요청된 방향으로 필드 청크를 복사하고 요청을 내립니다. “다른 플레이어 원격 포즈 getter”만 추정한 이전 설명을 actual 원본 생성/공급 경로로 대체하며 기존 문장은 역사 기록으로 남깁니다.
+
+원본 factory1/publish1024/리스트 교환1024/reader2048/maincopy1024/getter1024/reset3 불일치0, fault/null/auto-page0. malloc·thread-valid·handle-lookup만 경계이며 전체프레임/렌더러/실제 솔로 사망 사건은 실행 범위가 아닙니다. 상세 식·복사패딩·교환조건·한계: [r9_lifecycle.md](r9_lifecycle.md) §7·10·11. 증거 `analysis/completion/r9/camera_snapshot_emu.json`. L391/L447의 받는 쪽 전체 논리 질문은 해소, 최종 화면부호/5997898 posture 질문 L226은 별도 조사중입니다.
+
+
+### 7.9 9차 붐 위치 생략과 실제 구 캐스트(2026-10-03)
+
+[판독]+[실행] Bde0>=1은 새 위치를 고르는 분기가 아니라24dee64..6c에서24def5c로 넘어가 기존 `*(C+60)` xyz 쓰기를 건너뛰는 조건입니다. 이후 C1760 가중치로 현재 출력에서C1770의 제한 전 이번 프레임 위치로 혼합하고, at/최종 보정은 계속합니다. 새 원본 gate/blend2048·24576f32 독립 비트 일치0. 큰 상태에 따른 이전 출력 출처는 해당 선택 경로를 따르며 de0 자체가C1770를 복사한다고 해석하지 않습니다. 기존 §7의 위치 출처 미확정 질문은 이 쓰기·보존·후속 소비로 해소합니다.
+
+새 factory→nativeWorld0a492e8→BroadPhase0adb134→09af088→0947aec→0948f30의 구/캡슐 적중 비율·거리 1사례 비트 일치도 확보했습니다. 실제 Entity filter를 연결하면 생성 직후 Q필터+c=0에 의해 후보가 제외됩니다. 활성 마스크 producer가 남아 실제 사격장 필터 전체는 조사중입니다. 상세11절 문서와 경계는 [r9_boom_query.md](r9_boom_query.md) §3~11, analysis/completion/r9/camera_boom_{probe,filter_probe,gate_emu}.json.
+
+
+### 6.11 9차 충돌 밀림 오프셋 소비(2026-10-03)
+
+[판독]+[실행] C144..14c의 원본24da320..5a4를 새로2048사례/12288f32 비트 일치0 검증했습니다. 기존 offset 감쇠→리그/머리 상대 변화와B210잔차 가산→최종 속도 반대성분 제거→양의 aim성분 보정→C120추종위치 차감 순서입니다. Be0c>0이면 감쇠만 합니다. B210producer는 기존 player_state§7.3.3 실행근거를 재사용합니다. 전체식·입력경계·원본역순Ny보간값은 [r9_collision_spring.md](r9_collision_spring.md) §3~11. impl/cameraL94의0 근사 질문을 해소하며 코드/impl은 그대로 두었습니다.
+
+
+### 7.10 9차 리셋 진입·모듈 포즈 정정(2026-10-03)
+
+[판독]+[실행] 실제reset PC2472ccc는24719d4가아닌**2472c4c**의prologue안에있고2353a18(slot15)이호출합니다. 모듈 유효pose 적용24e4bc8은6c2b6a28(새설정공급2f3cebc) 및41cc9200(새Lobby메뉴전환3caller)로진입합니다. 이를Y버튼전용으로단정하지않습니다. 원본whole활성2048/무효64·28672f32bit0,reset만경계. quaternionXZ방향→reset→B544피치→선택gyro슬롯오프셋순서입니다. **상한45**가Ghidra의unreachable제거로누락돼실제FMIN명령/211사례로정정했습니다. 상세11절 [r9_reset_contexts.md](r9_reset_contexts.md). 전체호출상황L389는slot15상위lifecycle/moduleposewriter가남아조사중유지. 기존PlayerRestartType349fe34enum은확정근거재사용으로'추정'을정정하며옛문장은보존합니다.
+
+
+### 6.12 9차 붐 활성 필터 생산자·법선 정정(2026-10-03)
+
+[판독]+[실행] reset24d6598의24d6d94..6dc8가C2e0의layer를7(SplCamera),C2e4mask를8(Ground)로씁니다. 기존factory-only마스크0은reset전값이라활성writer미확정을정정합니다. 원본producer→actualEntityfilter/provider/codec→nativebroadSpherecast→SphereCapsule→pointiterator에서hit1,frac3e8ccccc/dist3f8ccccc비트일치,null/auto/fault0. 기존r5의world21c=.01사슬은재사용(.3반경). 원본법선선택은entrybit0=1이면pointN,0이면−pointN으로항상반전이아닙니다. [r9_boom_query.md](r9_boom_query.md) §3.1·6.1·10.1·11.1에전체필터계약과FieldRigidBody/TAG0whole잔여를구분했습니다. L352/implL114는형상·반경·질의필터질문을해소하고,실제stage전체가포함된큰묶음은계속조사중입니다.

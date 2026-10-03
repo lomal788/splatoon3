@@ -72,6 +72,7 @@
 | `_2cl` | BC4 | `_cp0` | `cTexCompPaint` — 몸에 묻은 잉크 표시 마스크(R + `two_color_complement_paint_intensity` − 1 이 BlitzUBO0 기준을 넘으면 잉크 재질로 셰이딩, 차분으로 범프) [판독 — [shaders.md §3.6.3](shaders.md)] |
 | `_Trm` | BC1 sRGB | `_t0` | 투과 색 [데이터: `enable_taransmission`(원문 철자), `enable_transmission_map`] |
 | `_Thc` | BC4 | `_re2` 등 | 두께(SSS) [추정: 옵션 `enable_thickness_map`, `restex_id_thickness_map`] |
+| ↳ 정정2026-10-03r8 [데이터]+[판독] | 원본Player00 M_Body Thcmapping와program5549/1115 확인 | _re2=cTexResource2 | **R을읽고1−R로투과/산란항에곱하는마스크**,잉크대체k1. 길이로환산하지않음. [calc_thickness_runtime.md §6](calc_thickness_runtime.md) |
 | `_MAi`, `_MBi`, `_Fxm`, `_MltA` | | `_fm0`/`_re0`/`_re1` | 슬롯 의미는 확정: `_fm0`=cTexSfxMask, `_re0..2`=cTexResource0..2(범용, `restex_id_*` 옵션이 용도 결정) [데이터 — [shaders.md §3.2](shaders.md)]. 각 텍스처 채널의 쓰임은 재질별 프로그램 역번역에서 확인해야 함 [미확정] |
 | `.0`, `.00` 번호 | | | 텍스처 패턴 애니 프레임(예 `M_Eye_Alb.00~.21` = 눈 색, `M_Eyelids_Opa.0~3` = 깜빡임) [데이터] |
 
@@ -160,11 +161,36 @@ glb 규칙은 mpj 변환기와 같습니다: 노드 0 `<모델>__model`, 뼈 = �
 - 선택 0x71010fe270(모델 생성 콜백 0x710110f8cc 가 호출): ① 모델 이름별 표(+0x30 트리) → ② 없으면 이름 끝 `_Far` = SuffixFar, 앞 `Fld_` = PrefixFld, `FldBG_` = PrefixFldBG, `Kbi_` = PrefixKbi, 그 밖 Default. 행 +8 = **End**, +0xc = **Start** 를 읽어 유닛마다(vt+0x228 개수, +0x38 배열 0x50 B 간격) **[Start, 2·Start − End, 1/(End − Start)]** 를 기록(Start == End 면 세 번째 값 1) [판독]. 정정(gfx4): 이전 판은 +8 = Start 로 보아 [End, 2End−Start, 1/(Start−End)] 라 적었으나, RSDB 행 적재 0x71013de244~0x71013de28c 가 `EndDistFromBounding` → 행+8, `StartDistFromBounding` → 행+0xc 에 쓰고(16 B 행 = 이름 8 B + End + Start), 리플렉션 0x71011bb6a0 도 End +0x30 / Start +0x34 로 같은 순서다 [판독]. 조회 0x71013df5e4 가 돌려주는 포인터가 이 행(또는 객체+0x28)이라는 것은 [추정: 두 배치 모두 +8=End 로 일치]. 예: Default(Start 20, End 50) → [20, −10, 1/30], SuffixFar(500/2000) → [500, −1000, 1/1500]. 필드 이름 `…DistFromBounding` 으로 보아 거리는 바운딩(구) 표면 기준으로 본다 [추정].
 - 플레이어 모델은 Default(20/50)를 받는 것으로 본다 [추정]. 이 세 값을 읽는 거리 계산과 셰이프 LOD 3단의 연결은 [미확정] (gfx4 조사: 유닛 클래스 vtable 미식별 — 0x710110f8cc 는 모델 생성 리스너 보조 vtable 0x7105560e38 슬롯 0x58 이고, 같은 슬롯 호출이 *0x7105812710 의 리스너에도 있음. main 문자열에 `SLOD_TYPE`·`FROM_SLOD_TYPE`·`TO_SLOD_TYPE`·`SLOD_TRANSITION_TYPE`·`PERFORM_LOD_CHECK`, Hoian_UBER 옵션에 `fade_dither_alpha`·`enable_model_dither_*` 가 있어 디더 페이드 경로 후보 [데이터]) — 웹은 당분간 LOD0 고정 또는 three.js `LOD` 에 위 임계를 그대로 넣는 근사.
 
+
+**r8 정정(2026-10-03)**: 거리 reader/전환식은 새 BfresModel 생성`3689a28`→배열 생성`3777354`→정적`3777f28`/애니 경계구`377e3a8`→선택기`3788760`으로 해소했다 [판독]+[실행]. 거리=뷰 입력`+8`−(경계구 뷰Z+반경), Start와 전역 보정으로 정규화하며, 게임은 거리 방식1/히스테리시스10을 쓴다. 리프8192+정적 패킷2048 전체 바이트 일치. [lod_runtime.md §3~§11](lod_runtime.md). 기존 PlayerDefault 및 실제GPU3단 소비를 묶은 문장은 아직 **부분 해소**다. 원점 거리20/50만으로 대체하지 않는다.
+
+**r8 후속 정정(2026-10-03, 실제 메시 연결)**: `10fde9c`은 LODThreshold36행의 이름을 그대로 해시 맵에 넣는다. 실제 FMDL 이름 Player00/00_Hlf/01/02/02_Hlf/Squid/Octopus는 예외 키·접두·접미에 없으므로 Default20/50이다 [판독]+[데이터]+[실행]. 패킷→큐36ab4e8→36ba1a0→ShapeVT60/36bf13c→ResShape 메시[stage]→089153c까지 실제3단 연결도 해소했다. 이름48/원본 큐252/실제 원본 메시 발행 인자252 불일치0. **패킷+25 일반단계와+26 별도 오프셋 적용 단계를 구분**한다. GPU 픽셀·동적 포즈·디더 옵션 공급은 별도 미확정이다. [lod_runtime.md §7.1~§11](lod_runtime.md). 기존 문자열 디더 후보만으로 동작을 확정하지 않는다.
+
 ## 8. 미확정과 필요한 근거
 
 | 항목 | 이유 | 필요한 것 |
 |---|---|---|
 | ~~셰이더 옵션 기본값·슬롯 의미~~ | 해소: 옵션 기본값·샘플러 심볼·Mat 오프셋 [데이터], 팀색·2cl 사용 [판독] — [shaders.md](shaders.md) | `_MAi`/`_Fxm`/`_MltA` 채널별 쓰임은 해당 재질 프로그램(`analysis/shader/hoian_uber/*.frag`)에서 읽으면 됨 |
 | ~~`texcoord_select_*` 값 의미~~ | 해소: 0→`_u0`+tex_mtx0, 2→`_u2`+tex_mtx1 [판독], 3은 [추정] | 값 3 재질 역번역 |
+
+
+**r8 정정(2026-10-03)**: 남은 선택3은 Product 프로그램2485 활성 발광맵의 정점/픽셀 경로로 `_u3+tex_mtx2`를 확정했다 [판독]. [shader_uv_selection.md §3~§11](shader_uv_selection.md).
 | Maya 스케일 보정 영향 | 클립별 스케일 커브 미조사 | 덤프 `--keys`로 스케일 키 ≠1 클립 집계 |
-| LOD 전환식 | 부분 판독: 표 선택·기록까지(§7.1, 필드 순서 정정됨). 거리 계산 소비처 [미확정] | 유닛 레코드(+0x38 배열, 0x50 B)의 [0]/[8] 을 읽는 gsys 셰이프 그리기 코드(vt+0x228 클래스 vtable 부터) |
+| ~~LOD 전환식~~ | r8 해소 [판독]+[실행]: 실제 배열 생성·reader·거리/화면·히스테리시스·최종 패킷 단계 식 | [lod_runtime.md §3~§11](lod_runtime.md),8192+2048 nostub |
+
+## 9. 웹 구현 연결
+
+`impl/assets.md`와`impl/render.md`의 근사/미반영 항목은 변경하지 않는다. 확정된 원본 텍스처 채널·UV·클립 정보를 구현할 때는 각 원본 근거 문서와 함께 읽는다. LOD 소비와 Maya 스케일 보정의 남은 질문은 §8 상태를 유지한다.
+
+## 10. 검증 범위와 한계
+
+§6의 glTF 구조·바인드 오차 검사는 변환 결과의 검사이며 원본 GPU 셰이딩 또는 전체 원본 애니메이션 실행과 같지 않다. r8 셰이더 근거는 원본 Product 명령 역번역·BFRES 바인딩 데이터의 판독이다. 새 원본 함수 실행은 개별 근거 문서에서 함수·입력·스텁 경계를 따로 기록한다.
+
+## 11. r8 원본 소비 정정 기록
+
+2026-10-03 `_Thc` 두께/SSS추정은실제몸5549/얼굴1115의1−R consumer·BFRES restex_id4 binding으로확정했다[판독]+[데이터]. GPU픽셀실행아님. 모든리소스채널/LOD는별도미확정이다. [calc_thickness_runtime.md §2~§11](calc_thickness_runtime.md). GearAlphaMask 몸_op0결합은기존r6SHARED552/103F434proof가이미있으므로이번새완료로계상하지않았다.
+
+
+### 11. r9 스케일 커브 전수 데이터 보강 (2026-10-03)
+
+`graphics_bfres2gltf.exe dump --keys analysis/completion/r9/graphics_player_fska_keys.json analysis/assets_work/raw/Player00.bfres`를실제로실행했다 [데이터].1044skeletalclips전체scaleMode=Maya. base S≠(1,1,1)또는curve target04/08/0C가있는clip635개,해당basebone1603개/curvebone1778개다. transformflag`SegmentScaleCompensate`가실제저장되며요약은`analysis/completion/r9/graphics_player_scale_summary.json`에있다. 단순curvequantization의scale과bone S를혼동하지않았다. **SDKMaya/SSCconsumer및자식뼈최종행렬대조는아직미확정**이므로§8 Maya영향전체질문을확정으로계수하지않는다.345MB키출력은보존했다.

@@ -130,6 +130,12 @@ v53(0x1100 B) 표와 순서는 같고, 정적 블록에서 키 개수 u32 8개(0
 | Samplers ×6 | 0xD90–0xE50 (0x20 간격, +0 u64 텍스처 ID) | [데이터: GTNT ID 일치] |
 | TexAnim ×6, reserved | 0xE50–0xEF0 | [추정] |
 
+### 2.2.2.1 r8 정정·신규 소비 근거 (2026-10-03)
+
+기존 `Render/Combiner` v53 순서 추정을 보존하고 [emitter_render_follow.md](emitter_render_follow.md) §3–11의 원본 consumer로 정정한다. Render의 depth/write/blend/cull은 082804c 원본832조합+실제11이미터 전달 인자 mismatch0이나 미사용 byte 전체 의미는 남아 **부분**이다. C30은 alpha1 loop period, C34는 scale loop period, C38..C3C는 5개 key interpolation type으로 “Combiner”라고 부르면 잘못이다. 마지막3byte/실제 combiner 위치는 남아 **부분**이다.
+
+`followType=2 POS` 추정은 **[판독]+[실행]+[데이터]**로 정정한다. 원본081a6f0의 key mask512/2048/1024, byte2인 원본 프로그램364의 POS=1 옵션이 직접 일치한다(896cases0mismatch). `rotateInit Res+A00` 추정은 **[판독]+[실행]**으로 정정한다. 081a0a0..b8→ER360→081e3e4 attr5=base+EmitterSet140 →vertex location5 공급을768건 비트 대조했다. 초기 회전을 UBO data[160] 직접 reader로 해석하지 않는다. 기존 행은 정정 사유를 보존하며 새 근거를 우선한다.
+
 ### 2.2.3 필드표
 
 이름은 **웹 권장 이름**(원본 이름 없음)입니다. 전체 목록과 근거 문자열은 `vfx_emitter46.py`의 `FIELDS`에 있습니다.
@@ -144,7 +150,7 @@ v53(0x1100 B) 표와 순서는 같고, 정적 블록에서 키 개수 u32 8개(0
 | 0x0B4–0x0C4 | f32×5 | loopRandom (같은 순서) | 반복 시작 위상 난수 배율 [판독: data[11].z, data[12].y] |
 | 0x0D0 | f32×3 | gravityDir | data[13].xyz [판독] |
 | 0x0DC | f32 | gravityScale | data[13].w [판독] |
-| 0x0E0 | f32 | airRegist | data[14].x, CPU 0x7100826cb0도 같은 식 [판독] |
+| 0x0E0 | f32 | airRegist | data[14].x; 0826CB0의 흔들림 field 보정 reader도 읽음. 일반 CPU 적분이라는 이전 설명은 §2.2.5.2 정정 [판독] |
 | 0x0E4 | f32 | (미상) | data[14].y, 정점 위치 보정에 곱함. 용도 [미확정] |
 | 0x0F0 | f32×3 | pivotOffset | 정점 = (pos + 0.5·값)·scale [판독: data[15]] |
 | 0x100–0x12C | | 흔들림(fluctuation) 진폭·주기·위상 | [추정: v53 순서] |
@@ -173,7 +179,7 @@ CPU 구역:
 | 0xAA0 | i32 | randomSeed | [판독] |
 | 0xAA4 | i32 | drawPath | 0x710080eb7c, 옵션 `DRAW_PATH_13` ↔ 13 [판독+옵션] |
 | 0xAA8 / 0xAAC | i32 | fadeOutFrames / fadeInFrames | 진행값 += dt/fadeIn (0→1), 종료 요청 뒤 −= dt/fadeOut [판독 0x710081c0b8] |
-| 0xAB0–0xAE8 | f32×15 | 이미터 trans, transRand, rotate, rotateRand, scale | 0x710080e4cc가 15개를 읽음 [판독], 순서 [추정] |
+| 0xAB0–0xAE8 | f32×15 | 이미터 trans, transRand, rotate, rotateRand, scale | **7차 해소 [실행]+[판독]**: 순서 = AB0 이동, ABC 이동 난수 범위, AC8 회전, AD4 회전 난수 범위, AE0 크기. §2.2.3.1 |
 | 0xB18 / 0xB1C | f32 | fadeInMin / fadeOutMin | `min + p·(1−min)` (켜짐 바이트 0xA9A/0xA9C) [판독 0x710080ed10] |
 | 0xB38 | u8 | hasEmitEnd | 0이면 무한 방출, 1이면 start+duration까지만 [판독] |
 | 0xB39 | u8 | isWorldGravity | 옵션 `_WORLD_GRAVITY` 유무와 일치 [셰이더옵션] |
@@ -183,7 +189,7 @@ CPU 구역:
 | 0xB48 / 0xB4C | f32 / i32 | emitRate / emitRateRandom(%) | [판독] |
 | 0xB50 / 0xB54 | i32 | emitInterval / emitIntervalRandom | 다음 간격 = interval + 1 + floor(u·intervalRandom) [판독 0x710080e9a4] |
 | 0xB58 | f32 | positionRandom | 난수표(0x200개) 벡터 × 값을 위치에 더함 [판독] |
-| 0xB5C | f32 | (방출 쪽 중력 배율) | 정적 0x0DC와 같은 값 [데이터], CPU 소비 미확인 |
+| 0xB5C | f32 | CPU 중력 배율 | **r8 2026-10-03 정정:** 정적 0x0DC 동일값은 기존 [데이터]; 080da10→E7FC→08244c4 소비 신규 [판독]+[실행]. 2,315건 비트 일치. [particle_gravity.md](particle_gravity.md) §3–10 |
 | 0xB6C–0xB78 | f32 | emitDist unit / min / max / margin | [판독] |
 | 0xB80 | u8 | volumeType | 형상 함수 점프표 인덱스 [판독], 번호별 형상 [미확정]. **5차:** 점프표 16칸 주소와 0·1번 식 [판독], 나머지 번호 이름 [추정] — §2.2.4.1 |
 | 0xB88–0xBAC | f32 | sweepLongitude/Latitude/Start, caliberRatio, volumeRadius xyz | 형상 함수가 읽음 [판독-부분] |
@@ -194,7 +200,7 @@ CPU 구역:
 | 0xC00 | f32 | momentumRandom | m = 1 + r − 2·r·u [판독] |
 | 0xC4C | i32 | shaderIndex | VfxGeneralShader 프로그램 번호 [실행] |
 | 0xCF4 | f32 | allDirectionVel | × set+0x218 → 이미터+0x7cc [판독] |
-| 0xCF8 | f32 | designatedDirScale | [추정] |
+| 0xCF8 | f32 | designatedDirScale | **7차 해소 [실행]+[판독]**: ResEmitter → 이미터 +0x7D8 → 지정 방향에 곱함. 이미터셋 +0x240도 곱함. §2.2.3.2 |
 | 0xCFC | f32×3 | designatedDir | [판독] |
 | 0xD08 | f32 | diffusionDirAngle(도) | 원뿔 안 cos을 [1 − a/90, 1]에서 균일 추출, φ = 2π·u [판독] |
 | 0xD0C | f32 | xzDiffusion | 방출 위치의 XZ 방향(0이면 난수 방향) × 값을 속도에 더함 [판독] |
@@ -203,8 +209,73 @@ CPU 구역:
 | 0xD20 / 0xD24 | f32 | emitterVelInherit / 상한 | 이미터 이동량/dt × 값, 길이 > 상한이면 상한으로 [판독] |
 | 0xD3C–0xD3F | u8 | color0Type, color1Type, alpha0Type, alpha1Type | 0 FIXED, 1 RANDOM, 2 ANIM [셰이더옵션] |
 | 0xD40–0xD5C | f32×8 | color0 RGB, alpha0, color1 RGB, alpha1 | [추정: v53 순서. alpha1 값이 alpha1 키0과 같음(Splash 3.0)]. **2026-10-03 해소 [판독]:** D40 RGB = color0, D4C = alpha0, D50 RGB = color1, D5C = alpha1. 종류가 FIXED(0)이면 로딩 중 키0(0x680/0x700/0x780/0x800)에 복사(§2.2.7) |
-| 0xD60 | f32×3 | particleScale | [추정] |
+| 0xD60 | f32×3 | particleScale | **7차 해소 [실행]+[판독]**: ResEmitter → 이미터 +0x7E4/+0x7E8/+0x7EC → 입자 탄생 크기. §2.2.3.2 |
 | 0xD6C | f32×3 | particleScaleRandom(%) | s·(1 − u·값/100). 세 값이 같으면 한 번 뽑은 u를 공유 [판독] |
+
+### 2.2.3.1 이미터 로컬 SRT·난수 소비 순서 (7차, 2026-10-03) [실행]+[판독]
+
+**정정:** 기존 AB0~AE8의 필드 순서 [추정]을 `0x710080e4cc`의 원본 명령과 실행으로 해소합니다. 이전 표의 이름은 맞지만 근거 수준이 부족했습니다. 기준 객체 `E`는 nn::vfx 이미터 인스턴스, `R = *(E+0xB0)`은 파일 ResEmitter, `S = *(E+0x80)`은 이미터셋입니다. 이 식은 캐릭터·액터 행렬 생성식과 별개입니다.
+
+| R 오프셋 | 형·단위 | 웹 권장 이름 | writer/reader |
+|---|---|---|---|
+| +0xAB0/+0xAB4/+0xAB8 | f32 XYZ, 로컬 위치 | emitterTrans | 원본 파일 → `0x710080e4cc` |
+| +0xABC/+0xAC0/+0xAC4 | f32 XYZ, ± 범위 | emitterTransRand | 같은 함수 |
+| +0xAC8/+0xACC/+0xAD0 | f32 XYZ, 라디안 | emitterRotate | 같은 함수 |
+| +0xAD4/+0xAD8/+0xADC | f32 XYZ, ± 범위 | emitterRotateRand | 같은 함수 |
+| +0xAE0/+0xAE4/+0xAE8 | f32 XYZ, 크기 배율 | emitterScale | 같은 함수 |
+| E+0xBC | u32 LCG 상태 | emitterRandomState | 읽은 뒤 `U*0x41C64E6D+0x3039`로 갱신 |
+| E+0x2E0/+0x2F0/+0x300/+0x310 | f32×4 열 4개 | localSRTColumns | `0x710080e4cc`가 기록 |
+| E+0x320/+0x330/+0x340/+0x350 | f32×4 열 4개 | localRTColumns | 같은 writer, 크기 제외 |
+
+난수는 **현재 상태를 실수로 바꾸고 다음 상태로 진행**합니다. `u_i = f32(f32(U_i) * 2^-32)`, `U_(i+1) = (U_i*0x41C64E6D+0x3039) mod 2^32`입니다. 회전 X/Y/Z에 u0/u1/u2, 이동 X/Y/Z에 u3/u4/u5를 사용합니다. 범위가 0이어도 여섯 번 진행합니다.
+
+```text
+signed(u) = f32(f32(u+u)-1)
+rot_i = f32(Rotate_i + f32(RotateRand_i * signed(u_i)))             // i=0..2
+T_i   = f32(Trans_i + f32(TransRand_i * signed(u_(i+3))))
+Rmat  = Rz(rot_z) * Ry(rot_y) * Rx(rot_x)
+localSRT = [Rmat.column0 * Scale_x, Rmat.column1 * Scale_y, Rmat.column2 * Scale_z, T]
+localRT  = [Rmat.column0, Rmat.column1, Rmat.column2, T]
+```
+
+실제 행렬 열 XYZ는 `(cz*cy, sz*cy, -sy)`, `(cz*sy*sx-sz*cx, sz*sy*sx+cz*cx, cy*sx)`, `(cz*sy*cx+sz*sx, sz*sy*cx-cz*sx, cy*cx)`입니다. 각 곱·합은 명령 순서대로 f32이며, 행렬 열 조합은 FMUL/FADD입니다. 열당 네 번째 패딩 칸은 활성 XYZ 검증에 포함하지 않았습니다.
+
+삼각함수는 `Math.sin/cos` 호출이 아니라 nn::util 다항식입니다 [판독]+[데이터]. SDK 동적 심볼에서 상수 데이터를 읽어 main GOT에 연결했으며 함수 스텁은 없습니다. `r = f32(angle * Float1Divided2Pi)`, `k = trunc(f32(r + (r>=0 ? 0.5 : -0.5)))`, `v = fma(-k, Float2Pi, angle)`로 감은 뒤 v>π/2이면 π−v, v<−π/2이면 −π−v로 접고 해당 구간 cos 부호를 바꿉니다. `x = f32(v*v)`일 때 아래 다항식의 내부 단계는 FMLA/FMLS이며, sin 마지막 `v * polynomial`은 FMUL입니다.
+
+```text
+poly(c) = fma(x, fma(x, fma(x, fma(x, fma(-x,c0,c1),-c2),c3),-c4), 1)
+sin(v) = f32(v * poly(SinCoefficients)); cos(v) = ±poly(CosCoefficients)
+SinCoefficients f32 bits = 32D46A65,36391B32,39500FBD,3C088896,3E2AAAAB
+CosCoefficients f32 bits = 348CB96F,37CFC9CF,3AB60A5D,3D2AAAA8,3F000000
+```
+
+호출 시점: 초기 버퍼 설정 `0x710080ced4`의 `0x710080d920`이 한 번 호출합니다. 다음 방출 간격 결정 `0x710080e9a4`는 간격용 난수 한 번을 먼저 소비하고 `R+0xA95 != 0`이면 `0x710080ea10`에서 같은 SRT 함수로 꼬리 분기합니다 [판독]. 그러므로 방출 때 변환 난수를 항상 새로 뽑는 것으로 일반화하지 않습니다.
+
+검증: 합성 402건 + 기존 원본 슈터 이미터 SRT 데이터 11건 = **413/413**, 두 행렬 활성 XYZ 24개 f32 칸과 최종 LCG u32 일치. 전체 원본 `0x710080e4cc` 실행이며 초기 버퍼 할당·부모 행렬 합성·GPU 렌더 실행은 제외했습니다(§10).
+
+### 2.2.3.2 지정 방향 배율·입자 기본 크기의 소비자 (7차, 2026-10-03) [실행]+[판독]
+
+**정정:** 기존 CF8/D60 [추정]은 필드 이름·연결이 확인되어 해소합니다. 초기 설정 함수 `0x710080ced4`가 `R+0xCF8 → E+0x7D8`(`0x710080da08/da0c`), `R+0xD60/D64/D68 → E+0x7E4/7E8/7EC`(`0x710080d9a8~d9b4`)로 복사합니다. 아래 **reader `0x710081e3e4` 전체와 형상0 `0x710081fa94`는 원본 실행**, 초기 복사 writer는 [판독]입니다.
+
+- CF8: `0x710081e5a0`이 E+7D8, `0x710081e5a4`가 S+240을 읽어 `0x710081eee4`에서 두 값을 곱합니다. 각도 0·월드 지정 방향 끔(R+B3B=0)에서는 raw `R+CFC` XYZ를 이 곱으로 배율 조절해 형상 속도에 더합니다. raw 방향을 먼저 정규화하지 않습니다. 이후 속도 난수 배율을 적용합니다. 일반 속도 난수 단계에 S+21C가 들어가는 부분도 명령으로 보입니다: `1 + S[21C]*(-u*R[D1C]/100)`(D1C=0이면 1). 확산 각도·월드 방향 변환의 전체 조합 실행은 이번 검증에서 제외했습니다.
+- D60: 동일 무작위 %는 한 번 뽑은 난수를 세 축이 공유하고, 서로 다르면 축별 난수 3번을 뽑습니다. 순서와 f32 연산은 아래와 같습니다. 퍼센트가 100을 넘으면 음수 크기도 나올 수 있으며 원본은 clamp하지 않습니다.
+
+```text
+if P_x == P_y == P_z:
+  u32 = 현재 LCG 상태; LCG 한 번 진행
+  factor = f32(f32(f32(P_x / -100) * f32(u32)) * 2^-32) + 1   // 마지막 +도 f32
+  birth_i = f32(f32(Base_i * factor) * S[0x160 + 4*i])
+else:
+  각 축 i 순서:
+    u = f32(f32(현재 LCG 상태) * 2^-32); LCG 한 번 진행
+    factor_i = f32(1 - f32(f32(P_i / 100) * u))
+    birth_i = f32(S[0x160+4*i] * f32(Base_i * factor_i))
+Base_i = E[0x7E4+4*i], P_i = R[0xD6C+4*i]
+```
+
+reader 주소: 동일 % `0x710081f530~f5a8`, 서로 다른 % `0x710081f5b4~f674`, 상속 크기 추가 곱 `0x710081f67c~f6a4` [판독]. 결과는 입자 배열 descriptor+18이 가리키는 f32×4 레코드 XYZ에 저장됩니다. S+160은 탄생 크기의 동적 축별 배율입니다. 기존 §2.2.4의 "이미터셋 스케일 * 이미터 스케일"은 요약식이었으며 실제 여기의 입력은 S+160과 E+7E4의 두 배열입니다. 부모 SRT와 화면상의 최종 크기 합성은 별도 단계입니다.
+
+검증: 점 방출·확산 각 0·follow NONE·상속 없음 조건에서 CF8 **402/402**, D60(동일/축별 %) **402/402**, 각 XYZ 비트 일치. 난수 표는 합성 입력이며 원본 표 생성은 검증하지 않았습니다. 확산 속도·속도 난수·운동량은 0, 자식·콜백은 없음. 함수 스텁 없음(§10).
 
 ### 2.2.4 방출·수명·초기 속도 (CPU) [판독]
 
@@ -307,7 +378,7 @@ rot    = initRot(± 무작위 반전) + (rand-0.5)*rotateInitRand
 keyLerp: tn < k0.time → k0, 키 사이 선형, 마지막 키 시간 이후 → 마지막 값
 ```
 
-CPU 쪽 같은 식 `0x7100826cb0`(airRegist 보정 `a' = a + (1−f)(1−a)`, `(1 − a'^t)/(1 − a')`)도 판독했습니다. 이 함수의 f(이미터+0x50)가 무엇인지는 [미확정]입니다.
+CPU 쪽 같은 식 `0x7100826cb0`(airRegist 보정 `a' = a + (1−f)(1−a)`, `(1 − a'^t)/(1 − a')`)도 판독했습니다. 이 함수의 f(이미터+0x50)가 무엇인지는 [미확정]입니다. **정정(2026-10-03, 7차):** 이 문장은 과거 기록입니다. f는 이번 갱신 시간 간격 dt로 해소했고, `0x7100826cb0`를 일반 CPU 위치 적분으로 부른 것도 부정확했습니다. 이 함수는 field 흔들림 변위를 더하는 소비자입니다. 아래 §2.2.5.2가 최신 결론입니다.
 
 ### 2.2.5.1 색·알파 입력과 프로그램별 조합 (solo_fx_audit §6.1·§6.3에서 옮김, 5차 보완) [판독]
 
@@ -345,6 +416,22 @@ if R[D3F] == 0: R[800:804] = R[D5C:D60]  // alpha1
 - 1747의 정점 셰이더는 location 4를 쓰지 않습니다. 그래서 프래그먼트의 `in_attr4.w` 값은 [미확정]입니다(하드웨어 기본값에 의존).
 - 1885(벽 Ripple)과 1202(머즐 Flash)는 역번역하지 않았습니다 [미확정].
 - 이 표는 6,285개 프로그램 전체의 일반식이 아닙니다.
+
+### 2.2.5.2 이미터 +0x50 = 이번 갱신 시간 간격, 흔들림 reader 정정 (7차) [실행]+[판독]
+
+기준 E는 위와 같은 nn::vfx 이미터 인스턴스입니다. 바깥 갱신 `0x7100816c90`은 입력 dt≤0이면 일반 calc를 건너뛰고, 활성 경로에서 `0x710081c0b8`로 같은 dt를 넘깁니다. `0x710081c18c`가 `E+0x50 = dt`, `0x710081c9b4/c9b8`가 `E+0x4C = f32(E+0x4C + dt)`를 기록합니다 [판독]. 시간 단위는 이미터 수명·키·방출 간격과 같은 프레임입니다. +50은 별도 설정 마찰 계수가 아닙니다. 입력 dt의 상위 게임 프레임 공급·일시정지 전체 순서는 이번에 실행하지 않았습니다.
+
+흔들림 호출 흐름 [판독]: field 적용 `0x71008244c4` → `0x7100822940` → `0x7100826cb0`. 2940이 EmitterResource+278 필드의 고정/키 보간 진폭을 준비하고, 6CB0이 기간·위상·파형의 시간 차분에 진폭 XYZ를 곱해 위치 출력에 **가산**합니다. `E+250`은 EmitterResource이고 그 +18은 R+70이므로 reader의 `*(*(E+250)+18)+70`은 **R+E0 = airRegist**입니다. field+2가 켜져 있고 보정값이 1이 아니면:
+
+```text
+a_step = f32(a + f32(f32(1-dt) * f32(1-a)))          // 0x7100826d10..d20
+adjustedAge = f32(f32(1-powf(a_step, age)) / f32(1-a_step))
+```
+
+`a_step==1`일 때 age 그대로입니다. 그 뒤 파형 시간 차분을 구하는 데 **별도로 dt를 계속 사용**합니다. 이 pow 보정식과 흔들림 파형 전체는 이번에 원본 실행하지 않았습니다 [판독]. 일반 GPU_TIME P0+V·f+G·g 식과 동일 함수라고 확대하지 않습니다.
+
+원본 검증: GPU_TIME·활성·빈 입자/방출 없음 E에서 `0x710081c0b8` 전체를 연속 **306/306** 실행하여 +50과 +4C를 독립 f32 누적 계산과 비트 대조했습니다. +50 쓰기 훅 PC는 **0x710081c18c 한 곳**입니다. 콜백/자식/필드가 없는 원본 경로이며 함수 스텁은 없습니다(§10).
+
 
 ### 2.2.6 웹 재현값 (슈터 탄 + 착탄 스플래시)
 
@@ -513,7 +600,7 @@ function particleState(e: Emitter, p: {p0: Vec3, v0: Vec3, birth: number, life: 
 
 | 항목 | 상태 | 다음 근거 |
 |---|---|---|
-| VFXB v46 EmitterData 필드(0xEF0 B) | **주요 필드 해소** [판독+셰이더옵션] §2.2. 구역 배치·방출·수명·속도·중력·airRegist·크기/색/알파 키·회전·calcType·follow·빌보드 | 남은 것: 형상(volumeType)별 위치·법선 식, Render/Combiner/TexAnim 바이트, 0x0E4·0xB5C 용도, 색 FIXED 값의 출처(Splash는 color0 키0이 0인데 PColor 0xD40은 1 — 런타임 UBO 패치 여부), 흔들림·스크롤 필드 순서. 다음 근거: 0x710540fea8 형상 함수들, 0x710081aee4(기존 UBO 복사·패치 후보), 프래그먼트 셰이더. **2026-10-03 정정:** FIXED 출처는 `0x71008190fc`의 PColor → 키0 패치로 해소(§2.2.5.1, 이전 solo_fx_audit §6.1). **5차:** 형상 0·1번 식과 점프표(§2.2.4.1), 1886/1747 색·알파(§2.2.5.1) 추가. 나머지는 유지 |
+| VFXB v46 EmitterData 필드(0xEF0 B) | **7차 추가 해소:** AB0~AE8 SRT 순서·CF8 지정 방향 배율·D60 기본 크기·E+50 시간 간격(§2.2.3.1/2·§2.2.5.2) [실행]+[판독]. **주요 필드 해소** [판독+셰이더옵션] §2.2. 구역 배치·방출·수명·속도·중력·airRegist·크기/색/알파 키·회전·calcType·follow·빌보드 | 남은 것: 형상(volumeType)별 위치·법선 식, Render/Combiner/TexAnim 바이트, 0x0E4·0xB5C 용도, 색 FIXED 값의 출처(Splash는 color0 키0이 0인데 PColor 0xD40은 1 — 런타임 UBO 패치 여부), 흔들림·스크롤 필드 순서. 다음 근거: 0x710540fea8 형상 함수들, 0x710081aee4(기존 UBO 복사·패치 후보), 프래그먼트 셰이더. **2026-10-03 정정:** FIXED 출처는 `0x71008190fc`의 PColor → 키0 패치로 해소(§2.2.5.1, 이전 solo_fx_audit §6.1). **5차:** 형상 0·1번 식과 점프표(§2.2.4.1), 1886/1747 색·알파(§2.2.5.1) 추가. 나머지는 유지 |
 | VAT 텍스처(bulletshtr_vsp) 축 | **해소** [판독] §2.1(가로 = 시간, 세로 = 정점) | 이전 A 채널 용도 미확정은 **2026-10-03 해소**: compact normal → fragment 법선, §2.1.1(이전 solo_fx_audit §6.2). GPU 비트 실행 미검증 |
 | 텍스처 형식 0x15 | **해소** [데이터] §2.1 (기존 [실행]은 디코더 자체 실행) | 이전 VAT 판독 필요 중 ball1383 해석은 2026-10-03 [판독] 해소. 다른 VAT 프로그램은 별도 |
 | θ 정의, 벽 스플래시 슬롯, E2 Splash 의 슬롯 | **해소** [판독] §3.1 | — |
@@ -528,3 +615,61 @@ function particleState(e: Emitter, p: {p0: Vec3, v0: Vec3, birth: number, life: 
 ### 2026-10-03 잔여 필드 판독 보완
 
 alpha1의 값 = .x, 시간 = .w는 1897.vert data[128]/[129] → out_attr1.w로 확정됐다. FIXED 네 채널은 `0x71008190fc`가 PColor 값으로 키0을 패치한다. §2.2.3의 고정 RGB/alpha 값 출처 [추정]은 load/store 판독으로 해소됐다(본문 §2.2.5.1로 옮김, 2026-10-03 5차).
+
+
+## 7. 이번 확정 항목의 리소스 연결 (7차)
+
+원본 자료·버전은 §1입니다. 기존 `analysis/vfx/emitters_v46_fields.json`의 11개 이미터 이름·오프셋으로 `analysis/assets_work/r6/static.vfxb`의 **AB0부터 15개 f32를 직접 읽어** §2.2.3.1 원본 실행 입력에 추가했습니다 [데이터]+[실행]. 이름도 ResEmitter+10과 대조했습니다. 기존 JSON은 일부 회전 값을 소수 6자리로 반올림하므로 비트 검증 입력으로 쓰지 않았습니다. 머즐 SplashCorn의 X 회전은 0x3FC90FDB, Flash는 0x40490FDB입니다. 실행 결과 JSON에 11개 SRT의 원본 비트를 기록했습니다. D60 탄생 크기는 §2.2.5의 scale 키 및 셰이더 동적 배율과 이어지며, CF8은 §2.2.4의 초기 속도 단계입니다. 팀색·VAT·색 조합은 §2.1.1/§2.2.5.1 근거를 유지합니다. 이번에 그래픽 문서나 웹 에셋을 수정하지 않았습니다.
+
+## 8. 실행 순서와 다른 기능의 관계 (7차)
+
+[판독] 초기화 080CED4는 버퍼 설정 도중 로컬 SRT 함수를 호출합니다. 갱신 081C0B8은 **081C18C에서 +50에 dt를 먼저 기록**한 뒤 방출·입자 처리 분기로 진행하고, 081C9B8에서 +4C 나이를 누적합니다. 방출 간격 함수는 간격 난수를 소비한 뒤 A95 조건에 따라 SRT를 다시 뽑습니다. 입자 생성 함수는 초기 방향·크기를 구성하며, field가 적용되는 경로에서는 08244C4→0822940→0826CB0이 이미 저장된 dt를 소비합니다. 각 함수의 명령·직접 호출 범위이며 액터·물리·렌더 전체 프레임 순서는 아직 확정하지 않았습니다. 초기화·방출 때 같은 LCG를 쓰므로 SRT 난수 6회와 크기 난수 1/3회 소비를 생략하면 뒤 입자의 난수 순서가 달라집니다.
+
+## 9. 웹 반영 구조와 구현 순서 (7차, 구현 코드는 수정하지 않음)
+
+1. 이펙트 로더는 §2.2.3.1의 오프셋 순서로 이미터 로컬 이동·회전·크기를 읽습니다. 스케일을 회전 난수로 읽지 않습니다.
+2. 이미터 상태에 `randomState`, `stepFrames`, `ageFrames`, `localSRTColumns`, `localRTColumns`를 둡니다(웹 권장 이름). 갱신 +50에 대응하는 stepFrames와 누적 ageFrames를 구분합니다.
+3. 로컬 SRT는 Rz·Ry·Rx와 원본 f32/FMA 다항식, 난수 소비 순서로 구성합니다. A95가 켜진 경우에만 간격 계산 뒤 SRT 난수를 다시 소비합니다.
+4. 입자 생성 시 CF8은 raw 지정 방향에 동적 배율을 함께 곱하고, D60은 크기 난수 1/3회 분기를 보존해 탄생 XYZ에 넣습니다. 기본 크기·키 애니·부모 행렬·화면 최종 크기 단계를 구분합니다.
+5. 흔들림을 지원할 때 +50 dt를 사용합니다. CPU 적분 함수로 잘못 연결하지 않습니다. 전체 field 파라미터·파형은 §11의 남은 근거를 확보한 뒤 반영합니다.
+
+웹에서 바꿔야 할 곳은 `impl/fx.md`에 기술된 이펙트 상태·입자 생성·행렬 구성입니다. 구현 문서는 질문 목록으로만 읽었고 변경하지 않았습니다.
+
+## 10. 7차 원본 실행과 검증 명령
+
+```sh
+.venv/Scripts/python web/tools/r7_fx_transform_emu.py
+.venv/Scripts/python web/tools/r7_fx_particle_emu.py
+.venv/Scripts/python web/tools/r7_fx_timestep_emu.py
+```
+
+| 명령·결과 파일 | 원본 실행 | 독립 대조 | 결과·한계 |
+|---|---|---|---|
+| transform → `analysis/completion/r7/fx_transform_emu.json` | 080E4CC 전체, SDK 상수 데이터 연결 | 원본 f32/FMA 다항식과 SRT 수식 | 413/413, 활성 XYZ 24칸+LCG word. 패딩 제외, 원본 데이터 11건 포함 |
+| particle → `analysis/completion/r7/fx_particle_emu.json` | 081E3E4 전체+형상0 081FA94 | 지정 방향 배율, 동일/축별 크기 난수 수식 | 각각 402/402. 점·각도0·follow NONE, 합성 난수 표, 자식/상속 없음 |
+| timestep → `analysis/completion/r7/fx_timestep_emu.json` | 081C0B8 전체, GPU_TIME 빈 이미터 | dt 복사와 f32 나이 누적 | 306/306, MEM_WRITE PC 081C18C. 방출/입자/field/콜백 없음 |
+
+세 하네스 모두 함수 스텁 없음. 해석·데이터·원본 실행을 구분합니다. 초기 버퍼 복사 writer, 흔들림 reader, 방출 간격의 SRT 재추출 조건은 [판독]입니다. 원본 게임·GPU를 실행한 검증이 아닙니다.
+
+실패도 보존: particle 입력에 두 번째 난수 표를 빠뜨려 `PC 0x710081f2dc, addr 0`에서 읽기 실패했으며 `*0x71057d52f0` 입력을 구성한 뒤 통과했습니다. timestep은 빈 입자 메타데이터 누락으로 `PC 0x710081c614`, CPU 버퍼 descriptor 누락으로 `PC 0x710081d87c`에서 실패했습니다. 메타데이터를 구성하고 실제 슈터 GPU_TIME 경로로 제한해 통과했습니다. CPU 버퍼 memcpy 경로 검증으로 확대하지 않습니다. 전체 명령·중복 조회·검색 실패는 `analysis/completion/r7/fx_commands.md`입니다.
+
+## 11. 7차 후 남은 미확정·다음 근거
+
+| 항목 | 이번 결과·남은 범위 | 다음 근거 |
+|---|---|---|
+| SRT·CF8·D60·시간 간격 | 이번 선택 4질문 해소 [실행]+[판독]. 게임 전체 seed 공급·최종 부모 합성은 별개 | 위 검증 도구, 080BC74/081B4F0, 이미터셋 setter |
+| 흔들림·스크롤·param | 0826CB0 의미와 dt reader는 정정. 전체 field 파형·필드명·키/켜짐 조건은 [미확정] | 0822940/08244C4/0826CB0, EmitterResource+278 loader |
+| 지정 방향·크기 전체 조합 | CF8/D60 필드 연결 해소. 확산 각도·월드 방향·상속·동적 크기 writer를 함께 실행한 검증은 미수행 | 081E3E4의 B3B/D08 분기, S+160/+240 writer |
+| 나머지 VFXB 질문 | 형상2~11/15, Render/Combiner/TexAnim, 팀색 writer, E4/B5C 등 [미확정], §6 상태 유지 | §6 주소·각 원문 질문 |
+| 사운드 질문 | r5/r6의 생존·시작 순번·DistCoef 확정은 재계상하지 않음. 필터 종류·그룹+1B8·Pitch 중간 소비 등 남음 | sound_resources.md §4.3/§4.6/§6 |
+
+### r8 CPU 중력 소비 (2026-10-03)
+
+기존 “B5C CPU 소비 미확인”은 [particle_gravity.md](particle_gravity.md) §3–10의 신규 원본 writer/consumer로 해소했다. 전체 VFXB·field·GPU 경로는 해당 문서 §11의 검증 범위를 넘어 승격하지 않는다.
+
+**2026-10-03 r8 후속 정정 [판독]+[실행]**: 이 문서의58237B0 정적초기화 미확정은 [floor_fixed_rotation.md](../effect_sound/floor_fixed_rotation.md) §3–10으로 해소했다. 원본124F5F0가init_array2692에등록되어단위3×3을만들고,속도0 착탄행렬1024건/초기화128건13440f32 모두일치. 기존초기화전 fixture0은원본default근거가아니며전체GPU/부팅검증주장없음.
+
+
+### 11.9 r9 OneEmitter n/count와 0x60 레코드 정정 — 2026-10-03
+
+기존 §3/§6의 n/count 추정과 레코드 질문은 [one_emitter_runtime.md §3~§10](one_emitter_runtime.md)에서 해소했다 [판독]+[실행]. n=수집 큐 인스턴스 한도, count=각 이미터의 최대 파티클 수다. 신규137F558/F4BC 전체와 실제SDK leaf를 원본2048건,293추가/불일치0/스텁0으로 확인했다. Mat34→네vec4 전치, 두 admission검사, 큐 full에서도 활성화 기록을 구분한다. 전체 birth/GPU와 이름 없는40..4C의GPU 의미는 별도 미확정이며 VFX전체 질문은 승격하지 않는다.

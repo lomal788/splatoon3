@@ -31,7 +31,7 @@
 | Rival | Player02 (+Player00) | Rival_Octopus (+Player_Squid) | Player02_Hlf | Player02_SuperHook (+Player00_SuperHook) | Obj_InkRailOctPlayer |
 
 - 괄호 "+X" = 함께 로드하는 추가 bfres. Player01·02는 87뼈 순서가 Player00과 같고(덤프 비교 [데이터]) 자기 스켈레탈 애니는 37/31개뿐, Player00은 1,044개 → 추가 파일은 **애니 공유 소스**로 봅니다 [추정: 이름과 뼈 동일성]. Player01 클립 37개 중 35개는 Player00에도 같은 이름이 있음(성별 덮어쓰기 [추정]).
-  - **추가 판독(2026-10-03):** AS 바인더(vt 0x7105632770) 슬롯 3 0x710244b414 는 이름으로 애니를 찾을 때 애니 리소스 목록(바인더+8 → +0x58, 개수 +200, 배열 +0xd0)을 앞에서부터 돌고 **처음 찾은 파일**의 순번(앞 파일들의 애니 수를 더한 값)을 돌려준다. 스켈레탈은 파일 +0x20→+0xe2, 가시성은 +0xe8 개수를 더한다 [판독: `analysis/decomp/r5_gfx_char/binder.c`]. 따라서 여러 bfres 가 한 바인더의 애니 원본으로 쓰이고, 같은 이름은 목록 앞쪽 파일이 이긴다. 목록에 Player01 과 Player00 이 어떤 순서로 들어가는지는 [미확정]이다(0x7102657260 의 추가 로드 순서).
+  - **추가 판독(2026-10-03):** AS 바인더(vt 0x7105632770) 슬롯 3 0x710244b414 는 이름으로 애니를 찾을 때 애니 리소스 목록(바인더+8 → +0x58, 개수 +200, 배열 +0xd0)을 앞에서부터 돌고 **처음 찾은 파일**의 순번(앞 파일들의 애니 수를 더한 값)을 돌려준다. 스켈레탈은 파일 +0x20→+0xe2, 가시성은 +0xe8 개수를 더한다 [판독: `analysis/decomp/r5_gfx_char/binder.c`]. 따라서 여러 bfres 가 한 바인더의 애니 원본으로 쓰이고, 같은 이름은 목록 앞쪽 파일이 이긴다. 2026-10-03 r8 **추가 확정 [실행]+[판독]:** 2656ac8→2656870/2657260의 실제 배열은 몸 타입 0..4 순서로 `[Player00]`, `[Player01,Player00]`, `[Player02,Player00]`, `[Player03,Player01,Player00]`, `[Player02,Player00]`다. SDK 366f140→366f280은 입력 배열 순서대로 바인더+0xD0에 복사한다. 따라서 자기 파일 클립이 우선하고 뒤 파일은 같은 바인더의 애니 공유 소스다. 기존 추정은 이 원본 순서로 정정한다.
 - SuperHook bfres는 모델 5개(`Player00_SuperHook`, `_Point`, `_Scarf`, `_Tentacle`, `Player01_SuperHook`)를 한 파일에 담음 [데이터].
 - 파츠 2 `_Hlf` 내용 [데이터]: `Player00_Hlf.bfres.zs` 306 KB(몸 Player00 은 12 MB), 모델 1개 · 뼈 79개(몸 87개에서 `nw4f_root`·`Root_Model`·`Mouth00~04_Model` 등 입 모양 뼈 제외) · 셰이프 3개(`Body`, `Eye`, `Eyelids`, LOD 3단) · 재질 애니 `Color_Eye` 1개, 스켈레탈 애니 없음. 얼굴·입·치아·Inner 셰이프가 없는 축소 몸이다. 리소스 사전 로드 0x7101455640 이 파츠 0~4 를 로드해 홀더 **+0x20(몸) / +0x38(오징어형, 파츠1) / +0x28(`_Hlf`, 파츠2) / +0x30(SuperHook) / +0x48(InkRail)** 에 둔다 [판독: 0x71014556b8 w19=1, 0x71014556cc w28=2 → 0x7101455838 `+0x28`(파츠2), 0x7101455848 `+0x38`(파츠1)]. 정정: 이전 판의 "+0x28 오징어형, +0x38 `_Hlf`"는 순서를 바꿔 읽은 것이다. **용도 = 사람↔오징어 변신 과도기 모델**(원거리·저부하용 아님) — §5.4 [판독].
 
@@ -46,7 +46,7 @@
 | 탱크 | TankInfo `SpecActor` 액터의 ModelInfo `Fmdb`(예 `Tnk_Simple`) | PlayerTank 팩 |
 | 무기 | `WmnG_<무기>` 액터 → ModelInfo `Work/Model/Weapon/Wmn_Shooter_NormalT/...fmdb` → `Model/Wmn_Shooter_NormalT.bfres` | WmnG_Shooter_Normal_00 팩 |
 
-`_F`/`_M` 선택이 모델 타입의 F/M을 따른다는 것은 [추정: 이름 규칙]. 코드에서 접미사를 붙이는 곳은 찾지 않았습니다.
+**정정(2026-10-03 r8) [실행]+[판독]:** 실제 26fd010은 `(modelType | 2)==3`이면 `_M`, 나머지는 `_F`다. 타입 0/2/4는 F,1/3은 M. 기어 IsUnisex는 접미사를 생략한다. 홀더+34 writer144f9a0와 caller1450cc4까지 연결했다. [전용 문서](part_suffix_runtime.md) §3~§10, 원본240/240.
 
 ## 5. 스켈레톤·애니메이션
 
@@ -184,7 +184,7 @@ else: 전부 0
   - 검증: `PY web/tools/r5_gfx_char_attach_emu.py` → "weapon_attach". 원본 0x710289beb8 + 0x7100f735b0 을 실행했다. 단위·바인드 실측(Weapon_R 바인드 회전)·스케일 0·무작위 회전×스케일×평행이동 400개, 총 403건에서 모델 +0x28c..+0x2b8 과 유닛 +0x268..+0x270 이 판독식과 **403/403 비트 일치**했다. 뼈 get 호출의 (모델 객체, 뼈 번호)도 +0x3b8/+0x3ba 와 일치했다. 몸 포인터 없음 1건은 행렬을 바꾸지 않고 갱신만 불렀다. 스텁은 뼈 get(합성 행렬 공급), 무기 모델 vt+0x1f8, 0x7100f72b7c, 컴포넌트 vt+0xc8 이다. 실제 뼈 행렬 producer 와 무기 슬롯 49 의 호출 시점은 실행하지 않았다.
   - 슬롯 70 0x710289bffc: WeaponCategory/WeaponDetail 에 둘 다 `Shtr` 를 쓴다 → [anim_state_machine.md §3.1](anim_state_machine.md).
   - `Muzzle` 뼈: 무기 모델 안의 뼈라서 무기 루트를 따라간다(무기 쪽 코드가 따로 옮기지 않음) [판독: 슬롯 49 는 루트만 설정]. 머즐 이펙트는 ELink `Bone Muzzle` 로 이 뼈에 붙는다 [데이터: effect_sound.md §3]. 탄 생성 위치가 이 뼈를 쓰는지는 이 문서 범위 밖이다(weapon 문서).
-- 탱크(하네스) — 0x71026f8f38(뼈 가시성 vt+0x90) [판독]: `show = !src+0x6ac`, `thin = src+0x6ad`, `type = src+0x6a8`(→ +0x18c0/+0x18c1/+0x182c, 쓰기 0x7102493d18). `Harness_{S,M,L}` = show && type == {0,1,2} && !thin, `Harness_{SF,MF,LF}` = show && type == {0,1,2} && thin, `Harness_Hide` = !show. 0x71026f5808 은 뼈 인덱스 조회만(S +0x1814, M +0x1818, L +0x181c, SF +0x1820, MF +0x1824, LF +0x1828, Hide +0x18bc). 필드 ↔ GearInfoClothes 이름(+0x6a8 HarnessType, +0x6ac IsHideHarness, +0x6ad IsThinHarness) 대응은 [추정: 이름·형식].
+- 탱크(하네스) — 0x71026f8f38(뼈 가시성 vt+0x90) [판독]: `show = !src+0x6ac`, `thin = src+0x6ad`, `type = src+0x6a8`(→ +0x18c0/+0x18c1/+0x182c, 쓰기 0x7102493d18). `Harness_{S,M,L}` = show && type == {0,1,2} && !thin, `Harness_{SF,MF,LF}` = show && type == {0,1,2} && thin, `Harness_Hide` = !show. 0x71026f5808 은 뼈 인덱스 조회만(S +0x1814, M +0x1818, L +0x181c, SF +0x1820, MF +0x1824, LF +0x1828, Hide +0x18bc). **이름 대응 정정(2026-10-03 r8) [판독]:** GearInfoClothes 파서 13b7ab4/13b9a84는 HarnessType→행+0x50, IsHideHarness→+0x78, IsThinHarness→+0x79다. 옷 파라미터 초기화 26da26c가 각각 객체+0x6A8/+0x6AC/+0x6AD로 직접 복사한다. 따라서 위 대응은 필드 이름 등록→파서→writer→기존 reader 연결로 확정한다. 2493d18은 별도 함수 시작이 아니라 249257c 내부 store다.
 - **탱크 잉크 잔량 표시·잉크 부족 점멸(2026-10-03 r6, [r5 ui→gfx_char] 요청) [판독]+[데이터]:** 액터 `PlayerTank`(`spl::PlayerCustomTank`, vtable 0x7105642e48), 모델 `Tnk_Simple`, AS `PlayerTank.root.asb`.
   - ASB [데이터]: 커맨드 5개. `Gauge` = Simultaneous(스켈레탈 `Gauge` + 재질 `Gauge`) 슬롯 0, `InkShortage` 슬롯 1, `InkShortageGauge` 슬롯 2, `InkLock` 슬롯 3, `SubMarker` 슬롯 4. `Tnk_Simple` 클립 [데이터]: 스켈레탈 `Gauge` 100f·재질 `Gauge`(M_Glass `multi_normal_weight`) 100f, `InkLockGauge`(M_Body `tex_mtx1`) 100f, `InkShortage`(M_Glass `emission_intensity`·`tex_mtx1`) **45f 반복**, `InkShortageGauge.fmab`(M_Glass `tex_mtx1`) 100f, `SubMarkerGauge`(M_BombLine `tex_mtx0`) 100f. 반복은 `InkShortage` 하나다.
   - 초기화(슬롯 15 0x71026f6814, 일반 탱크 = 플래그 +0x539~+0x53f 모두 0): `Gauge`·`InkLock`·`SubMarker` 를 요청하고 재생 속도를 0 으로 둔다(엔트리 +0xd4 = 0). 이후 프레임은 코드가 직접 정한다.
@@ -311,6 +311,10 @@ if mirrorX: A = Scale(-1,1,1) · A   (attachBody 는 왼쪽 뼈 그대로, map �
 ```
 원본은 파츠별 뼈 인덱스 쌍으로 행렬을 복사하는 구조로 보입니다(쌍 조회만 판독) [추정]. 공유 방식과 결과가 같도록 위 inverse 식을 썼습니다.
 
+### r8 귀 플래그·SRT 필드 정정 (2026-10-03)
+
+기존 §6.1의switch0..4는 실제 `ManualBindSRT.HideEar`이며2는`HairInfo.IsLong`자동조건이다. `Ear_L/Ear_R` index writer144f9a0→consumer1454330의고정행렬·보조벡터(0.65,0.8,1)를확인하고새2048입력원본비트일치를확보했다 [실행]+[판독]. ManualBindSRT명명필드는+30 HideEar,+34 Rotation,+40 Scale,+4C Translate로정정한다. HairInfo fallback SRT구조와혼동한이유를 [ear_hiding.md](ear_hiding.md) §4~§11에기록했다. 기존모자행렬결합259건은 재계상하지않는다.
+
 ## 7. 검증 [실행: 재구현]
 
 - `node web/tools/graphics_verify/shot.mjs <query>` (헤드리스 chromium, swiftshader). 결과 `analysis/graphics/shots/*.png`와 `.json`(bbox, 결합 뼈 대응 목록):
@@ -343,8 +347,15 @@ if mirrorX: A = Scale(-1,1,1) · A   (attachBody 는 왼쪽 뼈 그대로, map �
 | ~~스프링 트리거·축~~ | 해소(2026-10-03): §5.4 정정 항목([실행] 14400/14400, 축은 [판독]) |
 | 기본 장비 | [미확정]. v0 데이터에 초기 장비 표시 없음(HowToGet 은 Shop/Impossible/Other 뿐, FST 행은 `Hed_FST000` 만). 세이브 기록 0x7102a67b94(커스텀 +0x48~+0x80, 키는 해시)는 기록만 하고 기본값을 정하지 않는다. 다음: 세이브 구조 생성자(0x7102a67b94 의 param_1 타입)와 플레이어 만들기 씬(`PlayerMake`) 쪽 기본값 |
 | ↳ 갱신(2026-10-03 r6) | 세이브 커스텀 구획 초기값(슬롯 2 0x7102a66e28) 판독: 기어·무기 −1, HairId·BottomId·Eyebrow·SkinColor·EyeColor 0, ModelType 0(§5.2 표). −1 이 어떤 장비로 풀리는지는 [미확정] |
-| ~~`_Hlf` 용도~~, `_F/_M` 접미사 코드 | `_Hlf` 해소(§3, §5.4). `_F/_M` 접미사 코드는 미확인 |
+| ~~`_Hlf` 용도~~, `_F/_M` 접미사 코드 | `_Hlf` 기존 해소(§3, §5.4). `_F/_M`은 2026-10-03 r8 [실행]+[판독] ([접미사 문서](part_suffix_runtime.md))로 해소 |
 | ToSquid 쪽 `_Hlf` 시작 프레임 | [미확정]. §4.2 순서와 SM+0xf0 규칙만으로 계산하면 요청 프레임 S 에서 f0 = 40, S+3 에 70 이 되어 `_Hlf` 가 S+3 한 프레임, S+4 에 0x84 오징어로 넘어간다. 다만 ToSquid 요청 때 `max(f0, 30)` 을 쓰는 지점과 같은 프레임의 +10 순서를 명령으로 확인하지 못했다. 다음: 0x710243e7d0 의 0x82 요청 경로에서 SM+0xf0 쓰기 |
 | ↳ 해소(2026-10-03 r6) | §5.4 확정 항목: max(f0, 30) 다음 같은 프레임 끝에서 +10 이 반드시 지남(제어 흐름 검사) [판독]. 요청 지연(SM+0x1d4) 경우는 계산에 넣지 않음 |
 | 오징어 몸 절차 변형(2026-10-03 r6 추가) | 객체 플레이어+0x770·뼈 표·호출 순서 판독(§5.4). 동역학 식 0x710263b7d0/0x710263dacc 는 [미확정] — 디컴파일 `analysis/decomp/r6_gfx_char/squid_ctrl.c` |
 | 탱크 잔량 표시·잉크 부족 점멸(2026-10-03 r6 추가) | 해소(§6.1): Gauge 프레임 = (1 − r)·100, r 은 0.5/0.6 지수 추종, 부족 시 60프레임 `InkShortage` 반복 [판독]+[데이터]. +0x52c/+0x52d 가장자리 조건 일부 [미확정] |
+
+
+### r8 추가 검증과 한계 (2026-10-03)
+
+`web/tools/r8_gfx_binder_order_emu.py`는 원본 2656ac8/2656870/2657260을 실행하여 타입 5×파트 5의 **25 경로**에서 기본 파일·모델과 SDK 바인더 입력 배열을 기록했다. 몸 5개 배열은 판독식과 모두 일치했다. 결과 `analysis/completion/r8/graphics_binder_order.json`. 스텁은 모델 factory 2657a4c, 리소스 로더 37b2b28와 RTTI true, 경로 formatter 0f44d60, 배열을 기록하는 SDK 진입 366f140, 초기화 guard다. SDK 배열 저장 366f280은 `analysis/decomp/r8_graphics/char_suffix_binder.c`에서 별도로 판독했다. BFRES 파싱·포즈 바인딩·로드 실패·최종 렌더를 실행한 것은 아니다. 최초 실행은 초기화 guard 외부 호출 PC 3e99ec0에서 UC_ERR_FETCH_UNMAPPED로 실패했고 guard를 명시적 스텁으로 둔 뒤 25 경로 실행에 성공했다.
+
+하네스 이름 연결 근거는 기존 `analysis/decomp/graphics/model_teamcolor_1.c`의 13b7ab4 및 새 `analysis/decomp/r8_graphics/char_parts_loader.c`의 13b9a84, `char_body_params.c`의 26da26c다. 이름 연결을 새로 판독했으며 기존 뼈 가시성 실행 성과를 다시 계상하지 않았다. `_F/_M` 본문26fd010과 모델 타입 writer/caller 연결은 [접미사 전용 문서](part_suffix_runtime.md)에서 해소했다. Cloth·전체 포즈 합성은 계속 조사 중이다.

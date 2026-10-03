@@ -66,7 +66,7 @@ Pack/Actor/WeaponShooterNormal.pack.zs
 | 0x50 | u64 | conditionTablePos | 0x829c8 | 0x1fb58c |
 | 0x58 | u64 | nameTablePos | 0x86f78 | 0x20d774 |
 
-- numResParam은 실제 에셋+덮어쓰기 파라미터 합(ELink 17,001 / SLink 138,538)과 다릅니다. 의미는 [미확정].
+- **2026-10-03 정정 [데이터]+[판독]+[실행: 로더 초기화]:** numResParam은 에셋 u32 값만 센다(ELink 16,893 / SLink 138,491). 덮어쓰기 108/47개는 별도 표다. 기존 “에셋+덮어쓰기 합 17,001/138,538과 달라 의미 미상”은 집계 범위 오류였다. 원본 로더·전수 집계는 [xlink_parameter_counts.md](xlink_parameter_counts.md) §3–10.
 
 ### 3.2 헤더 뒤 배치
 
@@ -282,6 +282,7 @@ flag 비트 의미는 이 게임의 ActionTriggerCtrl 코드로 판독했습니�
 
 - **Switch** (`0x71038978bc`): 자식을 childStart→childEnd 순서로 봅니다. **조건이 없는 자식(conditionPos 0)을 만나면 그 자리에서 바로 고릅니다.** 조건이 있으면 §3.7 비교가 참인 첫 자식을 고릅니다. 아무것도 없으면 시작 실패입니다. 1차 문서의 "조건 없는 자식 = 기본값(마지막)" 추정은 데이터에서 무조건 자식이 거의 항상 마지막(2,066개 중 2,061개)이라 결과가 같습니다. 예외 5개(자식 전부 무조건)는 **첫 자식**이 선택됩니다.
 - **Switch calc** (`0x71038976d4`): 감시 속성이 바뀌어 선택 결과가 달라지면 현재 자식을 끄고 새 자식을 시작합니다(참고 소스와 같은 구조, 세부 페이드 조건은 미판독).
+  - **r8 정정·확정(2026-10-03)** [판독]+[실행]: 재선택 gate는 event+8 bit4=0, resource 존재, asset+2 bit1=1, event+8 bit3=0. 변경 시 old.vt30(cancel)→vt18(release)→새 생성/start. watch 가능한 동안 빈 자식이어도 부모가 끝나지 않는다. [전체 규칙·10,240개 원본 실행](xlink_switch_runtime.md) §3–10. Switch의 세부 취소 조건은 해소했으며 믹서 페이드 시간·파형은 별도 미확정이다.
 - **Random** (`0x71038925a0`): 자식 조건 weight(조건 +4 f32) 합 W. W ≤ 0이면 실패. `r = W·(f − 1)` (f = sead xorshift128 출력 `(u>>9)|0x3F800000`을 float로 본 값, 시스템 +0x908..+0x914 상태). 누적 weight가 **r보다 큰** 첫 자식을 고릅니다.
 - **Random2** (`0x7103892874`): Random과 같되, 자식이 2개 이상이면 **직전에 고른 자식을 후보와 가중치 합에서 뺍니다**. 직전 선택은 사용자 인스턴스(+0xF8 bit0으로 고른 +0x28/+0x30 객체)의 `{컨테이너 콜 테이블 번호, 선택 번호}` 표에 저장합니다(없으면 빈 칸에 추가). 1차 문서 [미확정] → [판독].
 - **Blend** (`0x710388f59c`, blendMode 0): 자식 전부를 시작합니다. 하나라도 시작되면 성공. **값 블렌드**(blendMode ≠ 0, `0x710388e8fc`/`0x710388ea98`)는 감시 속성 값이 자식 조건 `[min(+4), max(+8))` 안에 드는 자식 둘을 골라 곡선(+0xC 들어감 / +0xD 나감: 0 선형, 1 제곱, 2 제곱근, 3 sin(x·π/2), 4 min(2x,1), 5 1)으로 가중치를 줍니다. 이 게임 데이터에는 없습니다.
@@ -368,6 +369,10 @@ changeAction(slot: Slot, name: string, startFrame: number) {           // 0x7103
   slot.current = act; slot.frame = startFrame;
 }
 ```
+
+### 4.4.2 종료·상시 트리거와 전분기 대조 [판독 + 실행] (2026-10-03 [r8 fx])
+
+새 [xlink_trigger_runtime.md](xlink_trigger_runtime.md) §3–10에서 실제 종료 방출 `3896874`의 이전 액션 정리 루프를 확정했다. `(flag&0x0c)==8`과 bit0/발생함 조건이며 bit2가 우선이다. 원본 새 액션 처리 40,960건, 매 프레임 전체 low flag 조합 9,216건, Always `389c130` 768건, 실제 force writer `389d410` 16건 불일치0. r5 `1346470` 프레임 writer를 재사용하여 이름 변경과 프레임만 변경을 연결했다. user+f8 bit1은 inactive 값이며 Always ctrl+18 force와 구분한다. 재바인딩/파형/입자 종료 시각은 이 결과로 승격하지 않는다.
 
 ## 5. 웹 구현 — XLink 디스패처
 

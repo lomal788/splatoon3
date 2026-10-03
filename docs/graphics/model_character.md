@@ -112,7 +112,7 @@ Splatoon 3 v0의 모델(FRES v10)·텍스처(BNTX)·재질·팀 컬러·플레�
 - (대부분 해소) ASB: 노드 종류 10/12/19 = Event/FrameController/InitialFrame, 끝 프레임 = FSKA FrameCount, 블렌드 곡선, 블랙보드 공급 — [anim_state_machine.md](anim_state_machine.md). 남은 것: Event 발화 구간, 다층 포즈 합성, 일부 블랙보드 출처.
 - (대부분 해소) 머리카락 천 물리 상수(입자·질량·중력·감쇠·링크 강성·실행 순서) — [hair_cloth.md](hair_cloth.md), 도구 `gfx4p_bphcl.py`. 남은 것: 게임 쪽 스텝 dt·컬링. 모자 ManualBindSRT 행렬식 해소, HairArrange(맵 = 모자 객체+0x360으로 정정) 뼈 적용식 미확정 — [player_assembly.md §6.1](player_assembly.md).
 - (해소) 신발 미러(회전부 부호 반전 = X 미러), 하네스 선택식. GearAlphaMask: 컨테이너 등록 구조·몸 셰이더 알파 테스트식 판독, 재질 슬롯 연결(0x7102b8c668) 미확정.
-- LOD: 임계 표 선택·기록 판독, 필드 순서 정정(기록 = [Start, 2Start−End, 1/(End−Start)]) — [formats_bfres_bntx.md §7.1](formats_bfres_bntx.md). 거리 계산 소비처 미확정.
+- LOD: 임계 표 선택·기록 판독, 필드 순서 정정(기록 = [Start, 2Start−End, 1/(End−Start)]) — [formats_bfres_bntx.md §7.1](formats_bfres_bntx.md). 거리 계산 소비처 미확정. **r8 LOD 소비 정정(2026-10-03)**: 거리 계산은 실제 BfresModel 생성/정적·애니 경계구 reader와3788760 선택기로 해소 [판독]+[실행]. 원본8192+정적 패킷2048 일치. [lod_runtime.md §3~§11](lod_runtime.md). GPU 전체 디더·모델별 override는 별도 남음.
 - (해소) 화면 모델 선택(사람/`_Hlf`/오징어/잉크레일)과 전환 프레임 — [player_assembly.md §5.4](player_assembly.md).
 - (2026-10-03 해소) 무기 부착식, 모자 결합식(Head · P · ManualBindSRT), 클립 이름 대체 규칙, 눈 색 프레임 규칙, 스프링 트리거·축, 머리카락 천 46팩 상수표 — 위 §4 표와 각 하위 문서.
 - (2026-10-03 미확정 유지) HairArrange 맵 소비자, GearAlphaMask 재질 슬롯 결합, LOD 레코드 reader, 기본 장비 결정 지점, 엔트리 없는 애니 잎의 포즈 기여, ToSquid 쪽 `_Hlf` 시작 프레임. 시도와 다음 주소는 [player_assembly.md §6.1·§8](player_assembly.md), [anim_state_machine.md §6](anim_state_machine.md), [solo_graphics_audit.md §11](solo_graphics_audit.md).

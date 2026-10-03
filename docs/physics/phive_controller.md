@@ -155,7 +155,35 @@ return g
 ```
 special 0x18에서 n이 1..19이면 배율 = 0.2 + 0.8·(20−n)/20(n=1에서 0.96, n=19에서 0.24), 20 이상은 0.2. 즉 내려오는 동안 중력이 점점 약해진다.
 
-특수 상태 번호 이름 — 정정(이전 [미확정]): 본체+0x65c = 10 + 특수 열거 인덱스이고([camui] 판독, SHARED.md), 0x18 = Jetpack, 0x1b = Skewer, 0x1c = SuperLanding이다. 각 분기가 읽는 컴포넌트(+0xa680 PlayerInkActionSpJetpack, +0xa7e8 PlayerInkActionSpSkewer)와도 맞는다 **[판독+데이터]**. Periscope(+0xa818) +0x38/+0xb0의 게임 의미는 **[미확정]**.
+특수 상태 번호 이름 — 정정(이전 [미확정]): 본체+0x65c = 10 + 특수 열거 인덱스이고([camui] 판독, SHARED.md), 0x18 = Jetpack, 0x1b = Skewer, 0x1c = SuperLanding이다. 각 분기가 읽는 컴포넌트(+0xa680 PlayerInkActionSpJetpack, +0xa7e8 PlayerInkActionSpSkewer)와도 맞는다 **[판독+데이터]**. Periscope(+0xa818) +0x38/+0xb0의 게임 의미는 8차 새 원본 producer로 **해소 [판독]+[실행]**(§4.1.1).
+
+### 4.1.1 Periscope 상태·중력 차단 요청 (2026-10-03 r8 신규) **[판독]+[실행]**
+
+기준 `P=[본체+0xa818]`는 PlayerPeriscope(vtable563e030)이며 **P+0x38=s32 game 상태**, **P+0xb0=u8 아직 소비하지 않은 시작 요청**이다. 기존 “Periscope+38/+b0 의미 미확정”을 다음 새 원본 근거로 정정한다. 잠망경 카메라의 움직임과 리소스 전체 재생은 별도 범위다.
+
+| P+0x38 | 원본 상태명 | enter/exec/exit(실제로 등록된 주소) |
+|---|---|---|
+| 0 | Off | 266f780 / 266f914 / 없음 |
+| 1 | Extend | 266f918 / 266f9b0 / 없음 |
+| 2 | View | 266fcbc / 266fd4c / 266fd8c |
+| 3 | Shrink | 266fe1c / 266feb4 / 26701e0 |
+
+상태명·콜백은 신규 init `0x710266f18c`가 그대로 등록하며 원본 실행으로 위 네 문자열을 확인했다. `0x710267027c`가 초기 필드와 상태를 리셋한다. 중력 판정의 `P+38!=0 || P+b0!=0`은 **Extend/View/Shrink 중이거나, Off에서 시작 요청이 이미 들어온 상태**다. Viewer 상태2만 중력을0으로 하는 것이 아니다. HP 빠른 회복의 별도 조건 `P+38==2`는 정확히 **View**다(중력 predicate와 구분).
+
+시작 producer: 원본 접촉 listener `0x71021d2c68`은 플레이어 접촉·태그 조건과 `0x710266ed40(P)` eligibility를 검사하고, 메시지 **0x08536a00** 및 잠망경 actor handle/파라미터를 만든다. 수신자는 P vt 슬롯16=`0x7102427830(P,Msg)`다. Msg+4가 이 ID이고 Msg+0x10 payload가 nonnull이며 payload vt+0x40 형 검사에 성공하면, payload+b0 핸들을 P+78에 복사하고 **P+b0=1**, payload+c8/cc/d0/d4 네 u32를 **P+a0/a4/a8/ac**에 복사하며1을 반환한다. 잘못된 ID/null payload/타입 거부는0이며 래치를 쓰지 않는다. `Obj_Periscope_Raise` 소리 요청도 접촉 listener에 있다; 원본명 연결만 판독했으며 소리 실행은 하지 않았다.
+
+새 update `0x71026703b4`의 순서:
+
+1. DokanWarp 상태가0이 아니고 현재 잠망경 상태가0이 아니면 먼저 Off0 전이.
+2. Off0에서 b0가1이면 **b0=0**으로 소비하고 Extend1로 전이한다. 다른 상태에서 b0를 소비하는 분기는 없다.
+3. Extend1은 이동 오징어 상태집합 S를 벗어나면 Shrink3. S를 유지하고 `P+3c * f32(1/60) >= config+94`이면 View2.
+4. View2는 S를 벗어나면 Shrink3.
+5. Shrink3는 `P+3c * f32(1/60) >= config+a4`이면 Off0.
+6. 원본 game 상태 기계 `125a178` 전이 및 `125a394` update. 여기서 P3c는 부동소수 tick counter이며 설정의 시간은 초다. 이 함수가 읽는 조건을 “접지”로 바꾸지 않는다.
+
+보통 사격장 이동은 Off0/b0=0으로 위 중력0 우회가 없다. eligibility `266ed40`은 S, 현재 Off0, 요청 없음, 점프/착지/토관/공격 카운터 등이 없는 조건에서만 시작을 허용한다. 요청→Extend/View→Shrink→Off가 끝나면 중력 predicate가 풀린다. 모드 guard와 스틱 입력 유예도 원문에 남겨 두며 임의로 더 자연스럽게 바꾸지 않는다.
+
+검증 `web/tools/r8_physics_periscope_emu.py` → `analysis/completion/r8/physics_periscope_emu.json`: **상태800건 + 요청 수신240건, 정수 필드/래치/반환 불일치0**. 실제 init/state-name 등록 및 gameSM 전이/카운터 업데이트를 실행했다. actor/RTTI payload/config/time는 합성, actor·카메라·이펙트·자원 enter/exec/exit 콜백은 주소별 no-op이다(결과 JSON 목록). null0/PLT0/자동 페이지0. 따라서 **중력 predicate의 상태·요청 의미를 해소**했지만 잠망경 카메라·오브젝트 전체 동작을 검증했다고 쓰지 않는다. 신규 원문은 `analysis/decomp/r8_player/periscope.c`, `periscope_states.c`, `periscope_request.c`이다.
 
 ### 4.2 게임 코드의 수직 속도 갱신 `0x71024a7d00` [판독]
 
@@ -361,8 +389,8 @@ L.vt[0x30] (body)                                  // 0x71010067e0: 스텝 후 �
 
 - **dt 값**: 월드 생성 호출부 `0x7103db385c`가 desc+0x24(x26 = desc+0x5c−0x38)에 `0x3c888889`(0.016666668)를 쓰고, 생성자 `0x7103ac71c8`가 `월드+0x20 = +0x24 = +0x2c = min(desc+0x24, 0.99899f)`, `+0x28 = +0x30 = 1/dt`로 둡니다 **[판독]**. phive 범위(0x7103a80000~0x7103b40000)의 다른 `str s,[x,#0x24]` 15곳 중 7곳(`0x7103ade2f0`, `0x7103a8d068`, `0x7103a8da6c`, `0x7103a8ab1c`, `0x7103a8907c`, `0x7103ae9230`, `0x7103ab4518`)은 월드가 아닌 객체였고 나머지 8곳과 범위 밖 경로는 확인하지 않았습니다. 컨트롤러 프레임 정보 dt(§3.3 +0x44)도 같은 월드+0x24입니다.
 - **5차 보강(2026-10-03) [판독]**: 월드 설명자는 물리 시스템 초기화 `0x7103db346c`(물리 시스템 vtable 슬롯 `0x7105763af0`)가 스택에 만든 기본 설명자(desc = sp+0xb8) 또는 초기화 인자 `[x1+0x28]`이 주는 덮어쓰기 블록(+0x38)이다. `0x7103db37d0`의 `csel x26, x21, x11`이 두 경우 모두 desc+0x24를 가리키게 하므로 **dt 0x3c888889 는 덮어쓰기 블록 유무와 관계없이 생성 시점에 기록된다**. 기본 설명자의 다른 값: desc+0x28..+0x30 = (0, −9.8, 0)(`0x7103db34cc`의 0xc11ccccd), desc+0x7c/+0x80 = 0.05/0.05(`0x7103db3578`의 `stur x11,[x22,#0xb4]`) → 생성자가 월드+0x218/+0x21c에 복사(`0x7103ac72a8` → `0x7103ac73d0`). 5차에서 남은 8곳도 분류했다: `0x7103ac7320`은 생성자 자신(dt 기록), `0x7103afa914`는 스택, `0x7103afd39c`(구조체 +4..+0x28 채우기), `0x7103b0542c`/`0x7103b056dc`(행렬 곱 결과), `0x7103b0c588`(보간 결과), `0x7103b33e70`/`0x7103b34228`(행렬 열 ×0.995 감쇠)은 월드 객체가 아니다 **[판독]**. 즉 phive 범위(0x7103a80000~0x7103b40000) 안에서 월드+0x24 를 쓰는 곳은 생성자뿐이다. 범위 밖 경로와 덮어쓰기 블록 공급자는 **[미확정]**이므로 "실행 중 1/60 고정"은 아직 **[추정]**이다.
-- **정정(2026-10-03, 조정)**: 덮어쓰기 블록 공급자는 [r5 camweapon]이 찾았다. 게임 모듈 설정 팩토리 `0x710344af54` case 0xf가 설정 +0xb4 = 0.05, +0xb8 = 0.01을 쓰고, 모듈 생성 `0x7103dad17c`가 이 설정을 초기화 인자 +0x28로 넘긴다. desc = 설정+0x38이므로 desc+0x7c/+0x80 = 0.05/0.01이고, **실행 중 월드+0x218 = 0.05, 월드+0x21c = 0.01**이다 [실행](`web/tools/r5_camweapon_boom_emu.py`, 사슬 실행 + 경계 12/12 비트 일치) + [판독]. 위의 "월드+0x21c = 0.05"는 덮어쓰기가 없을 때의 기본 설명자 값이다. ColGround 최종 반경 max(0.6, 0.01) = 0.6, 붐 구 반경 max(0.01, 0.3) = 0.3이라 결과 반경은 바뀌지 않는다. dt는 덮어쓰기 블록에서도 desc+0x24에 1/60이 기록된다(위 판독).
-- **막는 접촉**(L slot5 `0x7101006718`): 접촉 플래그 +0x68 bit1이 꺼져 있으면 막지 않음(접촉만 기록). bit1이 켜져 있으면 `body+0x18c < 0`(기본 −1)이면 막음. 0 이상이면 상대 바디(+0x70/+0x78) +0x2a4 값과 `body+0x18c × 배율(0x7101a856e8(DamageRate 계열 표, body+0x190, 상대+0x2a8))`을 비교해 관통하면 bit1을 지우고 막지 않음 **[판독]**. 이 관통력(+0x18c)을 쓰는 곳은 찾지 못함 **[미확정]**. 접촉 bit1이 충돌 필터 표(LayerEntityParamTable 값 2 = 충돌, combat 문서)에서 오는지는 **[추정]**.
+- **정정(2026-10-03, 조정)**: 덮어쓰기 블록 공급자는 [r5 camweapon]이 찾았다. 게임 모듈 설정 팩토리 `0x710344af54` case 0xf가 설정 +0xb4 = 0.05, +0xb8 = 0.01을 쓰고, 모듈 생성 `0x7103dad17c`가 이 설정을 초기화 인자 +0x28로 넘긴다. desc = 설정+0x38이므로 desc+0x7c/+0x80 = 0.05/0.01이고, **실행 중 월드+0x218 = 0.05, 월드+0x21c = 0.01**이다 [실행] (`web/tools/r5_camweapon_boom_emu.py`, 사슬 실행 + 경계 12/12 비트 일치) + [판독]. 위의 "월드+0x21c = 0.05"는 덮어쓰기가 없을 때의 기본 설명자 값이다. ColGround 최종 반경 max(0.6, 0.01) = 0.6, 붐 구 반경 max(0.01, 0.3) = 0.3이라 결과 반경은 바뀌지 않는다. dt는 덮어쓰기 블록에서도 desc+0x24에 1/60이 기록된다(위 판독).
+- **막는 접촉**(L slot5 `0x7101006718`): 접촉 플래그 +0x68 bit1이 꺼져 있으면 막지 않음(접촉만 기록). bit1이 켜져 있으면 `body+0x18c < 0`(기본 −1)이면 막음. 0 이상이면 상대 바디(+0x70/+0x78) +0x2a4 값과 `body+0x18c × 배율(0x7101a856e8(DamageRate 계열 표, body+0x190, 상대+0x2a8))`을 비교해 관통하면 bit1을 지우고 막지 않음 **[판독]**. 이 관통력(+0x18c)을 쓰는 곳은 찾지 못함 **[미확정]**. 접촉 bit1은 기존 r6 combat의 `0x7103c55ed8→0x7103c34e14`가 그룹별 block 표·양쪽 몸체 마스크·형상 행을 검사해 켠다 **[실행]**. 값2만 block 배열로 만드는 원본 BYML 변환은 7차 [실행] — [character_controller.md](character_controller.md) §3.5.1. 7차 실제 사격장 bphsh 행 부착+탄 block 결과는 [../gimmick/collision_mesh.md](../gimmick/collision_mesh.md) §3.4.1~2. 기존 [추정]은 이 근거로 정정(2026-10-03).
 - **충돌 응답 = 멈춤**: 반사·미끄러짐·관통 보정 없음. 위치는 첫 막는 접촉 시점으로 되돌리고 속도는 0. 게임 쪽 속도 사본(탄+0x1118)은 그대로라 다음 프레임 슬롯54가 다시 setVelocity 합니다(실제로는 아래 콜백이 정지·소멸 처리) **[판독]**.
 - **쓸어 넘기기**(`0x7103c55968`): 형상의 p0·p1 AABB를 합쳐 넓은 단계 질의(월드 vt+0x3b8) → 후보마다 좁은 단계 처리기 표 `0x7105756468`(4개: `0x7103c52d30`, `0x7103c5368c`, `0x7103c54140`, `0x7103c54de4`)에서 상대 바디가 움직이는지(선속도 +0x144/+0x2d4, 각속도 +0x138/+0x2c8이 0인지)와 모션 종류로 하나를 고름. 처리기 내부(TOI 계산)는 판독하지 않음 **[미확정]**.
 
@@ -505,6 +533,202 @@ for p in 0..3, g in 0..7:
 
 비트 일치가 필요하면 바디식을 써야 합니다. 상태머신은 탄+0x1118 사본만 쓰므로 이 차이는 이동 거리(+0x1200)·스플래시 생성 지점·도색 위치·충돌 판정에만 들어갑니다. 결과 `analysis/bulletbody/integrate_compare.json`.
 
+### 6.9 지형 접촉의 실제 재질 reader·코덱 (8차, 2026-10-03) [실행]+[판독]
+
+`3c5606c`가 shapeA/B의 `12ac5e0` 16 B 재질 결과를 접촉+38/+48로 복사하고 `3c55ed8`로 block bit을 결정한다. `12acb38`는 실제 mesh leaf `0997078` tag&0x1fff를 I+18 count와 비교한 뒤 I+20+index*16을 반환한다. 월드 bootstrap `3c4579c`의 `WorldShapeTagCodec` vt5755ee8+40은 RET; Entity CollisionFilterBackEnd vt5756560+40=3c570c4이다. 새 실제 원본 mesh key→leaf→재질 실행11505건/leaf5530건/정점49770 f32필드 불일치0. **§9/§11의 재질 reader·코덱 클래스 미확정은 새 원본 근거로 해소**한다. 이전 r6/r7 block 계산은 재사용이고 신규확정수로 세지 않는다. 구조·명령·스텁·경계는 [../gimmick/collision_mesh.md](../gimmick/collision_mesh.md) §3.4.3.
+
+### 6.10 native 쓸어 넘기기·solver 진입 추적 (2026-10-03 r8, 부분) **[판독]/[미확정]**
+
+기존 `3c52d30/3c5368c/3c54140/3c54de4` 네 처리기와 `09af088` 이후를 새로 읽었다. **leaf 함수 표 D(전역57dd738)**와 **Havok 질의 디스패처 Q(world+0x510)**는 별개다. D+type*0x200+0xa8은 정점/반경, +0xc0은 leaf를 공급한다. Q는 `0x7100947508(Q,0)`에서 생성되고 `0x710093fe88`로 쌍 처리기를 등록한다. 새 원본 생성자를 실행해 type0/1/2/4/8의 **25쌍 함수 포인터가 판독값과 일치**했다(null/PLT/자동 페이지 없음, `r8_physics_query_dispatch_emu.py`). 이 실행은 기하 접촉 계산을 실행한 것이 아니다.
+
+`0x7100947aec`는 질의 filter vt+0x40(종류2, flip을 반전한bit, 두 info)를 먼저 확인한다. 각속도 입력 query+0x90..0x9c가0이 아니고 양쪽 shape+0x1a bit0이면 rotating cast `0x7100948360`; 그 외 `Q+0x1eb0 + typeA*0xf8 + typeB*8` 함수로 간다. 메시 상대(타입8)는 기존 topTree `0936ee8`; 반대로 메시→convex는 `0945350`이다. Convex 일반은 `0949570`, 타입1/2 일부쌍은 `0948f30`, 타입1→타입4는 `094ae10`이다. shape type 이름을 포인터 표 번호만으로 임의 명명하지 않는다.
+
+일반 `0949570`은 D+0xa8에서 각 shape의 정점·개수·반경을 받고 info+0x30 scale 조건에 따라 정점을 변환한다. radiusA에는 query+0x74를 더하고, 둘의 반경 합 및 query+0x70 한계·context+0x18 허용값을 native cast에 준다. 첫 접촉 collector가 없고 A정점 수<2·원점0 조건이면 `0x7100aefd00→0x7100aefdc0`; 그 외 **`0x7100aec920`**이다. 초기 겹침 결과가 유효하고 separation<=query+0x78이면 초기 collector vt+0x28에 type5, sweep 결과가 유효하면 hit collector에 type2를 전달한다. 네 상위 처리기의 collector 복사는 `3c5621c/3c56588/3c5677c/3c5698c`로 갈라진다.
+
+solver의 기존 `09cee34`는 `09cec84`를 부르는 래퍼이며 **실제 위치 적분 식 자체가 아니다**. 새 `09cec84` 판독: World+0x4a8 simulation의 vt+0x18을 World+0x920 task queue와 함께 호출하며 simulation+0x18==1인 경우에만 세 번째 작업 인자를 유지한다. `09bff14` 월드 생성자는 desc+0x70==1이면 MultithreadedSimulation(`0a68954`), 아니면 SingleThreadedSimulation(vt5462510, vt+0x18=`0a8ee28`)을 단다. Single 경로는 task 입력→`09ce984`→`0a84230`→`0a4ac10`→`0a71b90` 등으로 이어진다. **실제 적용되는 simulation 모드와 위치 적분/침투해소 커널 전체는 아직 미확정**이다.
+
+SolverInfo는 World+0x530이며 새 기본 생성자 `0a4517c`가 +0x70 substep4/+0x78 microstep1을 쓴다. 실제 월드는 `0a4536c(dt,solveDt,Info,gravity,desc10c,desc110)`로 덮어쓴다. 이 함수는 subdt=`dt/n`, invsubdt=`n/dt`, gravitySub=gravity*subdt, gravityTick=gravity*dt를 저장하며 cap84가 큰 sentinel보다 작으면 `cap84 *= (newN*oldDt)/(oldN*newDt)`로 재조정한다. **기본 생성자의4/1을 사격장 실제 반복 수라고 주장하지 않는다.** desc writer와 실제 task solver 소비를 이어서 확인해야 한다.
+
+새 디컴파일: `analysis/decomp/r8_physics/native_dispatch.c`, `query_solver_init.c`, `primitive_toi.c`, `solver_toi_core.c`. 아직 `0aec920`의 support/GJK·conservative cast와 `0aefdc0`의 핵심 계산, task solver의 최종 position/penetration writer를 완독·재구현 대조하지 못했다. 따라서 TOI 전체와 solver 질문의 **상태는 조사중**, 확정 수 증가0. 다음은 위 native kernel 및 `0a4ac10/0a71b90`이다. 원본 실제 ColGround↔지형→solver→actor→B10을 한 번에 실행하지 않았다.
+
+### 6.10.1 게임 기본 반복 설정과 native motion 저장 (2026-10-03 r8 추가, 부분) **[판독]+[실행: 월드 생성]**
+
+새 판독 `solver_integrate.c`/`solver_motion.c`/`native_motion_body.c`/`native_library_init.c`로 다음 경로를 확보했다. 기존 게임 factory `0x710344af54`의 재분석을 신규 성과로 세지 않으며, 이번에 처음 읽은 native 소비·최종 설정 연결을 기록한다.
+
+- native Cinfo 생성자 `0x7100a454cc`는 `D+0x10c=4`(substep), `D+0x110=1`(microstep), `D+0x70=1`(다중 작업 simulation)을 둔다. **게임 factory의 마지막 override는 Cfg+0x94=8**이다. `0x7103c4579c`가 Cfg+0x38 설명자의 +0x5c/+0x60/+0x64를 각각 D+0x10c/+0x104/+0x108로 전달하므로, 이 기본 gamefactory 경로는 **substep8/microstep1/tau0.6000000238418579/damp1**이다. 런타임 설명자 교체 여부 전체를 아직 확인하지 않았고 native 기본4를 실제 게임 반복 수로 채택하면 안 된다.
+- 원본 `0x7100923a60→0x71008f28c0`로 Havok 초기화를 실행한 뒤 `0x71009bff14` nativeWorld 생성이 끝까지 반환했다. 생성된 S=World+0x530의 +0x70/+0x78/+0/+8은 8/1/0.6000000238418579/1, World+0x4a8의 simulation VT는 `0x71054614c8`이며 slot+0x18은 **0x7100a6a078**이다. 테스트는 gamefactory 설정 세 필드를 original bootstrap 대응대로 전달한 합성 설명자이며 실제 게임 월드 캡처가 아니다.
+- 처음 월드 생성 실행은 Havok 할당 콜백 미초기화로 `intr 0x3d4ccccd00000201`에 멈췄다. 엔진 초기화 추가 후에는 ELF TLS의 TPIDR_EL0가 0이라 새 스레드 상태를 반복 생성하여 `0x71008af31c/0x71008af2d0` count limit에 걸렸다. 단일 스레드 ELF TLS 메모리와 nn TLS 값을 제공한 마지막 시도는 fault0/자동 매핑0으로 반환했다. SDK 락·시간·할당 외부 경계와 optional null callback은 JSON에 명시했다. 이 성공을 접촉 솔버 실행 성공으로 확대하지 않는다.
+- `0x7100a4ac10`는 **단일 작업 simulation**의 Jacobian 루프다. World+0x5a0 substep마다 World+0x5a8 microstep과 유한 cap(World+0x5b4) 분기를 돌며 세 solver stream을 처리하고, 반복 사이 `0x7100a4b514`(StStepMotions), 끝 `0x7100a4b8c8`(StFinalizeMotions)를 부른다. 게임 기본의 다중 작업 경로 `0x7100a6a078`가 만드는 작업·solver 순서는 계속 판독 중이다.
+- 새 `0x7100a4b8c8` 위치 저장은 native **hknpMotion stride0x80, COM +0x10/+0x18/+0x20의 double**에 축별 `double(f32(dt * effectiveLinearVelocity))`를 더한다(PC `0x7100a4c12c..0x7100a4c170`). 속도/감쇠·가속 cap·modifier·쿼터니언 갱신이 이 저장보다 먼저 있다. 이어 연결된 nativeBody(stride0xc0)마다 `0x71009d5b68`이 COM·회전·body COM offset으로 body transform과 AABB를 갱신한다. **Phive staging +0x44와 native motion 필드를 같은 객체로 간주하지 않는다.** staging→native 선속도와 native body→게임 body+d8 전체 연결, 접촉 침투 bias 및 Jacobian 전체 수식은 아직 미확정이다.
+
+근거: `web/tools/r8_physics_world_solver_probe.py`, `analysis/completion/r8/physics_world_solver_probe.json`(이전 실패 보존). 원본 월드 생성 반환과 설정 필드 확인을 [실행]으로 기록하며, 재구현한 접촉·위치와 비트 대조한 시험은 아니다. L15/L77/L191 및 TOI 행은 조사중 유지한다.
+
+### 6.10.2 원본 native 강체 생성·접촉 스텝 실행 (8차, 2026-10-03)
+
+**[판독]+[실행 관찰; 독립 재구현 비트 대조 전]**. 원본 라이브러리 초기화와 native body 등록을 끝까지 실행했다. 지난 §6.10.1의 optional null 콜백은 접촉 완결 근거가 아니었다. 이번에는 게임 초기화 `3c07898`의 첫 호출과 같은 **`09153d8(57e5398)`**를 실행하여 `SimdTreeBroadPhase`의 feature descriptor가 factory `0adbb30`을 전역 `57dd918+8`에 등록하게 했다. `09313b0(57dd738)`의 shape dispatcher 초기화와 ELF TLS `TPIDR_EL0`도 필요하다. 외부 nn OS TLS·락·시계·메모리 할당은 실행기의 단일 스레드 모형이다.
+
+| 원본 단계 | 함수·저장 | 확인한 경계 |
+|---|---|---|
+| 캡슐 | `0930b40`(sret x8) | human A(0,0,0), B(0,.7,0), r .6; 지형 대신 static capsule A(−10,−.1,0), B(10,−.1,0), r .1 |
+| native body | `09e64f8` BodyCinfo → `09c78f0` CreateBody → **`09c6a70` AddBodies** | motion type 0 static/1 kinematic/2 dynamic; body id low24와 generation 고비트. `09c8310`은 RemoveBodies, `09c969c`은 DestroyBodies이므로 등록 함수가 아니다 |
+| 질량·회전 | `0abf6e0` shape mass distribution → `09db37c` → `09d7338` | dynamic mass100, inertia XYZ0. `09d7338`의 mass는 **s0 실수 인자**이다. Ghidra의 첫 정수 인자 표기를 그대로 실행하면 질량을 잘못 전달한다 |
+| material | `0a507cc` → `0a4f76c` → Cinfo+c | probe에서 material+1a/+1c/+1e를 0으로 설정. native 재질 필드의 원본 descriptor 이름 및 Phive preset 변환은 이번 실행에서 대조하지 않았다 |
+| 원본 충돌 작업 | `09ce484` → mode1 `0a68c4c` task graph | `TI.dt=1/60`, **TI+4=0**, workerCount1. 기존 게임 `3c48298`는 세계 속도배율1일 때 scaledDt에 0을 넣는다 |
+| 작업 소비 | native task interface vt+18 | 원본 그래프 간선의 위상순서로 단일 스레드 실행. 첫 collide 25노드, 원본 `09d275c` graph reset 뒤 solve 7노드. 실제 동시 스케줄러는 모형이며 물리 callback은 원본 |
+| 접촉·위치 | `09cee34` → mode1 `0a6a078` → **`0a181fc`** → **`0a4b8c8` → `09d5b68`** | 원본 4-lane contact kernel·COM 적분·몸체 transform/AABB 생성이 모두 실행됨. 이 시험에서는 `0a29f20` 재생성 경로 진입0 |
+
+`r8_physics_contact_mt_probe.py`의 10프레임 모두 반환, **null 호출0/자동 메모리 매핑0/메모리 fault0**. contact kernel80회(8회/프레임), COM 적분10회, body transform10회이다. human native body 원점 y는 .45에서 첫 프레임 **.45749515295028687**, 10번째 **.5101864337921143**; native 저장 속도 y는 첫 **.003538846969604492**, 10번째 **.0022319555282592773**이다. fixture native 세계 중력은 WorldCinfo 기본 −9.81이며, 실제 Phive 플레이어의 매 프레임 속도 지정·native gravity 분리는 아직 연결하지 않았다. **이 수치를 사격장 상수로 사용하지 않는다.**
+
+같은 capsule·mass·material 입력의 진단 Single mode0 실행 `physics_contact_probe.json`과 mode1 실행은 10×(위치3 f32+COM3 f64+속도3 f32) **90필드의 비트가 동일**하다. 이것은 두 원본 경로 간 교차 대조이며 독립 재구현과의 비트 일치가 아니다. 접촉 없이 body 하나를 만든 `physics_body_probe.json`도 반환했다. native hknpMotion stride는 **0x80**, COM은 +10/+18/+20의 double, native linear/angular velocity는 +60/+70이다. Phive staging pool stride **0xd8** 및 staging+44와 혼동하지 않는다.
+
+실패도 보존: feature 미등록에서는 broad phase callback이 null이었다(`physics_body_no_broadphase_probe.json`); workerCount0에서는 simulationContext blockstream 생산이 빠졌다(`physics_body_zero_threads_probe.json`); collide 완료 노드를 solve에서 다시 실행한 첫 MT 실행은 해제된 task pointer를 읽었다(`physics_contact_mt_replayed_probe.json`). graph를 남겨 둔 뒤 TI+4=dt를 사용했던 별도 시험은 `physics_contact_mt_retained_graph_probe.json`에 보존했다. 이후 실제 게임의 TI+4=0 및 collide/solve 사이 원본 graph reset을 적용했다. 마지막 두 시행의 값을 정상 프레임 결과로 혼합하지 않는다.
+
+**[미확정]** 실제 Phive staging velocity→native motion setter, nativeBody transform→Phive body+d8 write-back, `SplPlayer` motion property mapping, 접촉 Jacobian의 침투 bias·impulse 식의 독립 비트 대조, 실제 사격장 지형 메시/경사/계단·오징어 형태의 전체 스텝. next: `3b07b8c→3c50c7c`, `0a181fc/0a29f20`, `0a4b8c8`, nativeWorld vt motion/pose getters. 이 실행 성공으로 기존 mixed whole 질문을 확정으로 승격하지 않는다.
+
+### 6.10.3 게임 속도 전달과 native 스텝 뒤 Phive 되쓰기 (8차 추가, 2026-10-03)
+
+**[실행]+[판독]** 새 `0x7103c50c7c`는 staged linear/angular 변경 플래그에 따라 nativeWorld의 `+0x190=0x71009d9674`(둘), `+0x198=0x71009d9e54`(linear), `+0x1a0=0x71009da1a0`(angular)를 호출한다. game Body+0x90 backend+8의 원본 handle로 native Body를 선택한다. Native motion+0x60..68의 linear setter는 축 차이가 모두 `2^-23` 이하이면 쓰지 않는다. 이 허용 오차는 앞단 게임 setter의 `0.0001`과 별개다. 새 `r8_physics_native_velocity_emu.py`는 원본 body 생성·AddBodies 후 이 bridge와 setter를 실행하여 1,044사례/3,132 f32필드가 독립 계산과 **비트 일치**, null/자동 매핑/실행 오류 0이었다.
+
+Native 속력 제한은 `n=f32(f32(f32(x*x)+f32(y*y))+f32(z*z))`가 `f32(cap*cap)` 이하이면 입력을 그대로 저장한다. 이를 넘으면 `inv=f32(1/f32(sqrt(n)))`, `k=f32(f32(cap*inv)*0.9999997615814209f)`를 먼저 만들고 각 축 `f32(v*k)`를 저장한다. cap=100은 검증 fixture의 motion+0x6c 값이며 사격장 전체 cap의 근거로 쓰지 않는다. NaN 길이는 새 값 저장을 거부하지만 ±무한대 길이는 inv=0을 만들고 무한대 축에 원본 ARM 기본 NaN `0x7fc00000`을 저장한다. 첫 독립 모델의 NaN 부호 불일치 1건은 `physics_native_velocity_nan_sign_failure.json`에 보존했고 원본 명령의 canonical NaN 처리로 모델만 정정했다.
+
+**[실행: 원본 producer 연결]+[판독]** 새 `0x7103ae6410`는 nativeBody+0x54 bit3(active)로 game Body+0x88 bit15를 갱신한다. 이전 또는 현재 active이면 Body+0xd8의 48 B 행렬을 +0x108의 이전 행렬로 복사하고 nativeWorld+0x180=`0x71009d1de0`에서 nativeBody 행렬을 얻는다. `0x71008a8cec`의 quaternion 변환 뒤 회전 9개를 Body+0xd8..+0x100에 쓰고 nativeBody+0x30/+0x34/+0x38의 위치를 Body+0xe4/+0xf4/+0x104에 쓴다. Body bit22가 꺼져 있으면 +0x1d0=`0x71009d9b84`의 linear 속도를 Body+0x138..+0x140으로, +0x1d8=`0x71009d9c5c`의 world angular 속도를 +0x144..+0x14c로 되쓴다. bit25는 bit26으로 넘긴 뒤 지운다.
+
+`r8_physics_native_writeback_emu.py`는 §6.10.2의 원본 MT contact 스텝 10프레임 후 **이 producer와 실제 native getter를 이어 실행**했다. identity 회전·angular0 fixture에서 현/이전 행렬24개, linear/angular6개 ×10 = 300 f32필드가 저장 대응과 비트 일치했고 contact kernel80/COM10/native pose10을 실제 실행했으며 null/자동 매핑/실행 오류는 0이었다. 출력 `physics_native_writeback_emu.json`. 접촉 보정 수식의 독립 재구현 대조나 임의 회전·잠복/계단 상태를 검증한 결과는 아니다.
+
+정정(2026-10-03): 아래 §8의 과거 “Phive 스텝 원본 미실행”은 위 제한된 원본 native contact/되쓰기 실행으로 보강한다. 실제 플레이어 슬롯18→staging→충돌/침투 보정 수식→형태 변경→슬롯19의 **전체 실행·식 검증**은 여전히 미확정이다. 기존 r6/range Main body→actor 저장 사슬은 재사용하며 이번 신규 수로 세지 않는다.
+
+8차 적분 저장 구간 추가(2026-10-03) **[실행: 명령 구간]+[판독]**: 실제 finalizer0a4b8c8의 **0a4c12c..0a4c188**는 먼저 SIMD 입력 실효속도와 dt를 **f32로 곱한 뒤**, 그 곱만 f64로 올려 nativeMotion+10/+18/+20의 double COM에 더한다. 그 후 COM을f32로 줄여 stack+f0에 위치cache를 저장한다. 즉 `COM64_new=COM64_old+double(f32(v_effective32*dt32))`이며 double v×dt가 아니다. 여기의 SIMD 실효속도가 nativeMotion+60의 최종 저장 선속도와 같다는 주장은 하지 않는다(침투 보정/solver 누적값의 합성은 후속 normal/bias 분석 필요). 새 `r8_physics_com_integrate_emu.py`는 이 저장 구간 2,048사례(큰/작은double원점,여러dt)의 **6,144 f64+6,144 f32필드**가 독립 계산과 비트 일치, null/자동 매핑/오류0. 출력 `physics_com_integrate_emu.json`. 전체 contact·finalizer 입구까지 실행한 시험은 §6.10.2/3의 별도 원본fixture다.
+
+8차 native 키네마틱 상대 접촉 추가 **[실행: 원본 전체 probe]/[미확정: 독립 전체 식]**: `r8_physics_contact_kinematic_probe.py`는 §6.10.2의 바닥 nativeBody를kind0 static에서kind1 keyframed로 바꿔 캡슐형 dynamic 몸체와 원본MT 스텝10프레임을 실행했다. kernel80/COM10/pose20, null/자동 매핑/오류0. 기존 static용 singlebody normal PC0a1a4d8/0a1a98c는0회이므로 이 결과는 다른 원본 두-body 경로다. 양쪽 무회전/무마찰 fixture이며 실제사격장 Main의 모든계층·형상·배치 실행이 아니다. 독립 normal/bias 계산 비교 전 whole 질문은 조사중 유지. 같은 첫kernel 시점의 BSS/heap/stack/regs는 `physics_kinematic_kernel_*`에 보존했다.
+
+### 6.10.4 침투 보정·법선 충격량·반복 수 (8차, 2026-10-03) **[판독]+[실행]**
+
+§6.10~6.10.3의 과거 "침투 bias·impulse 식 미확정"은 이 절의 새 판독/실행으로 **보통 플레이어의 무회전·지형/표적 접촉(마찰·반발0) 해소 식에 한해 정정**한다. 탄의 TOI 질의, 임의 회전/마찰 강체, 실제 Lby_Lobby00 메시 전체를 재생했다는 뜻은 아니다. 고정 목록의 `character_controller.md:L191` 질문(침투 보정 속도·반복 수)을 해소하며, TOI가 섞인 `phive_controller.md:L359/L495/L508`과 몸체 속성 전체 바인딩 `character_controller.md:L15`는 조사중이다.
+
+원본 사슬은 nativeWorld solverInfo(+530)의 초기화 **0a452fc→0a4536c**, 접촉 cache 생산 **0a218f0→0a21ae4**, Jacobian/target 생산 **0a15b70**, normal kernel **0a181fc**, carry **0a4b514**, finalize **0a4b8c8**이다. 0a77438 실제 MT 작업은 09d4ba8로 초기 속도/zero carry를 만들고 substep/microstep 카운터를 소비하며 마지막에 finalize를 호출한다. 게임 world desc의 **sub8/micro1/tau.6/damp1**은 §6.10.1 판독을 재사용한다. 실제 원본 MT graph는 한 프레임 normal kernel8회, 그 사이 carry7회, 마지막 finalize1회였고 10프레임에도 이 횟수를 유지했다. single 진단 경로 0a4ac10의 동일 8단계 루프도 판독했다. 반복 수를 "기본 constructor4"로 대입하거나 8회 각각에 전체 dt를 곱하지 않는다.
+
+수학 필드의 기준 객체를 구분한다. 아래 `S=solverInfo`, `C=접촉 cache`, `J=Jacobian행`; **S+C0와 C+C0는 다른 값**이다. root의 신규 전체 원본 실행(1,024사례/16,384 f32필드, `solver_info_emu.json`)에 따라 `S+B0=tau/damp`, `S+C0=damp/tau`, `S+74=f32(1/sub)`, `S+D0=f32(f32(tau/damp)*f32(f32(1/dt)*sub))`다. 실제 dt=f32(1/60),sub8이면 D0=288이다. cache writer0a21ae4는 quality+2c bit7이0이면 `C+C0=1`, `C+C8=-.05`를 두 lane에 저장하며 bit7이1이면 둘을0으로 쓴다(root 신규 1,024사례/4,096필드). enum 이름만으로 모든 게임 cache의 값이1/-.05라고 단정하지 않는다.
+
+원본0a15b70은 native contact+30의 현재 depth와 cache의 old/carry를 읽어 J+1c의 target velocity를 쓴다. 실제 정적 접촉 store PC0a16e20, kinematic 두-body 접촉 store PC0a17544에서 target=`2.1600022315979004`였고, effectiveMass store는 각각0a16d10/0a165e8였다. nativeManifold+92의 분기 byte를 읽는 PC0a15d94(W9), dual의0a165ec..165f4에서초기byte를mask로보존하는명령과 실제 Jacobian 분기/행 반복을 판독했으며, 고수준 플래그 이름을 임의로 붙이지 않는다. 세부 register/store와 실제 trace는 `analysis/completion/r8/contact_kernel_support.md` §4~7.2, `contact_bias_producer.json`/`contact_dual_bias_producer.json`에 보존했다.
+
+`F`를 명령마다 반올림하는 f32로 두면 보정 식은 다음과 같다. `old`/`carry`는 원본 cache 입력, `d`는 depth, `v`는 원본 상대 속도의 투영, `flag`는 해당 원본 분기 입력, `pred=S+20`, `k=C+C8`, `c=C+C0`, `gamma=S+D0`이다. 임계값은 **−2^-23**이고 실제 원본 old/carry 생산·변경은 위 주소의 store에 연결된다.
+
+```text
+p = carry if flag!=0 else F(carry + F(v*pred))
+cap = F(dt*c)
+if old >= -2^-23 and d > F(p-cap):
+    outOld=old; outCarry=d; target=F(d*F(-gamma))
+else:
+    t=max(+0,min(F(d*k),cap))
+    b=t if flag!=0 else min(F(old*k),cap)
+    diff=F(d-old)
+    p=F(min(p,+0)-diff)
+    select=p if p>F(cap+F(2*b)) else +0
+    nextOld=F(F(old+b)-select)
+    nextCarry=F(F(diff-b)+select)
+    outOld=min(max(nextOld,F(d-b)),-2^-23)
+    outCarry=nextCarry
+    target=F(nextCarry*F(-gamma))
+```
+
+signed zero와 min/max 순서도 보존했다. actual `old0/carry0/d=-.1500000358/flag1`은 old=`-.14250002801418304`, carry=`-.007500007748603821`, target=`2.1600022315979004`다. 깊이에 하나의 "밀어내기 상수"를 곱하는 식과 다르다. single bias4,097사례/24,582필드와 dual bias4,097사례/24,582필드 독립 bit 일치(early 각1,069/1,055)다.
+
+압축 inverse mass는 원본 **SHLL halfword #16**으로 f32 상위16비트를 복원한다. FP16 변환이 아니다. native mass100 fixture의 압축값0x3c24는 **.010009765625**로 복원되고 유효 질량은 **99.90243530273438**이다. `invMass=.01`로 바꾸지 않는다. single/dual 질량 블록 각각1,024사례/2,048필드가 독립식과 bit 일치했다.
+
+마찰0/관성0에서는 normal N과 linear L의 `dot=F(F(F(Lx*Nx)+F(Ly*Ny))+F(Lz*Nz))`; `dot>=target && oldLambda==0`이면 skip. 그 외 `delta=max(F(-oldLambda),F(F(target-dot)*effectiveMass))`, `lambda'=F(oldLambda+delta)`, `L'=F(L+F(N*F(delta*invMass)))`다. 두-body는 `(LA-LB)·N`을 사용하고 A에는 더하고 B에는 뺀다. kinematic의 inverse mass0 때문에 지정 속도는 그대로이며 dynamic player만 반응한다. 일반 회전 항까지의 명령 식은 support §7/7.1에 기록했지만 그 사용을 ordinary player 데이터로 확대하지 않는다. single normal4,097/40,970필드, dual4,097/77,843필드 bit 일치다.
+
+같은 manifold의 여러 행은 **앞 행이 수정한 속도로 다음 행**을 계산한다. 0a18d78..d88은 header+4 count, row stride0x20, lambda stride4를 소비한다. 실제 원본 kinematic 수직 캡슐 벽에서 **2행**을 생산했고 전체0a181fc의 실제 LR 반환 후 속도/scratch/lambda20필드가 독립 순차식과 일치했다. 추가 explicit2~4행 fixture를 합쳐1,025사례/3,074행/21,524필드 bit 일치. 3/4행의 native manifold 생산은 시험하지 않았다. SIMD 명령을 사용한다는 이유로 독립적인 "4개 접촉 병렬 처리"를 가정했던 후보는 근거가 없어 철회한다. 두 번째 실제 lambda의 작은 값`2.3818596673663706e-05`도0으로 없애지 않는다.
+
+### 6.10.5 최초 속도·carry·COM와 몸체 원점의 전체 연결 (8차, 2026-10-03) **[판독]+[실행]**
+
+§6.10.3의 원본 game stage→native setter와 native→Phive 되쓰기 증거를 재사용하며, 이 절의 신규는 그 사이 native 수식/속도 저장/COM→body origin이다. `State+68` current와 `State+90` baseline은 0x20 B packed 기록이다. angular xyz는+0/+4/+8, linear z는+c, linear x/y는+10/+14다. baseline+18/+1c/+1e는 motionID/속성ID/압축 각속도 상한이며 xyz 벡터로 읽지 않는다.
+
+새0a77438의 초기 단계는 **09d4ba8**을 호출한다. nativeMotion+60의 linear velocity에 `F(S+90의subgravity * MotionProperties+8의scale)`을 축별 f32로 더해 current를 만들고 baseline의 수학적 linear/angular 6성분을0으로 한다. 압축 inverse mass가0이면 그 중력 항을0으로 한다. modifier mask가 활성화되면 원본 vt+A0 callback을 거치는 별도 분기가 있고, 독립 시험은 modifier 없는 synthetic fixture다. 전체09d4ba8의1,024사례/12,288 f32필드 bit 일치(null/자동매핑/fault/PLT0). fixture world gravity−9.81과 실제 Phive 기본−9.8 및 게임이 적용하는 중력/공중 모드를 혼동하지 않는다(실제 게임 값은 §4의 기존 근거 재사용).
+
+각 normal 단계 뒤(마지막 제외) **0a4b514**는 physical delta=`F(current-baseline)`를 선속도 상한에 맞춘 다음 `nextBase=F(base+F(delta*(S+B0)))`, `nextCurrent=F(F(delta+nextBase)+subgravity*propertyScale)`를 쓴다. 새 whole 함수 독립대조: 상한 미도달1,024사례/6,144필드, 상한100/200와 큰 속도를 포함한2,048사례/12,288필드 모두 bit 일치. 원본 cap 경로의 길이²는 `F(F(x²+y²)+z²)`, scale=`F(cap/F(sqrt(length²)))`이다. 양수 상한·finite 입력/관성0·damping0·보통 collider 경계이며 일반 회전/NaN 전체를 이 결과로 확정하지 않는다.
+
+마지막 **0a4b8c8**은 `delta=F(current-baseline)`를 상한에 맞추고 **최종 nativeMotion+60 physicalVelocity**를 쓴다. damping0이면 그 저장값은 clip된 delta다. 위치에 쓰는 실효 속도는 별도로 아래 순서다.
+
+```text
+factor = F((S+74 invSub)*(S+C0 damp/tau))
+COMVelocity = F(F(baseline + F(physicalDelta*(S+B0 tau/damp)))*factor)
+COM64_new = COM64_old + double(F(COMVelocity*dt32))
+```
+
+finalize cap은 prestep과 계산 순서가 다르다. `scale=F(F(1/F(sqrt(length²)))*cap)`이며 `cap/sqrt`로 합치지 않는다. whole finalizer 독립1,024사례의3,072 f32 velocity+3,072 f64 COM, cap100/200/과속2,048사례의6,144 f32+6,144 f64가 전부 bit 일치(null/자동매핑/fault/PLT0). identity quaternion/angular0 fixture에서 **원본 함수 전체**를 실제 LR까지 실행하고 해당 출력 필드의 독립 식을 대조했다. 일반 회전적분/강체 modifier의 모든 callback까지 대조한 것은 아니다.
+
+실제 MT 첫 프레임: 첫 normal 뒤 current.y=`2.1600024700164795`; seven carry 뒤 baseline.y=`2.156463384628296`; final current.y=`2.1600022315979004`; physical delta.y=`.003538846969604492`; 위치용 COMVelocity.y=`.449705570936203`다. 이 실효 속도로 dt만큼 적분하므로 native COM.y=`.8074951050803065`, body origin.y=`.45749515295028687`가 된다. 침투 bias 속도를 다음 프레임 이동 속도로 그대로 보존하면 원본과 달라진다. **이 수치는 synthetic capsule 접촉의 결과이며 사격장 조정 상수가 아니다.**
+
+다음 **09d5b68**은 nativeMotion의 double COM에서 회전한 local COM offset을 빼 body origin을 만든다. 원본 nativeBody의+c/+1c/+2c가 local COM offset, +30/+34/+38은 f32 origin, +40/+44/+48은 `F(origin64-double(origin32))`의 잔차다. identity/no-angular 새 whole 함수1,024사례/6,144 f32 origin·잔차 필드가 독립 계산과 bit 일치했다. fixture의 local center.y는 원본 생산값`.34999996423721313`이며 보기에 예쁜`.35`로 치환하지 않는다. 이 함수의 실제 shape AABB callback은 원본을 계속 실행했다. 일반 quaternion 회전 식은 native_motion_body.c 판독 경계이며 이 시험은 identity만 대조했다.
+
+이후 §6.10.3의 **3ae6410→09d1de0→gameBody+d8/previous108/linear138** 및 기존게임 **0f76f78→3a13a24/3a102f0→Player functor24d26f8(반경·up 빼기)→Actor+28c→슬롯19 2483134→Player+10** 연결로 위치와 속도가 돌아온다. 원본 새 수식 체인으로 고정 `character_controller.md:L77`의 "Havok 위치 적분+접촉 해소 내부"를 해소한다. 사격장 실제 메시 전체/복합 몸체·shape의 native 접촉 생성, 게임 SplPlayer motion 속성의 최종 runtime ID/모든 modifier 바인딩은 `L15` 및 별도 TOI 복합질문에 남기며, 계산 함수의 식이 해소된 것을 scene 전체 검증으로 확대하지 않는다.
+
+검증 파일: `physics_initial_velocity_emu.json`, `physics_prestep_capture_probe.json`, `physics_prestep_emu.json`, `physics_prestep_cap_emu.json`, `physics_finalize_capture_probe.json`, `physics_finalizer_emu.json`, `physics_finalizer_cap_emu.json`, `physics_pose_capture_probe.json`, `physics_pose_emu.json`; 원본 snapshot은 `physics_{prestep,finalize,pose}_{fixture.json,heap.bin,stack.bin,bss.bin}`. 각 snapshot에서 실제 LR/주소/입력 register를 보존한다. 상세 commands는 `analysis/completion/r8/physics_commands.md`.
+
+정정 이력(2026-10-03): initial cap 모델의 prestep 합산 순서 오류168사례, finalize의 잘못된 MotionProperties 포인터1,359사례, 그 수정 뒤 `cap/sqrt`와 `(1/sqrt)*cap` 차이536사례를 실패 JSON에 보존했다. 실제 ARM `FADDP→FADD`, 실제 function x0 context+30 pointer, `FDIV1/sqrt→FMUL cap`을 확인해 최종 대조0bad를 얻었다. 원본이 틀렸다고 해석하거나 실패 결과를 성공 건수에 더하지 않는다. char motion bind3ae62cc와3c4f0b8의 새 판독은 resource 쌍 등록/별도 body 생성일 뿐 최종 runtime motion ID를 확정하지 못했으므로 L15는 유지한다.
+
+### 6.11 point 특수 TOI의 원본 전체 실행 (9차, 2026-10-03) **[판독]+[실행: 제한 경로]**
+
+새 함수 `0x7100aefd00`은 두 vertex 배열·개수와 질의 설명자를 `0x7100aefdc0`에 전달한다. 성공(+0x30 != 0)이면 접점 +0x10..+0x1f를 0으로 지우고, 법선 +0x20을 설명자 +0x10/+0x20/+0x30의 회전 열로 바꾼다. 원본 `0x7100aefd80`~`0x7100aefd90`의 연산은 `FMUL` 3번 뒤 `FADD` 2번이며 FMA가 아니다. `0x7100949570`의 vertex 하나가 원점이고 회전 추가 인자가 없는 특수 분기가 이 함수를 사용한다. 일반 형상·각운동은 다른 `0x7100aec920` 경로다.
+
+설명자 Q의 확인된 입력은 Q+0 delta(vec4), +0x10/0x20/0x30 회전, +0x40 원점(vec4), +0x50 허용값 2개, +0x58 초기 fraction 2개, +0x60 합산 convex radius 2개, +0x68 반복 상한, +0x6c flags(byte bit3 포함)이다. 출력 O는 +0/4 fraction, +8/c separation, +0x10 point(vec4), +0x20 normal(vec4), +0x30 valid. 원본은 delta 제곱합이 `1.4210855e-14`보다 작으면 실패한다. 진행 축과 delta의 내적이 양수이면 실패하며, 최대 fraction 직전의 `2^-23 / |delta|` 여유를 포함한 경계를 사용한다. bit3의 시작 겹침 법선 교체 분기는 `0x7100af0884`~`0x7100af08c0`이다. 이는 원본 입력 주소 판독이며 모든 flag의 고수준 이름 확정은 아니다.
+
+`r9_physics_point_toi_emu.py`는 양쪽 배열을 원점 vertex 하나씩, identity 회전, 초기 fraction 0으로 둔 원본 **aefd00→aefdc0 전체**를 2,048건 실행했다. 축·방향·반지름·거리·속도를 바꾸었고, 1,212 hit/836 miss, 24,576 f32 저장 필드와 전체 출력 131,072바이트가 독립 계산과 비트 일치했다. 유한 축 방향에서 기대 fraction은 `f32(f32(D-r)/speed)`이고, 접근 여부 및 최대 fraction의 위 여유 경계를 먼저 검사한다. PLT/자동 매핑/null/fault 모두 0. `physics_point_toi_emu.json`에 결과를 저장했다.
+
+**실패를 보존했다.** 처음 독립 계산이 다른 법선 축에 +0을 넣어 음수 축 hit 599건에서만 불일치했다. 원본의 normal 회전 `FMUL/FADD`는 -0을 보존한다. `physics_point_toi_signedzero_reference_failure.json`의 차이는 normal의 부호 바이트(+0x23/+0x27/+0x2b/+0x2f)에만 있으며 fraction/valid는 이미 일치했다. 독립 기대값에 동일 signed zero 연산을 적용한 후 0건이 되었다. 원본 결과를 바꾼 것이 아니다.
+
+**범위:** 이 실행은 one-vertex/identity/유한 축 방향 특수 경로이다. 일반 simplex 2~4점, 초기 겹침의 fallback, 회전·복합 형상, engine 4처리기의 실제 수집기·재질/접점 생성까지를 이 결과로 확정하지 않는다. 고정 질문 L359/L495/L508은 조사중을 유지한다.
+
+### 6.12 일반 TOI와 engine 처리기 진입 보강 (9차, 2026-10-03) **[판독]+[실행: 제한 경로]**
+
+**입력 정정 이력:** §6.11 초안의 Q+0x68 flags 표기는 틀렸다. 일반 `0949570→aec920`의 Q+0x68은 반복 상한이고 Q+0x6c가 flags다. game 처리기 `3c52f84`의 상수 `0x10000000000`을 query+0x78에 저장하면 query+0x7c=256이며 `0949570`이 이를 native Q+0x68에 복사한다. point 특수 하네스가 Q+0x68=0이어도 통과한 사실은 일반 경로의 반복 상한을 0으로 두는 근거가 아니다. 일반 하네스의 최초 0회 fixture 결과는 `physics_generic_toi_iteration_fixture_failure.json`에 보존했다.
+
+원본 전체 `aec920`의 point/triangle/cube, identity 및 유한 이동 탐색은 함수 반환/null/자동매핑/fault/PLT 0을 확인했다(`physics_generic_toi_probe.json`). 다만 이는 독립 계산 비트 대조가 아니다. 후속 100건 축방향 독립 참조는 **40건 불일치**했다(`physics_generic_toi_aligned_emu.json`). 39건은 diagonal line/triangle/skew quad를 축 extent만으로 계산한 잘못된 참조이고, cube 1건은 단일 나눗셈과 원본 보수적 반복 계산의 1 ULP 차이다. 원본의 일반 GJK 수식·연산 순서를 확인하기 전에는 실패를 성공으로 바꾸지 않는다.
+
+`r9_physics_engine_toi_probe.py`는 원본 game Capsule backend `3c243dc→3c27858`, native shape getter와 `09c78f0` native body를 준비하고 네 game 처리기 `3c52d30/5368c/54140/54de4` **전체**를 실행했다. 모두 `09af088→0947aec→0948f30`의 capsule/capsule 질의와 원본 `3c563dc` 접점 변환까지 도달하고 정상 반환, null/자동매핑/fault 0이었다. 이 형상쌍은 generic `aec920`을 사용하지 않는다. 입력 p0=(2,0,0), p1=(-2,0,0), 두 radius=.6에서 native fraction=.19999998807907104, normal=(1,0,0); 역질의 `54140`은 native normal=(-1,0,0)을 사용한다. 기록 `physics_engine_toi_probe.json`은 실제 query와 native point 128바이트도 보존한다.
+
+**실행 경계:** World와 몸체·회전·좌표는 명시 fixture다. 원본 World query math 및 primitive math를 대체하지 않았지만 WB+0x110 filter/WB+0xd0 codec을 null로 두고 lock/unlock은 원본 RET를 쓴다. 이 최초 probe는 수집된 접촉을 저장할 staging manager 용량이 0이라 game 접촉 목록 저장을 검증하지 않았다. 누락된 game body VT 때문에 native 접촉 후 `3c55f64` null 호출이 발생했던 최초 실패는 `physics_engine_toi_missing_body_vt_failure.json`에 보존했다. 실제 VT5749048을 넣은 결과가 위 성공이며, 실패의 null 호출을 무시하지 않았다. 현재 움직이지 않는 hitbody/identity 입력만으로 상대 운동·회전·모든 generic simplex를 해소하지 않으므로 L359/L495/L508 조사중 유지.
+
+#### 6.12.1 네 처리기의 상대 운동·접촉 저장 (9차) **[판독]+[실행: 축 방향 캡슐]**
+
+입력 묶음 A=[Bullet, ContactList, CastShape, HitBody, p0, p1, Rcast, angular]은 8개 포인터다. 처리기 표 `5756468`은 (52d30,0),(5368c,0),(54140,0),(54de4,0)의 16 B 멤버함수 항목이다. `3c55968`의 모드 3은 항상 54de4다. 그 외, hitBody의 선속도가 0이 아니면 해당 mode를 선택하며 unsigned mode≥4는0으로 돌아간다. 선속도가0이고 각속도가0이 아니면 양수 mode를1로 낮춘 값을 선택한다. 둘 다0이고 음수 mode가 아니면0을 선택한다. 원본의 부호검사/범위초과 fallback은 그대로 보존한다. typed body RTTI5576220이고 bit6/7이0이면 선속도+2d4/각속도+2c8, 그 외 +144/+138을 읽는다. 이는 정적/운동/회전의 기하 종류 4개를 뜻하는 표가 아니라 **질의 상대 운동 구성의 네 변형**이다.
+
+Pcur=HitBody+d8, Pprev=+108. 회전은 행렬을 `12da6dc`로 quaternion으로 바꿔 norm>0일 때 reciprocal sqrt로 정규화한다. 질의0(52d30)은 현재 pose의 역회전에서 p0−tcur와 (p1−tcur)−(p0−tcur)를 만든다. 질의1(5368c)은 이전 pose를 기준으로 p1에 ΔCOM를 더한다. ΔCOM=COMprev−COMcur; bit6=1이면0, 그 외 원본 backend vt28=`3c4fe24`에서 localCOM를 받아 각각 이전·현재 pose로 변환한다. 질의3(54de4)도 이전 pose/ΔCOM를 쓰며 A[7]의 각운동을 추가한다. 질의2(54140)는 두 형상의 역할을 뒤집어, hitBody의 이전 원점에서 현재원점+(p0−p1)로 이동시키는 역질의를 만든다. bit6=0이면 inverse(qprev)*qcur에서 θ=2acos(clamp(abs(w),0,1))와 정규화된 xyz 축을 만들고 θ>1.1920929e-6일 때 θ·axis를 각운동으로 전달한다. 위 inverse는 norm²≤FLT_EPS이면 conjugate, 아니면 conjugate/norm²다.
+
+**[실행]** `r9_physics_engine_toi_relative_emu.py`는 네 처리기 전체와 native capsule closest/advance 및 원본 후처리/목록 함수를 1,024건 실행했다. X/Z축, 방향, 이전/현재 위치를 바꾸며 원본 query origin/delta 2,048필드와 fraction·game 보간 위치 4,096 f32필드가 독립 계산과 비트 일치했다. 전체 1,024 hit, 오류/null/자동매핑/fault 0. native closest callback은 실제 `0954550`, 원본 수집기/포인터 목록은 `3c563dc→3c5621c/56588/5677c/5698c→3a60c74`다. 새 후처리 4함수는 `engine_post.c`, 성공 JSON은 `physics_engine_toi_relative_emu.json`이다.
+
+캡슐의 이 축 제한에서 `d2=f32(o*o)`, `inv=f32(1/sqrtf(d2))`, `N=f32(o*inv)`, `sep=f32(f32(d2*inv)-f32(rA+rB))`, `closing=f32(N*delta)`, `t=sep<=.001 ? 0 : f32(0-f32(sep/closing))`다. `0954774..47f0` 원본은 sqrt를 거리로 직접 쓰지 않고 **d2*inv**를 쓴다. 최초 단순 abs(o)·unitNormal 참조의 173건 차이는 `physics_engine_toi_relative_reference_failure.json`에 보존했다. 그 정정 뒤 초기 겹침 3건은 음수 t를 기대하여 실패했고 `physics_engine_toi_initial_overlap_reference_failure.json`에 보존했다. 원본은 initial-distance contact 및 TOI contact 두 개를 fraction0으로 저장한다. 해당 원본 분기를 반영한 최종 대조가 0건이다.
+
+staging 원천은 `[EngineWorld+10]+8`(worldtype0), 처리기 local meta+20이다. staging+24를 원자적 증가시키고 유효 구간(+20/+28)과 count+10/array+18을 적용하여 128 B 접점을 복사한다. 저장된 접점+24(world bullet center)=p0+f*(p1−p0), 순서는 FSUB→FMUL→FADD이며 FMA가 아니다. 5368c/54de4는 접점+0에서 f·ΔCOM를 빼며, 54140은 보간 중심+(nativepoint−p0), normal을 FNEG한다. ContactList+98/+9c 카운터를 증가시킨 뒤 같은 접점 포인터를 16 B 목록 항목에 저장한다. 첫 static fixture 4건도 `physics_engine_toi_stage_probe.json`에 별도 보존했다.
+
+**경계:** 전체 함수는 실행했지만 입력은 identity/zero localCOM/XZ 유한 축 방향 캡슐이다. game body flag는 동적 입력 소비를 검사하도록 설정했고 native 등록 몸체 자체는 static fixture다. 실제 게임 동적 바인딩·지형 전체·필터/코덱과 일반 simplex의 독립 수식 증거로 확대하지 않는다. 단계별 원본 수식 확인 결과를 whole L359/L495/L508의 일부 근거로만 더한다.
+
+#### 6.12.2 각운동 내부 실제 진입 (9차) **[판독: 사슬]+[원본 실행 관찰: 독립 비트 대조 전]**
+
+`r9_physics_engine_rotation_toi_probe.py`는 vertical capsule의 pure Y 회전 θ=0/.1/1/π2를 넣고 전체54140/54de4를 8건 실행했다. θ>0 6건에서 `0948360→094e6e4→af7b70`(3~4회) 및 `0929530`, 이후 실제 game staging/list까지 도달했다. 모두 정상 반환/null/자동매핑/fault0, native math callback 대체0. 회전 core3함수 새 디컴파일은 `rotation_toi_core.c`, 입력 Q·출력은 `physics_engine_rotation_toi_probe.json`에 보존했다. 기하가 회전 불변이어도 원본 fraction은 .19999997317790985~.20000001788139343로 달랐다. 이를 .2로 바꾸거나 아직 독립 수식 대조 없이 [실행] 확정으로 세지 않는다. 이전 one-vertex proof와 일반 회전 proof를 혼합하지 않는다.
+
+### 6.12.3 회전 시간식 새 지원 [판독]+[실행: 부분]
+
+2026-10-03 [rotation_toi_advance.md](rotation_toi_advance.md) §§3~6·10: 원본 whole54140/54de4 384회/core384회, 실제 advance700/refine806=3,012 f32필드 독립 bit 불일치0. 두 원본 block 각8,192회의32,768f32필드도0bad이며 NaN/FMINNM 경계를 포함한다. query130=1/131=0,최소진행1/256 writer/consumer를 판독했다. OS/TLS/할당 경계를 포함한 실제원본 support·quat를 계산스텁으로 대체하지 않았다. generic support/closest, 보간·추가vertexguard 전체는 별도 미확정이라 fixed3행 상태를 올리지 않는다.
+
+### 6.12.4 일반 지원점·전진식 새 지원 [판독]+[실행: 부분]
+
+2026-10-03 [generic_toi.md](generic_toi.md) §§3~6·10: original `af107c`8193회/32772필드 비트0bad(동률904),`aec920` interior aef0bc~aef1c0 4097회/10200 f32·정수필드0bad. 동률은4lane간우선순위이며global첫index가아니다. 전진limit끝은현재contactvalid경로가있다. 원본classifier는 **B featurecount | (A featurecount<<3)** 로 중간명명을 정정했다. 두collector가있는게임genericwrapper는arg7!=NULL로시작t0이며,別one-pointdirect실행을그경로전체의증거로확대하지 않는다. 실제fullgeneric8회 trace는관찰만이고 independentfullmath증거가아니다. `ae7b34` recovery·sphere/quad `094ae10`·회전support/pose를 이어 확인한다.
+
+### 6.12.5 회전 자세 callback 연결 (9차, 2026-10-03) **[판독]+[실행]**
+
+새 [rotation_pose.md](rotation_pose.md) §3~11: 원본 quaternion interpolation `08a8764`·48 B matrix writer `08a5ed0` 및 SIMD trig `08a69e0/08a6770`을 4097사례/**98328필드** 독립 f32 비트0bad로 확정했다. 게임 회전 처리기 `3c54140/3c54de4` whole8회→실제quat16/matrix24 callback의 input→return **352필드**도 비트0bad이며 정상 반환/nullauto0. theta0/.1/1/π/2 수직capsule·filterNULL fixture의 경계를 유지한다. 회전 support/EPA 전체와 실제 Lby 지형 모든 쌍은 미확정이며 pose 성공만으로 L359/L495/L508을 확정 승격하지 않는다.
+
+### 6.12.6 겹침·퇴화 복구 원본 근거 (9차, 2026-10-03) **[판독]+[실행: 부분식]**
+
+새 [penetration_recovery.md](penetration_recovery.md) §2~11:ae7b34→ae9b14→seed/support/f64facet/horizon/barycentric 전 본문을 새 판독했다. 전체 ae926c plane4097/65552필드, 전체 ae9590 barycentric4097/32776필드 독립비트0bad. 실제generic10whole의plane32+barycentric14=46callback/624필드도input→return0bad,nullauto0이다. 첫barycentric898참조오류를 원본 합 순서로 정정하고 failureJSON보존. 전체EPA/GJK topology의 독립 비트 검증과 부분식·source판독·wholetrace 수준을 구분한다. 최신사용자지시로TOI확대중단, L359/L495/L508조사중유지.
+
+### 6.12.7 일반 closest 및 sphere→quad 부분 검증 마무리 (9차, 2026-10-03)
+
+[원본 closest 지원 문서](../../../analysis/completion/r9/physics_gjk_support.md) §6.1~4/10~11: A1/B2·A2/B1, A1/B3·A3/B1, A1/B4·A4/B1, A2/B2의 원본 signedmask/정점순서/reduction/normal 블록 **32768사례/724904필드 비트0bad**. 각 synthetic 진입·nearzero 중단·처음 참조 피연산자 정정의 경계를 문서대로 유지한다. A2/B3·A3/B2와 회전 closest 대응은 아직 미확정이다.
+
+새 [sphere_quad_toi.md](sphere_quad_toi.md) §3~11: 원본 전체 `094ae10` **5120회/25150필드** 독립f32 비트0bad. 수직2048/13808, scaled oblique3072/11342, A/B radiusoverride·extra radius 포함. SDK mathstub/nullauto0; first199 signed-zero/earlycap 참조오류 보존. 임의 일반/퇴화/initial 전체에 대한 확정으로 확대하지 않는다. 사용자 최신지시로 TOI 신규 확대를 마무리하고 FillUp에 집중한다. 고정 L359/L495/L508은 부분 근거를 저장하며 조사중 유지한다.
+
 ## 7. 웹 포팅 구조
 
 | 모듈(웹 권장 이름) | 책임 | 원본 대응 |
@@ -592,13 +816,13 @@ function routeContact(b: ShooterBullet, c: Contact) {          // 슬롯22 끝 �
 | 최종 속도 v(param_17)의 수직 성분 구성 | **해소 [판독]** | `0x710245aed8` — §5.1 |
 | 이동 벡터의 `0.92y − 0.0002`와 +0x73c의 관계 | **해소 [판독]** | `0.92y − 0.0002`는 이동 속도(+0x114) y 보정(`0x710245b2b4` 끝 `0x710245edc0`), 최종 y = 둘의 합 |
 | 세계 기본 중력(+0x2a4) 런타임 값, dt(+0x24) | dt: 생성 시 1/60 **해소 [판독]**(5차, §6.4: 덮어쓰기 블록 유무와 무관하게 `0x7103db385c`가 기록). 기본 월드 설명자 중력 (0, −9.8, 0) [판독]. 남은 것: 실행 중 dt 변경 경로, 상태 S가 읽는 `[월드+0xb8]+0x2a4`가 설명자 중력에서 오는지 [미확정] | `-9.8` f32 상수는 main 전체에서 S 생성자 1곳뿐이고 PhiveConfig에도 중력 항목이 없다(2026-10-02 [move] 확인). 영향 범위: 공중 이동은 GameInAir(+0x1c=1)라 G0와 무관, 지상은 scale 0 → **플레이어 궤적에는 공중 ≥ 3인데 Phive 상태가 OnGround인 경우에만 영향**. dt는 게임 속도 ×60을 Phive가 적분하는 데 쓰이므로 1/60이 아니면 프레임당 이동량이 달라진다 — `[[*0x71057906f0]+0xe8]+0x24` writer(세계 스텝) 추적 필요 |
-| 특수 상태 0x18/0x1b/0x1c, `+0xa818` 컴포넌트 이름 | **해소 [판독+데이터]** | 0x18 Jetpack, 0x1b Skewer, 0x1c SuperLanding(본체+0x65c = 10 + 특수 열거), +0xa818 = spl::PlayerPeriscope(`player_components.tsv`). Periscope +0x38/+0xb0 의미만 미확정 |
+| 특수 상태 0x18/0x1b/0x1c, `+0xa818` 컴포넌트 이름 | **해소 [판독+데이터]** | 0x18 Jetpack, 0x1b Skewer, 0x1c SuperLanding(본체+0x65c = 10 + 특수 열거), +0xa818 = spl::PlayerPeriscope(`player_components.tsv`). Periscope +0x38/+0xb0은 8차 §4.1.1에서 해소 |
 | 탄 바디 적분·충돌 응답 | **해소**(2026-10-02, [판독]) | §6.3~6.4 |
 | 탄 접촉 반응 시퀀서의 프레임 내 실행 위치(→ 첫 명중 age) | **해소 [판독]+[실행: 그래프 간선]**(5차): 단계1 그룹0 = 물리 직후·모든 액터 슬롯19/21 앞(이전 [추정] "슬롯21 뒤·다음 슬롯18 앞"은 정정) | §6.7. 남은 것: 탄 생성 프레임에 슬롯18이 도는지 [미확정] — 생성 시점(사격 처리)과 그래프 구성 `0x7103c85fbc` 호출 위치 |
 | 좁은 단계 TOI(처리기 4종)·접촉 정렬 기준 | 미판독 | `0x7103c52d30`/`0x7103c5368c`/`0x7103c54140`/`0x7103c54de4`, `0x7103a6144c` |
 | 관통력 body+0x18c를 쓰는 탄 | 미확정(기본 −1 = 항상 막힘) | 5차 시도: `physics_memscan.py 0x18c --kind strs` 전체 40곳 이상·phive 범위 6곳(`0x7103a7e718`, `0x7103a87d2c`, `0x7103a8aab4`, `0x7103a8abfc`, `0x7103a920d4`, `0x7103aea4ac`)을 봤으나 탄 바디 setter 로 확인된 것 없음(`0x71016c33f8`은 다른 객체의 파라미터 정수→실수). 다음: phive 탄 바디 vtable `0x7105749990` 의 setter 슬롯, `0x7101a856e8` 표 |
 | 월드 dt를 런타임에 바꾸는 경로 | 생성 시 1/60 [판독], phive 범위 쓰기 15곳 전수 분류 → 생성자만 월드+0x24 기록 [판독], 범위 밖 변경 [미확정] | 범위 밖에서 월드 포인터(`[*0x710599dfa8+0xe8]`)로 +0x20/+0x24 를 쓰는 코드, 물리 시스템 초기화 인자 +0x28 덮어쓰기 블록 공급자 |
-| shapeTag → 재질표·충돌 필터(hknp 코덱·필터 구현) | 행 선택 한 단계 [실행](character_controller.md §3.5), 배열 부착 writer [미확정] | 질의 문맥 +0x130의 [0] vt+0x40(코덱 decode)·[1] vt+0x40(필터) 구현 클래스. 월드 생성 `0x7103ac71c8` 안의 하위 객체 생성(`0x7103b1b33c`, `0x7103a72c28`, `0x7103ac3960` 등)에서 vtable을 찾을 것. 5차 시도: bphsh 경로 생성 `0x7103a221cc`(".%s.bphsh")까지 찾음, 헤더 오프셋(+0xc/+0x10/+0x14…) 기반 포인터 저장 스캔은 phive 범위에서 해당 없음. 다음: `0x7103a221cc` 가 만드는 자원 객체의 로드 완료 콜백, 형상+0x28 에 정보 객체를 쓰는 `str x,[x,#0x28]` |
+| shapeTag → 재질표·충돌 필터(hknp 코덱·필터 구현) | 행 선택 한 단계 [실행] (character_controller.md §3.5), 배열 부착 writer [미확정] | 질의 문맥 +0x130의 [0] vt+0x40(코덱 decode)·[1] vt+0x40(필터) 구현 클래스. 월드 생성 `0x7103ac71c8` 안의 하위 객체 생성(`0x7103b1b33c`, `0x7103a72c28`, `0x7103ac3960` 등)에서 vtable을 찾을 것. 5차 시도: bphsh 경로 생성 `0x7103a221cc`(".%s.bphsh")까지 찾음, 헤더 오프셋(+0xc/+0x10/+0x14…) 기반 포인터 저장 스캔은 phive 범위에서 해당 없음. 다음: `0x7103a221cc` 가 만드는 자원 객체의 로드 완료 콜백, 형상+0x28 에 정보 객체를 쓰는 `str x,[x,#0x28]` |
 | Phive OnGround/InAir 전이 조건·점프 프레임 공중 유지 | **해소 [판독]** (4차) | 상태 vt+0x30 `0x71012aa648`/`0x71012aa108`, SplResultPlayer `0x7102c5a3c8`·`0x7102c5dd20` — [character_controller.md](character_controller.md) §5~6 |
 | 플레이어 캡슐·충돌 필터·재질 | **해소 [판독]+[데이터]** (4차) | character_controller.md §3 |
 | 액터 계산 단계와 Phive 월드 단계의 프레임 내 순서 | **해소 [판독]+[실행]**(5차) | §6.7. 남은 것: 단계2·3 액터 노드(액터+0x240/+0x248) 생성자, 작업자 ≥ 2 묶음 분기 실행 |
@@ -618,3 +842,38 @@ function routeContact(b: ShooterBullet, c: Contact) {          // 슬롯22 끝 �
 | Havok 솔버 | `0x71009ce484` = "TtBuildCollideTasks"(충돌), `0x71009cee34` = 다음 단계. 캐릭터 몸체가 이 스텝을 탄다 [판독]. 내부 [미확정] | 다음: `0x71009cec84` |
 | 단계2·3 액터 노드 | `0x7103cc2934`는 +0x230/+0x238 만 만들고 +0x240/+0x248 은 있으면 쓰기만 함. 0x7103c70000~0x7103d00000 에 실제 값 writer 없음 | [미확정] |
 | Periscope +0x38/+0xb0 | 6차 미착수 | [미확정] |
+
+## 10. 검증 코드·실행 결과·기대값 (7차 보강)
+
+새 실행은 `r7_physics_table_emu.py`(원본 BYML 표174값), `r7_physics_mask_emu.py`(강체·캐릭터 mask writer 1024사례/5120필드), `r7_physics_mesh_emu.py`(4개 원본 bphsh 부착24필드·접촉 bit1 476사례)이며 모두 불일치0. 원본 함수·스텁·기대값의 상세는 [character_controller.md](character_controller.md) §10 및 [../gimmick/collision_mesh.md](../gimmick/collision_mesh.md) §10. 기록 `analysis/completion/r7/physics_commands.md`.
+
+정정(2026-10-03): §9의 6차 "막는 접촉 비트 출처 0x7103c39158, 탄 호출 사슬 미확정"은 일반 질의와 탄을 혼동한 기록이다. 실제 탄 경로 `0x7103c55ed8→0x7103c34e14`는 이미 r6 combat에서 확정되었으므로 여기서는 **기존 근거 재사용**으로 정정한다. 7차 신규는 bphsh 정보 writer `0x7103a715b4`와 실제 행 연결 실행이다. §8의 접촉 정렬 미판독 문장 또한 이전 상태이고 §9의 r6 3000건 실행 정정을 따른다.
+
+## 11. 미확정 사항과 추가 분석에 필요한 근거 (7차 보강)
+
+| 항목 | 이번 시도·결론 | 다음에 볼 곳 |
+|---|---|---|
+| shapeTag → 재질표·코덱 | 배열 부착 writer 미확정은 `0x7103a715b4` [실행]으로 해소. 16 B 재질 reader·쿼리 +0x130 코덱 구현 클래스는 남음. 3b1b33c/3a72c28 명령을 보았으나 코덱 객체로 확인하지 못함 | collision_mesh.md §11, 월드+0xd0 writer·vt+0x40 |
+| 좁은 단계 TOI·용접·솔버 | 필터 실행만으로 TOI·침투 보정·용접 동작을 확정하지 않음. 기존 r6 판독 범위 유지 | `0x7105756468` 처리기, `0x71009af088`, `0x71009cec84` |
+| 플레이어-표적 실체 충돌 | 데이터 셀 값2→block 배열과 desc→F는 확정. 이름→최종 마스크·전체 솔버 남음 | character_controller.md §11 |
+| 나머지 기존 질문 | r6에서 끝난 중력·dt·접촉 정렬·슈터 관통력 기본값·프레임 순서를 다시 신규 성과로 세지 않음. 미해소 단계2/3 노드·작업자 분기·Periscope는 이전 상태 | §9 r6 갱신 표 |
+
+8차 §10 보강(2026-10-03): `web/tools/r8_physics_material_leaf_emu.py`와 `analysis/completion/r8/physics_material_leaf_emu.json` 신규 원본 실행, PLT 미구현0; wrapper getter만 합성. `r8/physics_commands.md`에 성공·실패 명령 기록.
+
+8차 §11 정정: 위 코덱·재질 reader의 과거 미확정 행은 collision_mesh.md §3.4.3의 신규 근거로 해소. 실제 침투 해소·TOI·leaf flags0x20의 용접 소비는 남음; `09af088/09cec84`와 leaf flags reader를 계속 추적한다.
+
+8차 §11 추가(2026-10-03): §6.10에 실제 TOI 디스패처와 solver simulation 진입을 좁혔다. 원본 constructor 포인터25쌍 일치는 전체 TOI 검증이 아니므로 TOI/침투해소/위치 적분은 미확정 유지. 다음0aec920/0aefdc0 및0a4ac10/0a71b90.
+
+8차 §11 Periscope 정정(2026-10-03): 과거 §4.1/§9/6차 표의 P38/Pb0 의미 미확정은 새 §4.1.1 producer·원본1040건 실행으로 해소. 잠망경 카메라/효과 전체는 합성 callback시험 범위밖이며 별도 camera 문서의 상태를 바꾸지 않는다. 웹은 기본 Off0/pending0을 유지하고 pending이 전달되면 Extend/View/Shrink 전체동안 원본대로 중력0 predicate를 보존해야 한다. 코드 변경 없음.
+
+8차 §11 정정(2026-10-03, native 식 해소): §6.10.4/5에서 원본 initial→8normal/7carry→finalize→COM→bodyorigin→Phive 되쓰기를 연결하여 보통 무회전 플레이어의 위치 적분·침투 보정·반복 수 식은 [판독]+[실행]으로 해소했다. 과거 “전체 솔버 미확정” 문장은 현 단계와 위 신규 범위를 구분해 읽는다. TOI 0aec920/0aefdc0·사격장 메시 전체 접촉 생성·runtime motion ID/모든 modifier 바인딩은 미확정이며 C0 quality 바인딩과09d5b68 일반 회전 경로도 다음 근거다. 완성된 식만으로 이 복합질문들의 전체 상태를 승격하지 않는다. 웹 필요: contact normal PGS순서/bit복원·8/1·carry/final physical속도와COM속도 구분·f32곱뒤double적분·native원점잔차를 반영. 코드 변경 없음.
+
+8차 원점 반환 주소 정정(2026-10-03): §6.10.5 초안에서3a83d98을Player+10 writer사슬로명명한것은잘못이다. 기존r6 character_controller§4의실제Actor물리callback/24d26f8와2483134복사주소를다시대조하여위정확한사슬로정정했다. 수학시험출력/확정수는이주소정정에영향없다.
+
+9차 §10 추가(2026-10-03): `web/tools/r9_physics_point_toi_probe.py` 최초 실제 전체 호출은 fraction .375/normal(1,0,0,0)/valid1. `r9_physics_point_toi_emu.py`의 2,048건 대조와 signed-zero 실패 파일은 위 §6.11 참조. 최초 JSON 직렬화는 numpy.bool_ TypeError로 실패하여 bool 변환 뒤 저장했다. 재구현이 signed zero를 버렸던 599건도 삭제하지 않고 실패 JSON에 남겼다.
+
+9차 §11 추가(2026-10-03): 특수 point TOI 경로만 새로 비트 대조했다. 일반 `0x7100aec920` 및 `0x7100aefdc0`의 simplex/fallback·engine `3c52d30/3c5368c/3c54140/3c54de4` 전체 접점 생성은 남음. 다음은 `3c55968`의 4종 선택과 설명자 생산을 원본으로 묶고, native query의 회전/다점 결과를 독립 대조하는 것이다. character_controller §4.2의 live MotionProperties13은 새로 해소되어 이전 'runtime motion ID 미확정' 중 캐릭터 특수13 질문은 정정한다.
+
+9차 §10 보강(2026-10-03): 일반 query 반복 상한 fixture 오류·독립 geometry 참조 불일치·engine body VT 누락 실패는 §6.12에 기록했다. 신규 engine 접촉 저장 함수 3c5621c/56588/5677c/5698c는 기존 notes/index에 없어 lookup·실제 prologue 확인 후 engine_post.c에 새 디컴파일했다. 앞 두 함수는 Ghidra가 tail-called 3a60c74를 inline하여 표시하므로 본문 식은 ARM 명령과 대조한다.
+
+9차 §11 보강: 네 game 처리기의 입력 구성/relative translation/staging/list는 §6.12.1에서 새로 판독·실행했다. 일반 simplex와 native rotation advance 전체 식은 아직 남아 있다. 각운동은 §6.12.2로 원본 내부 진입까지 좁혔으며 다음 094e6e4/af7b70와 aec920의 support/closest-feature/보수적 반복 수식이다.

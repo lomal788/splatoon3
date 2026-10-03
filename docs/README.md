@@ -15,8 +15,12 @@
 
 ## 공용 문서
 
+7차(2026-10-03) 최신 상태는 [analysis_completion.md](analysis_completion.md), 추가 근거는 [completion_r7.md](completion_r7.md). 아래 기능 표는 이전 회차 요약도 포함하므로 본문의 날짜별 정정과 최신 감사 목록을 우선한다.
+
 - [analysis_completion.md](analysis_completion.md) — Lby_Lobby00 1인 연습 출처별 미확정/추정 감사 목록·정확한 처리율
 - [completion_run.md](completion_run.md) — 이번 인수 분석의 명령·성공/실패·보호 파일 검증
+- [core_experience_priority.md](core_experience_priority.md) — 사용자 지정 핵심 체감 다섯 경로·최우선 잔여 연결
+- [completion_r7.md](completion_r7.md) — 사격 입력·도색 정점·색 보정·카메라·물리 추가 실행과 웹 반영 사항
 - [completion_summary.md](completion_summary.md) — 이번 회차 종료 보고·영역별 집계·확정/미확정·웹 반영 필요
 - [camera/solo_completion.md](camera/solo_completion.md) — 카메라 기저·붐 구체·FOV 정정
 - [weapon/solo_shooter.md](weapon/solo_shooter.md) — 첫 발·잉크·탄 생성 허용 원본 근거
@@ -57,3 +61,45 @@
 - **[미확정]** 미확정
 
 "분석 완료", "웹 구현 완료", "동작 검증 완료"는 서로 다른 상태입니다. 웹 구현 상태는 [impl/](impl/)에 영역별로 있습니다.
+
+## r8 원본 분석 갱신 (2026-10-03)
+
+[analysis_completion.md](analysis_completion.md)의 안정 ID와 [completion_r8.md](completion_r8.md)의 **r7 종료 고정 분모**로 진행률을 집계한다. 아래 기능 표의 과거 상태는 당시 기록이며, 최신 해소·잔여·실행 경계는 각 본문의 날짜별 정정과 r8 표를 따른다. 전체 목표는 아직 분석 중이다. 부분 검증을 복합 질문의 전체 확정으로 승격하지 않는다.
+
+| 신규 문서 | 원본 근거 범위 |
+|---|---|
+| [combat/knockback_pipeline.md](combat/knockback_pipeline.md) | 게임 넉백 메시지→원본 큐·행동 슬롯18·충격 컴포넌트 연결 |
+| [combat/critical_ring_lifecycle.md](combat/critical_ring_lifecycle.md) | 크리티컬 누적 링의 생성·reset 등록·방송 경로 |
+| [combat/hit_effect_pipeline.md](combat/hit_effect_pipeline.md) | 슈터 명중 요청→64개 FIFO→반응 셀·XLink 속성·거리 컬링 순서 |
+| [effect_sound/xlink_parameter_counts.md](effect_sound/xlink_parameter_counts.md) | XLink 속성 개수와 실제 인덱스 의미 |
+| [effect_sound/floor_fixed_rotation.md](effect_sound/floor_fixed_rotation.md) | 속도0 착탄의 원본 init 배열→단위 회전→코드 emitter 소비 |
+| [graphics/light_rig_runtime.md](graphics/light_rig_runtime.md) | 스테이지 Spot/Point Rig의 뼈 prefix·행렬·광원 값 전달 |
+
+카메라·탄·표적은 해당 기존 문서의 r8 절, 충돌 필터/피격 형상은 [character_controller.md](physics/character_controller.md) §3.3.1–3.3.2와 [hitbox.md](combat/hitbox.md), HP 대상0은 [player_life.md](combat/player_life.md) §3.6.1, 도색은 기존 paint 문서의 r8 절에서 확인한다. 구현 변경 필요 사항은 completion_r8 표에 기록하며 이번 작업에서는 웹 코드·impl을 변경하지 않는다.
+
+- [graphics/lod_runtime.md](graphics/lod_runtime.md) — r8 거리/화면 LOD 선택·히스테리시스·정적 패킷 전달. 전체 Player 모델 이름 override·GPU3단 전환은 별도 미확정.
+
+- [graphics/animation_weapon_blackboard.md](graphics/animation_weapon_blackboard.md) — 슈터 Category/Detail의 네 caller·empty 공급·원본 버퍼 절삭. 전체 포즈 합성은 별도 미확정.
+
+
+## r8 최소 증가 목표 검증 완료 (2026-10-03)
+
+r7 종료 고정 inventory에서 신규147개를 원본 근거로 해소하여 확정529/986이다. 물리·카메라·그래픽·피격 각각+20%p 이상, 이동·탄·표적·이펙트·도색·효과음 각각+10%p 이상을 충족했다. 정확한 고정 분모·현재율·원본 근거·웹 반영 필요는 [completion_r8.md](completion_r8.md), [완료 보고](completion_r8_report.md), [전체 감사 목록](analysis_completion.md)에서 확인한다. 전체 100% 확정은 아직 미달이다.
+
+새 마지막 근거: [물리 접촉/COM/몸체 되쓰기](physics/phive_controller.md) §6.10.4~5, [형태별 native 피격 형상](combat/hitbox.md) §2.1, [LOD 실제 모델/mesh/draw](graphics/lod_runtime.md), [무기 AS 두 이름 공급](graphics/animation_weapon_blackboard.md), [RSDB 팀색 공급 및 기존 데이터 설명 정정](graphics/teamcolor_rsdb_source.md). 실제 메시 전체·TOI·runtime 속성 바인딩·그림자 live 입력·GPU/LUT·전체 포즈 복합 질문은 유지한다.
+
+- [graphics/as_request_first_tick.md](graphics/as_request_first_tick.md) — 기본 AS 요청→첫 틱→래퍼 보고 1,025건 원본 실행. 연속 두 번째 틱과 전체 포즈는 조사중 유지.
+- [graphics/projected_shadow_runtime.md](graphics/projected_shadow_runtime.md) — 그림자 객체 생성·Scene 등록·밀도 uniform 소비. live 입력 및 L342 전체는 조사중 유지.
+
+## 9차 최종 기록 — FillUp 집중 분석 후 마무리 (2026-10-03)
+
+최신 지시에 따라 신규 분석을 종료하고 지금까지의 결과를 저장했다. 고정 r7 inventory·분모를 유지한 최신 수치는 [completion_r9.md](completion_r9.md), 이번 결과/실패/미확정/웹 반영 필요는 [completion_r9_report.md](completion_r9_report.md), 모든 안정ID 상태는 [analysis_completion.md](analysis_completion.md)에서 확인한다. 아래 과거 표는 당시 기록이며 이 최신 문서의 날짜 정정을 우선한다. 물리·카메라100% 등 이전 전체 목표를 달성한 것으로 표시하지 않는다.
+
+- FillUp 원본 프리셋 등록: [fillup_preset_runtime.md](physics/fillup_preset_runtime.md)
+- FillUp 실제 접촉·대체 탐색: [fillup_contact_runtime.md](physics/fillup_contact_runtime.md), [fillup_fallback.md](physics/fillup_fallback.md)
+- FillUp 원본 저작 형상·배치: [fillup_authored_data.md](gimmick/fillup_authored_data.md)
+- FillUp 액터/리소스 공급과 형상 프리셋 소비: [fillup_dynamic_sources.md](physics/fillup_dynamic_sources.md)
+- 물리 회전/침투/구–사각형 TOI 부분 검증: [rotation_pose.md](physics/rotation_pose.md), [penetration_recovery.md](physics/penetration_recovery.md), [sphere_quad_toi.md](physics/sphere_quad_toi.md)
+- 카메라 원본 붐/충돌 감쇠/상태/리셋: [r9_boom_query.md](camera/r9_boom_query.md), [r9_collision_spring.md](camera/r9_collision_spring.md), [r9_state_sources.md](camera/r9_state_sources.md), [r9_reset_contexts.md](camera/r9_reset_contexts.md)
+- 그래픽 원본 ASB/typed tag/cloth: [asb_header_runtime.md](graphics/asb_header_runtime.md), [asb_typed_tags.md](graphics/asb_typed_tags.md), [cloth_damping_runtime.md](graphics/cloth_damping_runtime.md), [cloth_link_runtime.md](graphics/cloth_link_runtime.md)
+- 이펙트/효과음 원본 생성·제한·필터: [one_emitter_runtime.md](effect_sound/one_emitter_runtime.md), [sound_limiter_runtime.md](effect_sound/sound_limiter_runtime.md), [sound_runtime_filters.md](effect_sound/sound_runtime_filters.md)

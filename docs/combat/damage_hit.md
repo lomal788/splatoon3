@@ -151,6 +151,14 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | +0x11ef | u8 | 크리티컬 히트 래치 | 시작 0x710174efc0에서 0, OnHit에서 0x71016e6260 결과 | 슬롯95 |
 | +0x11f0 | s32 | 데미지 캐시. -1이면 미계산 | 생성자 -1, 매 이동 0x7101750d6c에서 -1, OnHit에서 계산값 | 슬롯83 |
 
+### 4.3.1 스플래시슈터 생성정보의 실제 생산자 [판독 + 실행 + 데이터] (2026-10-03 [r8 combat/camweapon])
+
+기존 §4.3의 +91/+92/+94 추정은 **이번 대상 스플래시슈터의 값과 생산 경로**에 대해 해소한다. [shooter_bullet.md](../weapon/shooter_bullet.md) §3.3.7: 생성자 `25817c8`은 +91=0/+92=1/+94=−1. 실제 `258801c→2552da0` 공유 기록자는 팀을 Actor+668에서 생성정보+2c에 쓰며 호출되는 WeaponShooter VT+238의 실제 함수 `2865f18`은 RET여서 세 필드를 변경하지 않는다. 조건부 `25827d8..27fc→2580354`는 **TripleShotSpanFrame>0일 때만** +92=u8(RepeatTimer limit I80), +94=I9c를 덮어쓴다. 스플래시슈터의 원본 TripleShotSpanFrame=0 데이터이므로 +91/+92/+94는 **0/1/−1**을 유지한다.
+
+소비는 기존 `1753b90`의 ExtraInfo8=VariableRepeat 분기(+91), `1a86ec0` 크리티컬 누적의 필요 횟수(+92)·샷 key(+94)와 연결된다. 필드 +91의 원본 등록 이름을 새로 발견한 것은 아니며 consumer 역할 명칭이다. +92=1이므로 슈터의 적중 한 건만으로 필요 횟수를 충족한다. +94=−1은 독립 증가 shot ID가 아니다.
+
+원본 신규 공유 binder192건+조건부 writer48건 불일치0(`weapon_geninfo_emu.json`). **전체 발사/풀/자식 생성정보 복사 실행은 제외**이고, 다른 무기의 limit 파라미터명·+91 enable 생산자·needCount>1 무기 목록은 미확정/이번 다른무기 범위밖 조사로 남긴다. §6.3의 “어떤 무기가 needCount를1보다 크게 주는지” 복합 질문 L335를 이 결과로 승격하지 않는다. 웹 반영 필요 `impl/weapon.md`, `impl/range.md`: 스플래시슈터에 임의 VariableRepeat/shotkey증가/필요횟수 보정을 넣지 말고 실제 0/1/−1 생산→소비를 연결해야 한다.
+
 ### 4.4 DamageInfo (스택 구조체, 0x71016498bc가 초기화)
 
 `0x71016498bc`, `0x71017db2d4`(복사), `0x7101a86ec0`(소비)에서 읽은 필드입니다. 기준 객체는 OnHit 스택의 `sp+0x38` 구조체입니다 **[판독]**.
@@ -216,6 +224,38 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 
 예 [데이터]: `Shooter___Default` = 1.0(키 없음), `Shooter___BulletUmbrellaCanopyNormal` = 0.7, `ChargerFull___BulletUmbrellaCanopyNormal` = 3.0, `Blaster_KillOneShot___MsnBoxL` = 10.0.
 
+### 4.6.1 무기 정보 → DamageRateInfoRow 실제 로더 [판독]+[실행] (2026-10-03 [r8 combat])
+
+§4.6의 “0/1/2 Main/Sub/Special 순서 [추정]”와 “채우는 코드 미판독”을 다음 원본 연결로 정정합니다. 기존 설명은 위에 보존했습니다.
+
+- manager descriptor 초기화 `0x7101424e88`가 0x28 B 항목 **10/11/12의 +8**에 각각 `WeaponInfoMain`/`WeaponInfoSub`/`WeaponInfoSpecial` 원본 문자열을 씁니다. 원본 실행으로 세 이름을 확인했습니다. `0x7101a88920`은 category 0/1/2에서 정확히 이 항목 10/11/12를 읽으므로 **0=Main, 1=Sub, 2=Special**입니다. 이는 숫자 순서 추론이 아니라 writer/reader 연결입니다.
+- 실제 데이터 `extracted/romfs/RSDB/WeaponInfo{Main,Sub,Special}.Product.100.rstbl.byml.zs`를 풀어 **원본 BYML 배열 접근 `0x71037d204c` → 행 visitor `0x7101415c04` → 노드 빌더 `0x7101413a60` → 조회 `0x7101a88920`**를 연결 실행했습니다. 범위 밖 다른 무기의 실제 동작은 분석하지 않았고, 공통 배율 표의 loader/category 질문에만 사용했습니다.
+
+| 기준 객체 | writer·원본 의미 | reader |
+|---|---|---|
+| loader 임시 행 R+8 | `1415c04`: `DefaultDamageRateInfoRow` 문자열 포인터 | `1413a60` 기본 문자열 복사 |
+| R+0x10/+0x18 | 같은 visitor: `ExtraDamageRateInfoRowSet` BYML base/array node | `1413a60` 원본 BYML 반복과 `38b27d8` reflection |
+| R+0x54 | 같은 visitor: `Id` s32 | builder의 트리 키 |
+| runtime 노드 N+0x20 | builder가 R.Id 저장, `1415864`가 실제 균형 트리 삽입 | `1a88920` 무기ID 검색 |
+| N+0x98+ExtraInfo×0x58 | SafeString의 문자열 포인터; 각 문자열은 N+0xA4+ExtraInfo×0x58 내부 64 B | `1a88920`가 SafeString 주소 반환 |
+| runtime N+0x28.. | `14155b0` 초기화·기본 HitEffector 설정과 행이 공유 | 기존 HitEffector 질문은 r6 확정으로 재계상 안 함 |
+
+[판독]+[실행] builder는 **DefaultDamageRateInfoRow를 Normal 한 칸뿐 아니라 26칸 전부에 먼저 복사**합니다. 그 뒤 `ExtraDamageRateInfoRowSet`를 데이터 순서로 읽고 ExtraInfo 인덱스의 `DamageRateInfoRow` 문자열을 덮어씁니다. ExtraInfo가 unsigned 26 이상이면 쓰기 대상과 조회 대상 모두 Normal(0번)입니다. 문자열은 최대 **63바이트+NUL**로 절삭합니다. 같은 ID의 기존 노드를 다시 빌드할 때 0x958 B 내용을 지우고 내부 포인터를 다시 초기화한 뒤 기본값과 extra를 적용합니다.
+
+사격장 스플래시슈터 `Shooter_Normal_00`, 무기 ID **40**의 결과는 26칸 모두 **Shooter**입니다 [데이터]+[실행]. 기본 배열 적용 후 CriticalHit=17도 동일한 DamageRate 행입니다. CriticalHit의 HitEffector 행 선택은 별도 r6 근거를 따르며 두 표를 혼동하지 않습니다.
+
+검증 도구 `web/tools/r8_combat_rate_rows_emu.py`, 결과 `analysis/completion/r8/combat_rate_rows_emu.json`, 전체 로그 `combat_rate_rows_run.txt`: 실제 세 파일 **250행×30 ExtraInfo=7,500 조회**, 문자열 길이 0/1/62/63/64/65/127/1000과 노드 재사용 **208칸**, 불일치 **0**. 행 visitor·BYML·reflection·트리 삽입·builder·조회는 원본 명령 그대로 실행했습니다. SDK memcpy/strcmp/guard/lock, 메모리 할당 wrapper `083d2f0`, mutex 초기화 `3585094`, 종료 등록 `0000250`만 스텁입니다. global manager alias `5790598`와 fallback SafeString `5790020`는 하네스에서 공급했으므로 **게임 부팅·실제 manager 객체 수명 검증은 아닙니다**. Main 객체의 tree+0x118/Sub·Special+0xD8에 만든 트리를 연결한 fixture를 썼으며 loader 전체 객체 생성은 주장하지 않습니다.
+
+실제 명령:
+
+```powershell
+& 'C:\Program Files\Git\bin\sh.exe' web/tools/full_decomp.sh C:/dev/splatoon3/analysis/decomp/r8_combat/rate_loader.c 0x7101414c44 0x7101419088 0x710141d940 0x7101421040 0x71014155b0 0x7101415864
+& 'C:\Program Files\Git\bin\sh.exe' web/tools/full_decomp.sh C:/dev/splatoon3/analysis/decomp/r8_combat/byml_row.c 0x71037d21fc 0x71037d204c 0x71038b27d8
+.venv/Scripts/python.exe web/tools/r8_combat_rate_rows_emu.py
+```
+
+초기 실패: original allocator wrapper가 `__errno_location`에 도달해 strict SDK 하네스가 중단됨 → 해당 allocation wrapper만 명시적으로 합성 할당으로 대체; BYML API `parse()` 없음 → 기존 `root()`로 수정. 이후 원본 전 행 검증은 통과했습니다. 숫자 category와 실제 행 이름 채우기 질문만 해소하며 다른 피격·애니·카메라 질문은 이 결과로 승격하지 않습니다.
+
 ### 4.7 열거형 (main 문자열) [데이터]
 
 | 열거형 | 값 (순서 = 정수값, 아래 근거로 확인한 것만 표시) |
@@ -225,6 +265,52 @@ Splatoon 3 v0 원본에서 **탄이 무언가에 맞았을 때 데미지 값이 
 | `spl::HitEffectorType` | Default, Shooter, Shooter_CriticalHit, Roller, … (48개, `HitEffectConfig` 행 이름과 같음) |
 | HitEffectType(E1) | NoHit, HitConstant, HitEffective, HitBombDead, HitKebaInkCore, ChargeKeep |
 | 플레이어 생존 상태 | `Dying, AirFall, WaterFall, RespawnWait, Normal` (등록 0x71026bd6e0), 표시 상태 `Dying, WaterFall, AirFall, RespawnWait, Half, HalfToHuman, Human_RecoverDamage, Human_Normal, Squid_RecoverDamage, Squid_Normal, NoAction`. 소비 코드는 미판독 [미확정] |
+
+### 4.7.1 DamageResultType의 원본 등록 배열 [실행] (2026-10-03 [r8 combat])
+
+위 “나머지는 문자열 순서 [추정]”를 원본 등록 함수 `0x71027b8258` 실행 출력으로 정정합니다. `0x7103472a28`이 이 함수를 호출해 `game::DamageResultType`에 등록합니다. 원본 함수가 이름 토큰의 배열을 만들고 반환한 **8개 인덱스/이름**은 0 Through, 1 Constant, 2 Aggregated, 3 NetPriorityFailure, 4 Invincible, 5 Armored, 6 Damaged, 7 Cure입니다. 입력 문자열에는 별도 값 대입(`=`)이 없고 배열 인덱스가 순차 값입니다. `r8_combat_enum_emu.py`로 원본 코드 그대로 실행하여 배열 전체를 대조했습니다. Mutex 초기화 `0x7103585094`·종료 등록 `0x7100000250`, SDK lock/guard는 스텁이고 파서·배열 저장은 원본입니다. 결과 `analysis/completion/r8/combat_enum_emu.json`; 판정의 모든 결과 분기를 재실행한 검증은 아닙니다.
+
+같은 도구로 `0x710349a028`의 `spl::DamageReasonOtherId` 등록 배열 11개도 실행 확인했습니다. 1=Blood, 2=StepPaint, 3=AirFall, 4=WaterFall이며 Other 이유의 실제 플레이어 소비 분기는 [player_life.md §6.3.1](player_life.md)에서 이어집니다. 기존 HP 단위·리시버 실행 근거는 재사용이며 새 확정 수로 중복 산입하지 않습니다.
+
+### 4.7.2 생존·표시 상태 값의 순서 정정 [판독 + 실행] (2026-10-03 [r8 combat])
+
+이전 §4.7의 등록 주소 `26bd6e0`는 함수 중간이다. 실제 정보 함수 **26bd4e0(592B)** 원본 실행 결과는 `Dying=0,AirFall=1,WaterFall=2,RespawnWait=3,Normal=4`. 별도 표시 type1 `26b82d0` 출력은 `Dying=0,WaterFall=1,AirFall=2,RespawnWait=3,Half=4,HalfToHuman=5,Human_RecoverDamage=6,Human_Normal=7,Squid_RecoverDamage=8,Squid_Normal=9,NoAction=10`. 두 enum의 Air/Water 순서는 반대이므로 값을 공용으로 복사해서는 안 된다. `r8_combat_life_enum_emu.py` 원본5+11항목 확인, 결과 `combat_life_enum_emu.json`. guard·SDK lock·mutex init/atexit 경계 스텁은 기록했다. 첫 display 입력을 null로 두어 빈 문자열11개가 나온 실패를 비널 객체의 필수 +8/+20/+38 공급으로 수정했다. 상태 **생산·소비 경로는 추가 추적 중이며 r7 복합 질문L219는 미확정 유지**한다.
+
+### 4.7.3 실제 TroubleType·표시 상태 생산→소비 [판독 + 실행 + 데이터] (2026-10-03 [r8 combat])
+
+§4.7.2에서 남긴 소비 경로를 신규 원본 근거로 연결했다. `26b3370` 전체 정적 등록을 실행하면 공통 속성 3개 뒤에 플레이어 속성 33개가 등록된다. 플레이어 인덱스 5는 **TransformType**, 6은 **TroubleType**이다. `26bd4e0`의 다섯 값은 독립 HP 상태 기계가 아니라 TroubleType에 등록되는 enum이다. `Normal=4`를 표시 슬롯의 `NoAction=10`과 혼용하면 안 된다.
+
+`PlayerModel::calc`의 실제 시작은 **2515488**이다. `251524c`는 572B 이벤트 핸들 함수라, 최근접 함수 검색만으로 `2515798`의 소유자를 정한 이전 후보는 틀렸다. 신규 디컴파일 `r8_combat/model_update.c`와 원본 명령을 함께 읽었다.
+
+- C=`PlayerModel`, B=`[C+27d8]+108`의 플레이어, PD=`[B+a8a0]`. 현재 HP=PD+7c, 직전 HP=PD+eec. C+2168은 후보 표시 상태의 **작은 번호 우선** 누적값이다.
+- 모델의 Half(+27e8 객체+61)가 참이면 후보를 4 이하로, HalfToHuman(+ac)이 참이고 Half가 거짓이면 5 이하로 제한한다.
+- B+d60>0 → Dying(0), 아니면 B+df0>0 → WaterFall(1), 아니면 B+de0>0 → AirFall(2), 아니면 B+d58>0 → RespawnWait(3). 이 순서로 하나를 택한다.
+- 나머지는 인간 조건에서 `HP>직전HP ? Human_RecoverDamage(6) : Human_Normal(7)`. 오징어 조건에서는 `HP>직전HP && !B7a0 ? Squid_RecoverDamage(8) : Squid_Normal(9)`. B7a0은 [player_state.md §6.1.4](../player/player_state.md)의 잉크 잠복 조건이므로, 회복 중에도 잉크 안이면 `Squid_Normal`이다. 이를 더 자연스럽게 보정하지 않는다.
+- 오징어 조건 생산에는 모델+62, B7a0, 유효 액터 핸들의 일반 생명주기 상태, Chariot 분기가 있다. 함수 본문의 이 조건들은 [판독]; 실행 대조는 무효 대체 액터와 일반 인간/오징어·Half 조건에 한정했다. 전체 모델 틱 실행으로 표기하지 않는다.
+
+| 표시 상태 값 | TransformType(인덱스5) | TroubleType(인덱스6) |
+|---|---|---|
+| 0 Dying | 0 | 0 Dying |
+| 1 WaterFall | 0 | 2 WaterFall |
+| 2 AirFall | 0 | 1 AirFall |
+| 3 RespawnWait | 0 | 3 RespawnWait |
+| 4 Half | 2 | 4 Normal |
+| 5 HalfToHuman | 1 | 4 Normal |
+| 6/7 Human_RecoverDamage/Normal | 0 | 4 Normal |
+| 8/9 Squid_RecoverDamage/Normal | 3 | 4 Normal |
+| 10 NoAction 또는 u32 범위 밖 | 0 | 4 Normal |
+
+실제 테이블은 **4a9fe48**(TroubleType), **4a9fe70**(TransformType). 원본 호출부 `25161e4..2516230`이 두 속성을 `26bbc60`으로 전달한다. 이 함수는 Voice(+1d8), Focused(+200), Enemy(+2a0), Friend(+278) **네 사용자 전부**의 +80 배열에 공통 속성 수를 더한 인덱스로 기록한다. 값이 바뀔 때만 +70/+78 dirty 비트를 OR한다.
+
+표시 애니 소비는 별도이다. C+216c와 후보 C+2168이 같으면 C+2170을 1 늘려 **26bb648(M,1,frame)**로 액션 프레임을 전달한다. 바뀌면 C+216c 갱신·프레임0 후 **26bb360(M,1,enum,0)**. `26bb360`은 `26b82d0`이 반환한 위 11개 이름을 네 XLink 사용자의 slot1에 `389b61c`로 넣는다. 모델 리셋 **25204f8**은 2168/216c=10,2170=0으로 하고 `NoAction`을 전달한다. slot2/3의 ASB 콜백 **24475f0**은 노드+c6 및 메타데이터를 검사하여 같은 enum이면 frame 갱신, 다른 enum이면 action 전환한다. 이는 LifeState slot1 공급과 구별한다.
+
+검증 명령: `.venv/Scripts/python.exe web/tools/r8_combat_life_xlink_emu.py`. 신규 원본 생산 prefix **23,328건**, 두 속성 호출부 **117건**, 전체 네 사용자 setter **50건** 모두 불일치0. 결과 `analysis/completion/r8/combat_life_xlink_emu.json`. registration 및 setter는 원본 전체 함수; 모델 prefix/호출부는 지정 구간 실행이다. SDK 메모리·문자열·mutex·guard/atexit·할당 경계와 정적 디버그 ErrorResult/IPv4 초기화의 무효 스텁을 결과에 명시했다. 해당 디버그 값은 이 속성 경로에서 읽지 않는다. 실제 렌더 출력·ASB 전체 틱·오디오 재생은 실행하지 않았다.
+
+r7 `damage_hit.md:L219`의 enum·소비 질문은 위 신규 생산/소비 연결로 해소한다. 웹 반영 필요(`impl/weapon.md`,`impl/range.md`,`impl/fx.md`): 표시와 TroubleType의 Air/Water 번호를 분리하고 원본 최소번호 우선·회복중 잠복 Normal·네 사용자 동일 속성 갱신 및 같은 액션 frame 증가를 적용.
+
+### 4.7.4 피격 연출 문자열 후보 정정 [판독] (2026-10-03 [r8 combat])
+
+§6.5의 `19389fc/193a230` 후보는 **1938610/19395e0**의 파라미터 방문/필드 조회 코드이다. 실제 VT55bcc18+60 getter **193b978**은 `spl__CoopSakeSaucerParam`을 반환한다. `PlayerDamage`(+6c, s32), `PlayerDamageSmall`(+70, s32), `PlayerDamageSmallKnockBack`(+78, f32)는 적의 공격 데미지 파라미터이며 플레이어 피격 연출명이 아니다. `1927104`도 **1927044** 파라미터 방문 함수의 `PlayerKnockBack`(+5c,f32)이고 VT55bc2b0+60 getter **19282a0**은 `spl__CoopEnemySakeWheelParam`이다. 신규 명령/디컴파일 및 `param_reflect.py PlayerDamage PlayerDamageSmall PlayerKnockBack --json`으로 확인했다. 원래 후보 기록은 유지하고 이 정정을 붙인다. 연어런 실제 동작은 이번 범위 밖이므로 분석하지 않았으며 **이 후보 정정을 신규 피격 확정 수에 넣지 않는다**. 실제 일반 피격 애니·이펙트는 player_life §7.1의 남은 경로로 계속 추적한다.
 
 ### 4.8 충돌 형상과 레이어 [데이터]
 
@@ -288,7 +374,7 @@ HitPointHolder가 데미지를 HP에서 빼는 코드: `spl:DamageHelper`가 대
 | 탄 age +0x134 | 생성자 0 → 시작에서 −1(정정) | 갱신마다 +1(이동 전), 첫 갱신 0 | 탄 소멸 |
 | 데미지 캐시 +0x11f0 | 생성자 -1 | 매 이동 -1, OnHit 첫 줄에서 항상 다시 계산해 저장 | 슬롯83(getDamage)은 캐시가 0 이상이면 그 값을 쓰고, 아니면 계산 [판독] |
 | 크리티컬 래치 +0x11ef | 시작(슬롯15)에서 0 | OnHit에서 덮어씀 | 다음 OnHit |
-| 크리티컬 누적 링(전역) | 게임 단위 | 플레이어(0~9)별 8칸 링. 빈 칸(키 -1)에 넣고, 없으면 키가 가장 작은 칸을 교체 | 링 초기화 시점 [미확정] |
+| 크리티컬 누적 링(전역) | 게임 단위 | 플레이어(0~9)별 8칸 링. 빈 칸(키 -1)에 넣고, 없으면 키가 가장 작은 칸을 교체 | 이전: 링 초기화 시점 [미확정]. 2026-10-03 r8 정정: 생성 및 SplProcessReset 방송에서 초기화 [판독]+[실행], §6.3.1 |
 | 리시버 히트 이력 | 생성 | 히트마다 추가, 최대 +0x1b0(64)개를 넘으면 가장 오래된 것 제거 | |
 | 충돌 반경 | 매 프레임(슬롯57) | age로 다시 계산 | |
 
@@ -325,6 +411,12 @@ function bulletRadius(age, Init, End, ChangeFrame):
 
 **원본 실행 [실행]** (2026-10-03 [r5 combat]): 두 함수를 CollisionParam 체인 1~3단(필드별 플래그 무작위), ChangeFrame 0·음수·양수, age −2~29·100으로 5,280건 실행해 재구현과 비트 일치. ChangeFrame이 음수면 `t = age/Change`가 음수 → 0이 되어 Init 쪽 값(0.02 하한)이 됩니다.
 
+#### 6.2.1 GroundOnly/ExceptGround 바디 슬롯 대응 정정 (r8, 2026-10-03) [판독]+[실행]
+
+§4.8의 “vt+D0=GroundOnly, vt+D8=ExceptGround 대응 [추정]”을 해소한다. 기존 초기화 `16cb660`의 두 이름과 실제 형상 포인터를 잇고, 원본 vtable **559F3F8/559F698**의 **+D0=16CB590**, **+D8=16CB5EC**를 확인했다. 각각 wrapper+20(GroundOnly)/+28(ExceptGround)의 구 형상+E4 반경을 비교하고, 차이의 절댓값이 f32(2^-23)보다 크면 신규 원본 **3A72F84**를 호출한다(BL PC **16CB5C8/16CB624**, 함수 시작과 구별). 이 함수가 반경을 `max(world+21C 또는 0.05, 입력)`→2000 상한→비유한이면1 순서로 제한해 shape+E4에 즉시 쓴다. +∞는 상한 단계에서2000, NaN은최종1이 된다. 이후 world가 있으면 `3A6C5D8`로 형상 dirty 요청을 보낸다 [판독; 실제world queue는 실행 제외].
+
+`web/tools/r8_camweapon_lifecycle_emu.py`의 두 setter→clamp **474건 원본 실행 비트불일치0**, 결과 `analysis/completion/r8/weapon_emu.json`. 합성형상·world없음(.05하한), dirtyqueue 제외. 첫 재구현은 비유한 검사를 상한보다 앞에 둬 +∞ 기대값을 틀리게 잡았으며 원본 순서대로 정정 후 통과했다. 반경식 `18a6b68/18a6fe4`는 기존 실행 결과를 재사용하며 신규확정으로 다시 세지 않는다. 웹 적용은 Field/Player 두 반경을 각각 이 바디에 연결하고 원본clamp순서를 유지하는 것이다. Narrowphase·형태별캡슐 변화는 별도 미확정이다.
+
 ### 6.3 크리티컬 누적 — `0x71016e6260` [판독 + 실행]
 
 ```
@@ -348,6 +440,10 @@ function critAccumulate(mgr, contact, pIdx, shotKey, dmg, need=1000, needCount):
 - 대상 = 접촉 쌍 `C+0x38 → [0] → [0]` 객체의 +0x70(쌍 바이트 +8 == +9이고 비트0 = 1, 또는 다르고 비트0 = 0일 때; 단 +0x69 비트4면 0) 또는 +0x78. 대상이 널이면 칸에는 기록하되 결과는 거짓(need 1000 > 0).
 
 인자는 dmg=탄 원 데미지(+0x11f0, 배율 적용 전), needCount=생성정보+0x92 byte, shotKey=생성정보+0x94입니다. 어떤 무기가 needCount를 1보다 크게 주는지는 무기 쪽 코드를 봐야 합니다 **[미확정]**.
+
+### 6.3.1 링 생성·리셋 시점 정정 [판독]+[실행] (2026-10-03 r8)
+
+기존 §5.3 표의 “링 초기화 시점 미확정”을 신규 원본 근거로 해소한다. 관리자 생성27cc960의 원본 저장은80칸 `{target=0,key=-1,damage=0}`. 초기화16e3294가582ECC0 타입 신호를 구독하고, `SplProcessReset` 생산2d53a3c→원본1323ea8 방송→27d2150 멤버 thunk→16e48c8이 **키만−1로 리셋**한다. 대상·데미지는 보존한다. 생성1,280B/독립 리셋512건/원본 등록·실제 신호 방송256건 불일치0. 전체 Scene 실행·실제 thread lock·메뉴 입력 연결은 포함하지 않는다. 상세 구조·명령·경계·첫 실패는 [critical_ring_lifecycle.md](critical_ring_lifecycle.md) §3~11.
 
 ### 6.4 수신 배율 — `0x7101a86ec0` (DamageReceiver 슬롯7) [판독 + 실행]
 
@@ -447,7 +543,7 @@ return v
 
 **원본 실행 [실행]** (2026-10-03 [r5 combat]): `0x7101e66c4c`를 슈터 파라미터 9건 + 무작위 400건(up 0·수평·임의, 속도 0 포함, blend 0/1/0.5/임의)으로 실행해 재구현과 409건 비트 일치. 슈터 값(up (0,1,0), 진행 방향 +Z) 크기: dmg 360 → 101.5294, 1150 → 187.5, 2500 → 280.0. 호출부 `0x71017633a8`~`0x71017633c8`에서 up = (0,1,0)(s0..s2 = 0, 1, 0), 속도 = 슬롯49(vt+0x188), dmg = info.damage, 파라미터 = 스택 {95.0, 300, 280.0, 2000, 0.0}(슬롯96 vt+0x300이 바꿀 기회)임을 명령으로 확인 [판독]. 속도가 0이면 넉백도 0입니다.
 
-플레이어가 받으면 리스너 0x71024632ec가 `v = 넉백 × (1/3600)`, `|v| ≤ 0.48`로 바꾼 뒤(×8.0 조건 = Chariot 사용 중·야구라 탑승 등, [hitbox.md §5.2](hitbox.md)) 0x71024c8318이 `v × 60 × 60`을 플레이어 물리 쪽 메시지로 보냅니다 **[판독]**(즉 95~280은 크기를 3600배로 표현한 값). 물리 쪽에서 이 메시지를 속도에 어떻게 더하는지는 **[미확정]**입니다.
+플레이어가 받으면 리스너 0x71024632ec가 `v = 넉백 × (1/3600)`, `|v| ≤ 0.48`로 바꾼 뒤(×8.0 조건 = Chariot 사용 중·야구라 탑승 등, [hitbox.md §5.2](hitbox.md)) 0x71024c8318이 `v × 60 × 60`을 플레이어 물리 쪽 메시지로 보냅니다 **[판독]**(즉 95~280은 크기를 3600배로 표현한 값). **2026-10-03 정정 [판독]+[실행]:** 기존 “물리 쪽에서 속도에 어떻게 더하는지 [미확정]”는 [knockback_pipeline.md](knockback_pipeline.md) §3–10의 원본 큐·RTTI 바인딩→감쇠전 dt가속 추가로 해소했습니다. 1,024건 불일치0, 실제 생성기본 strength 분모30을 확인했습니다. 최종접촉솔버와별도K는분리된미확정입니다.
 
 ### 6.6 히트 이펙트 선택 [데이터 — 선택 코드는 미판독]
 
@@ -455,7 +551,7 @@ return v
 
 행은 `WeaponInfoMain.DefaultHitEffectorType`(`Shooter`)과 ExtraInfo에서 정해지는 것으로 봅니다(CriticalHit → `Shooter_CriticalHit`) **[추정]**. 실제 재생은 `0x71016d9c60`이 만드는 `spl::HitEffectNetEvent`를 거칩니다([effect_sound], [network]).
 
-**행 선택 정정(2026-10-03 [r6 combat]): [추정] → [실행]**. OnHit이 sp+0x38 이벤트 정보를 {+0 결과, +4/+8/+0xc}로 만들고 슬롯97 `0x7101765a94`가 +4 = 생성정보+8(카테고리), +8 = 생성정보+0xc(무기 ID), +0xc = 슬롯95(ExtraInfo, 크리티컬이면 17)를 씁니다. `0x71016d9c60`이 `0x71028fed18(카테고리, 무기 ID, ExtraInfo)`로 HitEffectorType 번호(`spl::HitEffectorType` 순서)를 얻어 이벤트+0x34에 넣습니다. 규칙: 무기 ID < 0 → ExtraInfo 3이면 Bomb(26) 아니면 0, 5xxxx → MultiMissile(ExtraInfo 19면 40, 아니면 41; 카테고리 1·ID 50010은 26), 4xxxx → 카테고리 1·ID 40000이면 26, 카테고리 0·ID 42000이면 Charger 계열(ExtraInfo 5→7, 1→6, 그 밖 5), 그 밖 ExtraInfo 5면 33; 카테고리 0/1/2는 무기 정보 표(*`0x710599b420`+0x18 목록 10/11/12, 트리 +0x118/+0xd8)의 ID 노드+0x28[ExtraInfo](ExtraInfo ≥ 26이면 [0]), 노드 없으면 0; 그 밖 카테고리는 ExtraInfo 25면 47. 노드 배열은 행 빌더 `0x7101413a60`이 26칸 모두 행+0x50(DefaultHitEffectorType, `0x7101416108`)으로 채운 뒤 ExtraHitEffectorInfoSet 칸만 덮어씁니다(`0x7101414154`) [판독]. 원본 실행 `PY web/tools/r6_combat_hiteffect_emu.py` 36,900건 불일치 0(WeaponInfoMain 실제 데이터, 카테고리 1/2는 합성 트리, 스텁 없음). 결과: **스플래시슈터 등 대부분 슈터는 크리티컬이어도 `Shooter` 행**, `Shooter_CriticalHit`는 ExtraHitEffectorInfoSet에 CriticalHit가 있는 7행(TripleMiddle 계열)만 [실행 + 데이터].
+**행 선택 정정(2026-10-03 [r6 combat]): [추정] → [실행]**. OnHit이 sp+0x38 이벤트 정보를 {+0 결과, +4/+8/+0xc}로 만들고 슬롯97 `0x7101765a94`가 +4 = 생성정보+8(카테고리), +8 = 생성정보+0xc(무기 ID), +0xc = 슬롯95(ExtraInfo, 크리티컬이면 17)를 씁니다. `0x71016d9c60`이 `0x71028fed18(카테고리, 무기 ID, ExtraInfo)`로 HitEffectorType 번호(`spl::HitEffectorType` 순서)를 얻어 이벤트+0x34에 넣습니다. 규칙: 무기 ID < 0 → ExtraInfo 3이면 Bomb(26) 아니면 0, 5xxxx → MultiMissile(ExtraInfo 19면 40, 아니면 41; 카테고리 1·ID 50010은 26), 4xxxx → 카테고리 1·ID 40000이면 26, 카테고리 0·ID 42000이면 Charger 계열(ExtraInfo 5→7, 1→6, 그 밖 5), 그 밖 ExtraInfo 5면 33; 카테고리 0/1/2는 무기 정보 표(*`0x710599b420`+0x18 목록 10/11/12, 트리 +0x118/+0xd8)의 ID 노드+0x28[ExtraInfo] (ExtraInfo ≥ 26이면 [0]), 노드 없으면 0; 그 밖 카테고리는 ExtraInfo 25면 47. 노드 배열은 행 빌더 `0x7101413a60`이 26칸 모두 행+0x50(DefaultHitEffectorType, `0x7101416108`)으로 채운 뒤 ExtraHitEffectorInfoSet 칸만 덮어씁니다(`0x7101414154`) [판독]. 원본 실행 `PY web/tools/r6_combat_hiteffect_emu.py` 36,900건 불일치 0(WeaponInfoMain 실제 데이터, 카테고리 1/2는 합성 트리, 스텁 없음). 결과: **스플래시슈터 등 대부분 슈터는 크리티컬이어도 `Shooter` 행**, `Shooter_CriticalHit`는 ExtraHitEffectorInfoSet에 CriticalHit가 있는 7행(TripleMiddle 계열)만 [실행 + 데이터].
 
 참고 [데이터]: `Shooter_CriticalHit___Damaged_Default` = E1 `HitMiddleCritical`, E2 `Hit`, S1 `3連ヒット`, S2 `インク被弾`(일반 `Shooter___Damaged_Default`는 E1 `HitEffective`, S1 `ヒット`). 즉 E1은 아래 §6.7의 `HitEffectType` 열거형이 아니라 이펙트 이름입니다. 크리티컬(ExtraInfo 17)이 이 행으로 가는 코드는 [미확정]이고(이벤트 구성 `0x71016d9c60` 안 `0x71028fed18(info[1], info[2], info[3])`가 후보), 스플래시슈터의 `ExtraDamageRateInfoRowSet`은 비어 있어 DamageRateInfo 행은 크리티컬이어도 `Shooter`입니다 [데이터].
 
@@ -612,7 +708,7 @@ interface Receiver { colName: string; teamMode: 1|2; team: number; ignoreTeamMas
 | ✔ 무적·아머 설정자 | [미확정] → 부분 [판독] → **[판독] + 무적 조건 원본 실행** (2026-10-02 [respawn]) | 무적 판정 0x71024c7624 조건별 출처 컴포넌트·리스폰 무적 T+0xf4(리셋이 59/119) — [player_life.md](player_life.md) §6.11. 아머 HP 설정자 = startArmor 0x710243c1c4(원인 작은 번호 우선, 홀더 max/hp, 시작·끝 GameFrame, `StartArmor` 이벤트) — §6.9. 남은 것: 원인 번호 ↔ 무기 이름 |
 | ✔ FriendThroughFrameForPlayer | [미확정] → **[판독]**; r5: vt+0xb0/+0xc0 = 필터 +8 비트0~5 설정/읽기 **[판독]** (`0x71016cb4c0`/`0x71016cb538`) | §4.8: 0x7101762f68/0x7101763a10이 탄 레이어 8/9 전환 |
 | ✔ DamageHelper(+0x160), KnockBackHelper(+0x11b0) 역할 | [미확정] → 클래스 역할 [판독] | DamageHelper = 피해 수신 액터의 HP 홀더 목록 컴포넌트, KnockBackHelper = 바인딩만 하는 0x38 B 컴포넌트. 탄 객체에서 두 포인터를 쓰는 곳은 여전히 [미확정] |
-| ✔ 넉백 적용 | [미확정] → 변환 [판독]; r5: 넉백 벡터 계산 `0x7101e66c4c` **[실행]**(§6.5) | 플레이어: ×1/3600, 최대 0.48, 0x71024c8318이 ×3600으로 물리 메시지. 물리 쪽 처리 [미확정] — [hitbox.md §5.2](hitbox.md) |
+| ✔ 넉백 적용 | 2026-10-03 [판독]+[실행]; 기존 [미확정] → 변환 [판독]; r5: 넉백 벡터 계산 `0x7101e66c4c` **[실행]**(§6.5) | 플레이어: ×1/3600, 최대 0.48, 0x71024c8318이 ×3600으로 물리 메시지. 2026-10-03 [판독]+[실행] 원본큐→Impact→dt가속해소 — [knockback_pipeline.md](knockback_pipeline.md) §3–10(기존 물리쪽처리미확정 정정) |
 | ✔ 수신 이력 case 1~6 | [미확정] → **모드별 판정 [판독]** (2026-10-02 [respawn]) → r5: **[실행]** 3,823건 일치(§6.4.1) | §6.4.1: 1 = 간격(초) 안 같은 송신자 거부, 2 = 이전 합계 초과분만, 3 = 송신자별 누적 상한, 4 = 같은 프레임 같은 송신자/key 거부, 5 = 4 + key 교체, 6 = 1이 거부하면 2로. 이력 나이는 DamageHelper가 1/60초씩 더하고 15초에 지움. 남은 것: 송신자(액터+0x238) 클래스별 모드·값 [미확정] |
 | ✔ 시간 창(+0x1fc~0x204) | [미확정] → r5: **동작 [판독 + 실행]**(§6.4, §4.5) | +0x200이 간격과 배수를 겸함, info+0xa8 ≠ 0이면 건너뜀(탄은 기본 1). 남은 것: 카운터 `0x710580e758`+0x148의 정체, info+0xa8 = 0을 쓰는 송신 쪽, R+0x1fc/+0x200을 바꾸는 쪽 [미확정] |
 | ✔ 접촉 콜백 시점(첫 명중 age) | [미확정] → **age 시작값 정정 [판독], 첫 명중 age 0 [추정]** (2026-10-02 [combat4]) → r5: **이동 접촉 첫 명중 age 0 [판독]**([r5 physics] 프레임 순서) | age −1 시작([hitbox.md §1](hitbox.md)). 남은 것: 생성 위치 겹침 접촉의 age(데미지는 같음) |

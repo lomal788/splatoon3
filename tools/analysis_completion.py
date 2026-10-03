@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'analysis/completion'
 AREAS={'player':'이동','physics':'물리·충돌','weapon':'탄·무기','camera':'카메라·조준','combat':'피격·판정','range':'표적·사격장','paint':'도색','graphics':'그래픽','effect_sound':'이펙트·효과음','ui':'HUD','gimmick':'물리·충돌'}
 IMPL={'이동':['physics'],'물리·충돌':['physics','assets','weapon'],'탄·무기':['weapon'],'카메라·조준':['camera'],'피격·판정':['weapon','range'],'표적·사격장':['range'],'도색':['paint','assets'],'그래픽':['render','assets'],'이펙트·효과음':['fx','assets'],'HUD':['range','weapon']}
-ORDER={k:i for i,k in enumerate(['이동','카메라·조준','탄·무기','물리·충돌','피격·판정','표적·사격장','도색','그래픽','이펙트·효과음','HUD'])}
+ORDER={k:i for i,k in enumerate(['카메라·조준','이동','물리·충돌','탄·무기','도색','그래픽','피격·판정','HUD','표적·사격장','이펙트·효과음'])}
 RX=re.compile(r'\[미확정\]|\[추정[^\]]*\]|미판독|미해독|미발견|미추적|미확인|미검증|미탐색|미정|못 찾|못 봄')
 ADDR=re.compile(r'0x71[0-9a-fA-F]{8}')
 EXCLUDE_DOCS={'paint/special_gauge.md','paint/turf_result.md','ui/ui_minimap.md','ui/ui_vs_maintv_elements.md'}
@@ -64,7 +64,7 @@ def collect():
    if historical: level='기존 해소 표기(원문 근거 재사용)'
    implfiles=[rel] if rel.startswith('impl/') else ['impl/'+x+'.md' for x in IMPL[area]]
    status='범위 밖' if outside else ('기존 해소 표기' if historical else '대기')
-   rows.append(dict(id=f'{rel}:L{i}',area=area,item=item,level=level,source=rel,line=i,section=section,next=nextwhere,impl=implfiles,web=raw[:260] if rel.startswith('impl/') else '확정 후 해당 구현 기록의 근사/미확정을 대조',priority=('P0' if area in ['이동','카메라·조준','탄·무기','물리·충돌','피격·판정','그래픽','HUD'] else 'P1'),status=status,raw=line))
+   rows.append(dict(id=f'{rel}:L{i}',area=area,item=item,level=level,source=rel,line=i,section=section,next=nextwhere,impl=implfiles,web=raw[:260] if rel.startswith('impl/') else '확정 후 해당 구현 기록의 근사/미확정을 대조',priority=('P0' if area in ['이동','카메라·조준','탄·무기','물리·충돌','피격·판정','도색','그래픽'] else 'P1'),status=status,raw=line))
  # Required visible HUD paths are missing from general battle-HUD documents.
  for item,nxt in [('사격장 잉크 게이지 값·표시·회복 정지·부족 표시','0x7102492120; 0x710342eb10; InkTank/InkGauge 문자열·로비 HUD'),('사격장 조준점 위치·거리 보정·히트마커 발생/종료 조건','0x71017504f4; 0x7101763310; WpShtrHitMarker/照準 문자열')]:
   rows.append(dict(id='coverage:'+item,area='HUD',item=item,level='[미확정]',source='ui/ui_hud.md',line=1,section='§1/§11 범위 누락 점검',next=nxt,impl=['impl/weapon.md','impl/range.md','impl/fx.md'],web='게이지・조준점・히트마커의 원본 소비 경로 확보 후 반영',priority='P0',status='대기',raw=item))
@@ -79,10 +79,10 @@ def render(rows):
  s='# Lby_Lobby00 1인 연습 — 분석 완료 점검\n\n작성일: 2026-10-02; 갱신일: 2026-10-03 (Asia/Seoul). **분석 전체 100%는 아직 달성하지 않았다.**\n\n'
  s+='## 1. 범위와 집계 규칙\n\n'
  s+='플레이어가 보거나 느끼는 이동・충돌・스플래시슈터・표적・도색・카메라・그래픽・이펙트/효과음・사격장 HUD를 대상으로 한다. 네트워크, 다른 무기, 서브/스페셜 실제 동작, 랭크/연어런/스토리/메뉴는 제외한다.\n\n'
- s+='이 표의 단위는 **출처 문서의 항목/문장 1개**다. 동일 질문의 문서별 반복도 출처를 놓치지 않기 위해 각각 보존했다. 따라서 비율은 질문 기록의 처리율이며 게임 전체 파악도의 추산이 아니다. 혼합 문장은 모든 하위 미확정이 해소되어야 확정으로 바꾼다. 분모는 아래 본표의 '+str(total)+'개이며 범위 밖 부록은 제외한다. 기존 해소 표기는 재분석 금지: 기존 근거 확인 및 문서 연결이 끝나기 전에는 분자에 넣지 않는다. [재구현]/합성 테스트/[추정]은 분자에 넣지 않는다.\n\n'
+ s+='이 표의 단위는 **출처 문서의 항목/문장 1개**다. 동일 질문의 문서별 반복도 출처를 놓치지 않기 위해 각각 보존했다. 따라서 비율은 질문 기록의 처리율이며 게임 전체 파악도의 추산이 아니다. 혼합 문장은 모든 하위 미확정이 해소되어야 확정으로 바꾼다. 분모는 아래 본표의 '+str(total)+'개이며 범위 밖 부록은 제외한다. 기존 해소 표기는 재분석 금지: 기존 근거 확인 및 문서 연결이 끝나기 전에는 분자에 넣지 않는다. [재구현]/원본 실행 없는 합성 테스트/[추정]은 분자에 넣지 않는다. 원본 함수를 합성 입력으로 실행한 경우에는 검증한 입력·호출 경계 안에서만 [실행]으로 인정한다.\n\n'
  s+='[실행] 원본 Unicorn와 재구현 비트 일치, [판독] 원본 명령/원본 셰이더 식 확인, [데이터] 원본 데이터 확인만 `확정`이다. `확정 불가`는 시도・불가 사유・다음 근거가 기록된 경우에만 사용하며 **근거 확정률에는 넣지 않는다**. `대기/부분 확정/조사 중`은 미완료다. `범위 밖` 판정도 적용 조건이 불명확하면 재검토한다.\n\n'
  s+='## 2. 영역별 확정률\n\n| 영역 | 항목 수 | 확정 | 확정 불가 | 원본 근거 확정률 |\n|---|---:|---:|---:|---:|\n'+'\n'.join(counts)+'\n\n'
- s+='## 3. 우선순위 목록\n\nP0는 이동・조준・탄・판정・화면・HUD, P1은 표적 수명・도색・이펙트/효과음이다. 같은 우선순위는 표의 순서대로 확인한다. 본표에는 역사적 해소/정정 표기도 포함하여 잔여 미확정과 구분한다. 주소가 없는 곳은 발견한 것처럼 채우지 않았다. 전체 원문/안정 ID는 `analysis/completion/inventory.json`에 보존한다.\n\n'
+ s+='## 3. 우선순위 목록\n\n2026-10-03 사용자 우선순위: P0는 카메라·이동/물리·사격/피격·바닥 도색·그래픽이며, P1은 그 밖의 보조 항목이다. 각 영역의 미완료를 확정 기록보다 앞에 둔다. 세부 작업 순서는 [핵심 체감 경로](core_experience_priority.md)를 따른다. 핵심 경로가 미확정이면 주변 항목 완료로 대체하지 않는다. 같은 우선순위는 표의 순서대로 확인한다. 본표에는 역사적 해소/정정 표기도 포함하여 잔여 미확정과 구분한다. 주소가 없는 곳은 발견한 것처럼 채우지 않았다. 전체 원문/안정 ID는 `analysis/completion/inventory.json`에 보존한다.\n\n'
  head='| 영역 | 항목 | 현재 수준 | 근거 문서(§) | 다음에 볼 곳(주소·함수) | 웹 반영 필요(impl 파일) | 우선순위 | 상태 |\n|---|---|---|---|---|---|---|---|\n'
  def row(x):
   src=f"[{x['source']}]({x['source']}) {x['section']} (초기 L{x['line']})"

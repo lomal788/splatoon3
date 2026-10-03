@@ -75,16 +75,16 @@
 | 2 | `StringSelector` | 블랙보드 문자열 + (case 문자열, 자식), 기본 `その他` | [데이터] |
 | 3 | `SkeletalAnim` | 클립 이름(또는 bb 참조). 끝 프레임 vt+0x38 = 0x71039d44ac(§4.2). 본문에 **부착 목록**(§2.8) | [판독] |
 | 6 | `FloatBlend` | 실수 입력 x + 자식마다 [lo, hi] 구간, §4.4 | [판독: 0x71039c890c] |
-| 7 | `Sequence` | 자식 2개(`Emote_@` → `Emote_@_EdWait`) | [추정] |
-| 8 | `IntSelector` | bb 정수 + (정수, 자식) | [추정] → 선택 규칙 [실행](표 아래, 2026-10-03) |
+| 7 | `Sequence`(웹 권장 이름) | 현재 자식 완료→다음, 본문+14로 같은 틱/다음 틱 진행; 실제 자식84→81 아래 Emote 잎 | [판독] (2026-10-03 r8, [노드 제어](asb_node_runtime.md) §3~§7) |
+| 8 | `IntSelector` | bb 정수 + (정수, 자식) | [추정] → 선택 규칙 [실행] (표 아래, 2026-10-03) |
 | 9 | `Simultaneous` | 자식 n개 동시. 끝 프레임 vt+0x38 = 0x71039d30e4 | [추정: 이름] |
-| 10 | `Event` | u32 이벤트 번호(사람 0~4, 오징어 0 — 헤더 +0x14 의 5/1 과 일치). 잎 노드의 부착 목록으로 붙음. 발화 처리 0x71039c6d98 | [판독+데이터], 발화 구간 [미확정] |
+| 10 | `Event` | u32 이벤트 번호(사람 0~4, 오징어 0 — 헤더 +0x14 의 5/1 과 일치). 잎 노드의 부착 목록으로 붙음. 발화 처리 0x71039c6d98 | [판독+데이터], 발화 구간 [실행]+[판독] (2026-10-03 r8, [이벤트 전용 문서](asb_event_runtime.md) §3~§10) |
 | 11 | `MaterialAnim` | 재질 애니 이름(애니 잎) | [데이터] |
 | 12 | `FrameController` | 잎 노드에 붙어 재생 구간·속도를 덮어씀, §4.3 | [판독: 0x71039c9140] |
 | 13, 24 | 애니 잎(종류 미상) | 이 두 ASB 에 없음 | [판독: vtable 그룹] |
 | 18 | `VisibilityAnim` | 가시성(뼈) 애니 이름(애니 잎) | [데이터] |
-| 19 | `InitialFrame` | u32 방식 1..7: 1/2/6/7 = 이전에 재생한 같은 애니의 프레임을 이어받음, +0x20/+0x28 bool. 사람 263 은 방식 3(난수 경로 있음) | [판독: 0x71039c9fcc], 방식 3 = 무작위 시작 [추정] |
-| 21 | `BoolSelector` | bb bool + 자식 2개(`WaitHold_Nrml` ↔ `Wait`) | [추정] → 선택 규칙 [실행](표 아래, 2026-10-03) |
+| 19 | `InitialFrame` | u32 방식 1..7: 1/2/6/7 = 이전에 재생한 같은 애니의 프레임을 이어받음, +0x20/+0x28 bool. 사람 263 은 방식 3(난수 경로 있음) | [판독: 0x71039c9fcc], 방식 3 난수 구간식 [실행]+[판독] (2026-10-03 r8, [전용 문서](asb_initial_frame.md) §3~§10) |
+| 21 | `BoolSelector` | bb bool + 자식 2개(`WaitHold_Nrml` ↔ `Wait`) | [추정] → 선택 규칙 [실행] (표 아래, 2026-10-03) |
 | 5, 15 | 빈 노드 | 공유 vtable, 이 파일에 없음 | [판독] |
 
 이름은 데이터 모양·동작으로 붙인 웹 권장 이름이다. 참고: TotK ASB 의 공개 노드 열거에 1 을 더한 번호가 위 관찰(애니 잎 그룹·빈 노드 쌍 포함)과 모두 맞는다 [추정: 외부 자료 대응, 이 바이너리에는 노드 이름 문자열이 없음].
@@ -113,6 +113,9 @@
 | 0xd…… / 0xe…… | 실수 파라미터 표(헤더 +0x48, 개수 +0x44, 사람 34) 참조 |
 
 실수 파라미터 표 항목(0x20 B) = {내부 bb 순번, 변화율 제한(/dt), 모드(1 = 각도), 초기값, scale, offset, min, max}, 결과 = `clamp(offset + scale × 변화율 제한을 거친 bb 값, min, max)`. 사람 표의 내부 순번 0/1/4/5/6 = MoveSpeedRt [0..1], StainFrm [0..600], ShotPitRt [−1..1], StringerTiltDeg [0..90, 모드 1, 90/프레임], NiceBallDamageBlendRt [데이터].
+
+
+**r8 정정(2026-10-03)**: rate0은 새 값 즉시 갱신, mode1은 도 단위·mode2는 라디안 각도 감기다. 새3997c10 원본2048/2048, 기존3997de0 전체 캐시/반환1536/1536 비트 일치로 확인했다. 정확한 식·스텁·한계는 [asb_float_parameter.md §3~§11](asb_float_parameter.md). 기존 참조태그 판독 성과를 새 확정으로 재계상하지 않았다.
 
 ### 2.8 부착 목록 — Event·FrameController·InitialFrame 이 붙는 곳 [판독+데이터]
 
@@ -254,8 +257,11 @@ if (f >= e.end) {
 - 게임이 보는 cur: 슬롯 처리 0x7103996d84 가 먼저 전진(0x71039ccc4c → 종류 3 vt+0xb0 → 0x71039bcdbc)하고, 다음에 보고(0x71039cd350 → vt+0xc8 0x71039d3dcc 가 entry.cur 를 씀) → 슬롯 +0x104. 래퍼 갱신 0x71024507a8 이 엔진 틱 0x710399f848 뒤에 `래퍼+0x30[i] = 슬롯i+0x104` 로 복사(0x7102450c94~0x7102450d68).
 - 순서: 상태기계 0x710243e7d0 의 0x710243ea00~ea30 이 `cur = 래퍼+0x30[slot]`, `end = 0x710245064c`, `cur + 3 > end` 면 다음 단계 → 함수 끝(0x7102440d6c/0x7102440d78)에서 사람·오징어 래퍼 모두 0x71024507a8(dt = SM+0x204) 로 틱. **판정은 직전 프레임에 전진을 마친 cur 로 한다.**
 - 커맨드 요청 프레임: 0x710399e340 → 진입(cur = 0, 0x71039bcdbc 를 인자5 = 1 로 불러 전진 없음) → 0x710399ec94 → 0x7103997558 보고. 같은 프레임 뒤쪽 틱에서 전진해 cur = 1 [판독: 경로, 실행 검증 없음].
+  - **정정(2026-10-03 r8) [실행:범위]:** 위의 “실행 검증 없음”은 기본 kind3·FrameController/InitialFrame 부착 없음인 요청→첫 tick→슬롯/래퍼 보고 연결에 대해 해소했다. 원본399E340 요청은 cur0/prev−1·slot1040으로 진입·보고하고39BCDBC의x4=1 경로에서 전진39AB2C4를 호출하지 않는다. 이어 원본399F848 첫 tick은x4=0→39AB2C4 전진→39D3DCC 보고를 수행한다. 원본2450C94..2450D6C 복사 구간도 wrapper30=slot104에 일치했다. ToSquid6/rate1/dt1 기본 사례는0→1이며, 요청·첫 tick 각1,025건과래퍼복사1,025구간/9,225개 f32필드가 bit mismatch0이었다. [as_request_first_tick.md §3~§11](as_request_first_tick.md)에 메타데이터·output capacity0·guard/memcpy 경계를 기록했다.
+  - **실행 범위:** 24507A8 전체·상태 전환 predicate·실제 클립 로더·출력 포즈 합성은 실행하지 않았다. 연속 두 번째 tick은 slot168 pool pointer fixture가 없어3997080에서 실패했고 성공 건수에 포함하지 않았다. 아래 S+4 및 화면 프레임1..4 예는 기존 판독 기반 계산이며 이번 첫 tick 실행만으로 전체 수명/화면 검증으로 올리지 않는다. 전체 혼합 질문은 조사중이다.
 - 예(사람 ToSquid, FrameCount 6, rate 1, dt 1): 요청 프레임 S 의 틱 뒤 cur = 1 → S+4 프레임 처음에 cur = 4, `4 + 3 > 6` → 0x84(오징어 ToSquid). 화면에 나가는 사람 클립 프레임은 1, 2, 3, 4 [판독 기반 계산]. ±1 문제의 답: end 는 FrameCount, 판정은 틱 전 cur.
 - 래퍼 +0x5d7(슬롯 0) / +0x5d8(슬롯 1)이 켜지면 그 틱 동안 슬롯 rate 를 0 으로 두고 되돌린다(일시정지). dt(SM+0x204) 설정은 vtable 0x7105630208 의 0x710243a45c, 기본값 [미확정].
+  - **정정(2026-10-03 r8) [실행]+[판독]:** SM+204 기본값은 **1.0f(3F800000)**, +208=0이다. 기존 생성자24397BC의 실제entry부터2439D08 actor778 연결까지 실행했다. 더럽힌 allocation24건 모두 원본store2439D00이1.0/0을 쓰고 같은 SM을 연결했다. 실제 PlayerVT562FF08+300=243A45C로 엔진 phase whole/prefix512건도 dt×actor4D8 및 gate에 일치했다. 모델 생성/메모리 서비스가 실행 경계이며 라이브 phase dt=1·actor 배율 기본1까지 확정한 결과는 아니다. 도구 `r8_camweapon_sm_dt_emu.py`, 근거 `analysis/completion/r8/sm_dt_support.md`·`sm_dt_emu.json`. 이 단일 기본값 질문은 해소하고 §6 블랙보드 공급 전체 묶음은 남긴다.
   - **추가(2026-10-03 r6) [판독]:** 0x710243a45c 는 `플레이어+0x778(SM)+0x204 = s0` 한 줄이다. 이것을 담은 칸은 0x7105630208 = 플레이어 vtable +0x300 이다. main 전체에서 `ldr x,[x,#0x300]; blr` 16곳 중 액터 갱신 0x7100f76a78(0x7100f76c04)과 0x7100f76f78(0x7100f77174)이 부른다. 둘 다 액터 +0x4cc bit1 일 때만 부르며(플레이어 초기화가 +0x4cc |= 0xfa), 넘기는 값은 같은 프레임 AS 틱(0x710399f848)에 넘기는 `단계 정보+4 × 액터+0x4d8` 이다(0x7100f76bac/0x7100f77120 `fmul`). 즉 **SM+0x204 = 엔진 단계 dt × 액터 시간 배율**이다. 단계 정보 +4 의 실행 중 값(정상 1.0 으로 보임)과 +0x4d8 기본값은 [미확정]이다.
 
 ### 4.3 FrameController (종류 12) [판독: 0x71039c9140, 값 목록 vt+0x98 0x71039c9ccc]
@@ -285,7 +291,7 @@ if (자식 i, i+1 구간이 겹침) {
 } else 범위 밖: 마지막 자식(또는 0번)만
 ```
 
-사람 34개 [데이터]: 26개 (0,1)/(0,1), ShotPitRt 4자식 1개 (−1,0)/(−1,0)/(0,1)/(0,1), Stringer 7개 (0,90)/(0,90). 본문+8 은 전부 0 → **선형**. 두 자식의 프레임 동기화(0x71039bcb9c)는 [미확정].
+사람 34개 [데이터]: 26개 (0,1)/(0,1), ShotPitRt 4자식 1개 (−1,0)/(−1,0)/(0,1)/(0,1), Stringer 7개 (0,90)/(0,90). 본문+8 은 전부 0 → **선형**. **정정(2026-10-03 r8):** 두 자식의 정규화 진행률 전달과 원본 프레임 소비는 [노드 제어](asb_node_runtime.md) §3~§10에서 [판독]+[실행]으로 확정했다.
   - **정정(2026-10-03 r6) [판독]:** 다음 주소로 적었던 0x71039bcb9c 는 동기화 함수가 아니다. 잎 노드의 부착 목록에서 첫 InitialFrame(종류 0x13)·첫 FrameController(종류 0xc) 번호를 인스턴스 +0x58/+0x5a 에 두고, 나머지 부착을 목록에 넣는 수집 함수다(조건: 부착 레코드 +0xf4 bit1 이면 0x71039bc378 필터). 자식 동기화는 여전히 [미확정]이고 다음에 볼 곳은 FloatBlend 진행 0x71039c8d30 이다.
 
 ### 4.5 상태 전환 블렌드 [판독: 0x710399728c]
@@ -316,7 +322,7 @@ else { t = 0; step = 1/B }
 
 | 이름 | 값 |
 |---|---|
-| MoveSpeedRt | SM+0xe0. 0x7102446dfc 에서 `e0 += k·(목표 − e0)`, 주 경로 k = 0.2, 목표 = clamp((SM+0xd4 − 0.027)/0.023, 0, 1)(SM+0xd4 = 0x710246d060 속력). 사람 이동 상태 0x5e~0x81 이 아니면 0. 다른 분기 [부분 판독] |
+| MoveSpeedRt | SM+0xe0. 0x7102446dfc 에서 `e0 += k·(목표 − e0)`, 주 경로 k = 0.2, 목표 = clamp((SM+0xd4 − 0.027)/0.023, 0, 1)(SM+0xd4 = 0x710246d060 속력). 사람 이동 상태 0x5e~0x81 이 아니면 0. 다른 분기 [부분 판독]. 7차 보완(2026-10-03): 슈터 WalkDamage에서는 목표 0, 앞·뒤/옆 걷기의 AS 슬롯 rate는 서로 다른 상수와 SM+0xe4=1.25를 사용한다. [player_state.md §6.3.1](../player/player_state.md) [실행]+[판독]. |
 | StartLaunchLandingBlendRt | min(SM+0x110/60, 1). SM+0x110 은 매 프레임 −1, 상태 0xbf 끝에 120(0x710244240c). ASB 는 참조하지 않음 [데이터] |
 | EquipWeaponMain | 본체+0x588 무기 분류의 +0xd0/+0xd4 ≠ 0 |
 | ShotPitRt | 0x71024c9824 결과에 따라 본체+0x538 객체 +0x48/+0x44/+0xc 중 하나 |
@@ -346,10 +352,11 @@ else { t = 0; step = 1/B }
 
 | 항목 | 상태 / 필요한 것 |
 |---|---|
-| ~~노드 종류 10/12/19~~ | 해소: Event / FrameController / InitialFrame, 잎 노드 부착 목록(§2.5, §2.8). 남은 것: Event 발화 구간(0x71039c6d98, 헤더 +0x20~+0x34 섹션), InitialFrame 방식 3(점프표 0x7104af3296) |
+| ~~노드 종류 10/12/19~~ | 해소: Event / FrameController / InitialFrame, 잎 노드 부착 목록(§2.5, §2.8). r8 정정(2026-10-03): Event 발화 구간은 [asb_event_runtime.md](asb_event_runtime.md) §6/§10에서 해소(점 2048·구간 2048 원본 실행). 남은 것: BAEV 파일 전체 섹션 및 InitialFrame 방식 3(점프표 0x7104af3296) |
 | ~~블렌드 곡선, FloatBlend 가중~~ | 해소: §4.4, §4.5. 남은 것: 다층 포즈 합성(0x71039cd350, 0x71039be4a0, 0x71039bf1b8), FloatBlend 자식 프레임 동기화(0x71039bcb9c) |
 | ↳ 갱신(2026-10-03 r6) | 0x71039cd350 = 층 가중 전파·진행률 보고(포즈 합성 아님), 0x71039bcb9c = 부착 수집(동기화 아님) — §4.4·§4.5 정정. 포즈 샘플러 쪽 정규화와 자식 동기화(0x71039c8d30)는 [미확정] |
 | ~~끝 프레임·±1~~ | 해소: end = FSKA FrameCount, 판정은 틱 전 cur(§4.2). 요청 프레임 첫 틱 전진은 경로 판독만(실행 검증 없음) |
+| ↳ 정정(2026-10-03 r8) | 기본 kind3/noattachment 요청→첫 tick→프레임 보고는 원본1,025건/9,225f32 bit0으로 보강(§4.2, [as_request_first_tick.md](as_request_first_tick.md)). 연속 두 번째 tick pool fixture 실패·복합 FrameController/InitialFrame·전체포즈는 남아 조사중 유지 |
 | 블랙보드 공급 | 대부분 해소(§4.6). 남은 것: WeaponCategory/WeaponDetail 호출자 값(슈터는 `Shtr`/`Shtr` 로 해소, §3.1), JumpVarID 출처, MoveSpeedRt 나머지 분기·애니 rate 표(state_big_full.c 2725~2985행), SM+0x204 기본값 |
 | ↳ 갱신(2026-10-03 r6) | JumpVarID 규칙 해소(§4.6), SM+0x204 writer = 엔진 액터 갱신이 플레이어 vt+0x300 으로 넘기는 dt × 액터+0x4d8(§4.2). 남은 것: 다른 무기의 Category/Detail, MoveSpeedRt 나머지 분기, 단계 dt 실행값 |
 | ~~BoolSelector 자식 순서·IntSelector 기본~~ | 해소(2026-10-03): 참 → 자식 0, IntSelector 는 마지막 자식이 기본 [실행 130/130], §2.5. 남은 것: 재평가 세대 값(인자2+0xd0/인스턴스+0xa0) |
@@ -358,3 +365,32 @@ else { t = 0; step = 1/B }
 | 이벤트 AnimationEvent/AsNode/*.baev 연결 | baev 형식 판독 |
 
 참고: `romfs/Sound/*.baatarc`, `*.bagst` 는 사운드 감쇠·그룹 설정이며 애니와 무관하다 [데이터: 경로 `/Sound/Attenuation/`, `/Sound/Group/`].
+
+2026-10-03 7차 보완: §4.6 및 잔여 표의 MoveSpeedRt 나머지 분기·애니 rate 질문은 **슈터 범위에서 해소**했다. 걷기 5515 입력·1440 연속 프레임, 보조 선택과 NG 판정 각각 6640건, Jump_St 요청 1152건을 원본 실행과 대조했다. [player_state.md §6.3.1~§6.3.3 및 §11](../player/player_state.md)에 식·순서·스텁을 기록했다. 다른 무기의 Category/Detail·rate와 전체 애니 그래프 연결 실행은 별도 미확정이다.
+
+2026-10-03 r8 추가: FloatBlend 동기화·Sequence 진행은 [asb_node_runtime.md](asb_node_runtime.md)에서 해소했다. 종전 §6의 포즈 합성/동기화 혼합 질문은 포즈 합성이 남아 있으므로 전체 완료로 올리지 않는다.
+
+### 11.8 SM 기본 dt 실행 정정 — 2026-10-03 r8
+
+[실행]+[판독] §4.2의 SM204 기본값 미확정은 생성자store2439D00·actor778 연결2439D08 원본prefix24건으로 해소했다. 실행 중 덮어쓰기는 실제setter512건과 기존r6producer를 대조했다. 명령·실패·실행 경계는 `analysis/completion/r8/sm_dt_support.md`·`sm_dt_emu.json`. 초단위1/60을 기본 SM 프레임dt로 쓰는 근사는 바꿔야 한다. 라이브 단계dt/actor시간배율 기본·다층pose 등은 미확정이며 전체블랙보드 질문을 승격하지 않는다.
+
+### 4.6.1 WeaponCategory/Detail 네 호출자 값 — 2026-10-03 정정 [판독]+[실행:구간]
+
+기존§4.6의네caller미확정은 [animation_weapon_blackboard.md](animation_weapon_blackboard.md) §3–10의새2491758/24BB240전체판독·네원본source구간1024건으로해소했다. 2491940/249CFC8/24BB548은선택된무기의실제vt230에서슈터Shtr/Shtr을받고,24919C8은선택holder null전환에서empty/empty를쓴다. null의호출생략과empty공급을구분한다. 기존r5슈터getter/sink/이름대체는재사용. 전체caller생명주기/다른무기/다층포즈는별도미확정유지하며복합L277을이결과로승격하지않는다.
+
+
+### 11.9 요청→첫 tick 실행 보강 — 2026-10-03 r8
+
+[실행:범위] camera_weapon 담당이 저장한 신규399E340→399F848 전체 경로와2450C94..2450D6C 원본복사 구간의1,025사례/9,225f32 대조를 §4.2에 연결했다. 기본 요청cur0→첫 tickcur1이며 entry/advance/traversal/report는원본을실행했다. §4.1의곱셈표기를실제f32순서로구체화하면 `step=f32(f32(dt*slotRate)*entryRate)`다. round4는FRINTA ties-away이며 NaN/Inf·역재생은검증하지않았다. end=FrameCount/상태판정틱전cur은기존근거재사용이다.
+
+연속8tick 시도는두번째tick(slot168 pool fixture 누락, PC3997080)에서실패했다. 실패JSON은보존했고부분cur2 보고를전체성공으로세지않았다. FSKA/resource metadata 및output capacity0/clear·debugoff·guard/memcpy 경계와원본실행범위를 [as_request_first_tick.md §10~§11](as_request_first_tick.md)에명시했다. 커맨드요청순서의확정된하위결론을전체ASB포즈/상태기계의확정으로확대하지않는다. L276은조사중,신규완료항목수는증가시키지않는다. 웹코드·impl은변경하지않았다.
+
+
+### 11.10 ASB 헤더 이벤트·이름 마스크 정정 — 2026-10-03 r9
+
+[판독]+[실행]+[데이터] §2.1 header14의5/1은 이벤트 그룹 개수다. 신규39AFDFC getter→3DE0F6C의BAEV 파일 요청을 확인했다. header18의2/0은 보조 슬롯 수가 아니라 이름으로 뼈를 선택하는 마스크 그룹 개수이며 신규39AE15C/39AE544가12+8*n 가변 길이 그룹을 적용한다. 원본39AE5441,026건 호출·상태 일치와 원본 getter 실제 ASB2건은 [asb_header_runtime.md §3~§11](asb_header_runtime.md)에 기록했다. AS 슬롯 수·SDK 최종 포즈·헤더 나머지 섹션은 이 결과로 올리지 않는다.
+
+
+### 11.11 r9 typed tag 정정 — 2026-10-03
+
+§2.4의 “상위4비트8/A/D/E가 타입”은 보편 분기로 사용할 수 없다. 타입은 호출 reader가 정하고 공통 bit31=상수/참조, bit24=값칸 주소 override, float 상위2bit=3은 파라미터 표다 [판독]. 신규39CDA20의 이전 미실행 typed/override/miss를1536건 실행해 nibble8..F가 모두 정수 reader에서 같은typed API를 부름을 확인했다 [실행: 명시적getter fixture]. [asb_typed_tags.md §3~§10](asb_typed_tags.md). 기존float/string/bool 판독은 재사용이며 upstream 실제값·전체포즈 미확정은 유지한다.

@@ -24,12 +24,12 @@
 | 점프 흔들림: 점프 시 카운터=Jump_DegBiasEndFrame, 공중(공중 프레임 ≥ 4)이면 1, 접지면 2씩 감소, (End−DecreaseStart) 구간 선형 복귀 | 0x7102580c4c, 0x7102580f98, 0x71025830d0 | [판독] (본체+0xc0 = 공중 프레임은 증가·리셋 writer 0x710246b574/0x710246b32c로 확정 [판독], [player_camera.md](player_camera.md) §6.2. vt40 호출자는 [미확정]) |
 | 연사 타이머(RepeatFrame) 위상 누적 방식 | 0x7102551530 | [판독] |
 | 플레이어 카메라 리그: p(−1..1)별 3점 베지어 4개(H,F,D,S) + 고각 회전 | 0x71024d6e84 | [판독] (기본 경로) |
-| FOV 55°, near 0.2, far 2000 | 0x71024d6598 | [판독] |
-| 감도(세이브 0..20) → yaw/pitch 속도, yaw·pitch 모두 FOV 비율 곱 | 0x71024d6598, 0x71024e0178 | [판독] (UI 표시 −5..+5 ↔ 세이브 대응은 [미확정], [player_camera.md](player_camera.md) §4.2) |
-| 수평은 즉시, 주시점 높이만 지연 추종 | 0x71024d9ae8 | [판독] (비율 변수 의미 [추정]) |
-| 벽/지형 회피 | PlayerCamera 내장 질의 Q(this+0x1d0)로 피벗→리그 카메라 붐을 두 번 질의(피벗 근처·단축). 적중 거리 Q+0x54 → 목표 비율 this+0x14c8(막히면 즉시, 풀리면 천천히) → 평활 비율 +0x14c4 → `pos = 피벗 + dir·len·비율` ([player_camera.md §6.8](player_camera.md)) | 경로·식 구조 [판독], 형상 = 구·반경 런타임 0.3 [실행]+[판독] (2026-10-03), 줄어들 때 rate·복귀 속도 세부 [판독-부분], 브로드페이즈 필터 [미확정] |
+| 수직 FOV 55°, near 0.2, far 2000 | 0x71024d6598, 0x7101017434→0x7103589d74(player_camera §6.7, 7차) | [판독]+[실행: 투영256/256] |
+| 감도(세이브 0..20) → yaw/pitch 속도, yaw·pitch 모두 FOV 비율 곱 | 0x71024d6598, 0x71024e0178 | [판독]+[데이터]+[실행: UI625/625] (2026-10-03 8차 정정: UI s=(v−10)/2, k=s/5, [player_camera.md](player_camera.md) §6.9.3; 이전 UI 대응 [미확정] 해소) |
+| 수평은 즉시, 주시점 높이만 지연 추종 | 24dd9ec의 (B73c 일반수직+B754 벽차지)/58bbc60 Jump初速0.115; 기존 y추종 식은 player_camera §6.6 | [판독]+[실행:ratio4096] — 2026-10-03 r9 의미 추정 정정([r9_state_sources.md](r9_state_sources.md)) |
+| 벽/지형 회피 | PlayerCamera 내장 질의 Q(this+0x1d0)로 피벗→리그 카메라 붐을 두 번 질의(피벗 근처·단축). 적중 거리 Q+0x54 → 목표 비율 this+0x14c8(막히면 즉시, 풀리면 천천히) → 평활 비율 +0x14c4 → `pos = 피벗 + dir·len·비율` ([player_camera.md §6.8](player_camera.md)) | 경로·식 구조 [판독], 형상 = 구·반경 런타임 0.3 [실행]+[판독] (2026-10-03), 전진 계수·감소rate·복귀 속도 상세 [판독]+[실행: 480/480·640/640] (7차, player_camera §6.8.1), 브로드페이즈 필터 [미확정] |
 | 반전 설정 IsReverseUD/LR | 오른쪽 스틱 기록 0x71024a73b8이 세이브 +0x4001(상하)/+0x4002(좌우)로 부호 반전, 자이로에는 미적용, 차이값은 '원시 − 지난 기록값'(특이점) | [판독]+[실행(에뮬) 4 PASS] |
-| 슈퍼점프 비행 중 카메라 | 별도 카메라 없음. this+0x1920 = PlayerDokanWarp 단계로 오징어 블렌드·붐 질의 생략·착지 방향 자동 yaw | [판독] (단계 이름 [추정]) |
+| 슈퍼점프 비행 중 카메라 | 별도 카메라 없음. this+0x1920 = PlayerDokanWarp 단계로 오징어 블렌드·붐 질의 생략·착지 방향 자동 yaw | [판독]+[실행] (8차 player_camera §7.2 producer로 번호별 동작·yaw분기 확정) |
 | 사망 카메라 | 사망 대기(T+8) 시작 프레임에 Pos/At/ShotDirXZ 메시지를 연결 액터로 1회 전송, 화면 카메라는 받는 쪽 | [판독], 받는 쪽 [미확정] |
 | 카메라 쉐이크 = Axis × curve(frame) × gain × Scale, 살아 있는 쉐이크 합을 카메라 **위치(월드)**에 더함 | 0x71010182e8, 0x7101010150 | [판독] |
 | 쉐이크 gain = DistanceAttenuate≥1이면 1−clamp((d−15)/10), 아니면 1 | 0x710137b000, 0x710130d3a8, RumbleModuleParam | [판독]+[데이터] |
@@ -165,3 +165,8 @@ sin = T[i].s + T[i].ds * fr ;  cos = T[i].c + fr * T[i].dc
 - README 기능 표의 카메라 행 링크는 이미 이 문서를 가리킵니다. 상태 칸의 "자이로·벽 회피·특수 카메라 미확정"은 2026-10-02 [camui] 기준 "대체 리그 조건·쉐이크 적용·자이로(부분)·형상 질의 존재·리셋 호출자 판독, 반전 설정·질의 효과·슈퍼점프 카메라 미확정"으로 바꾸기를 제안합니다(README는 공용이라 직접 고치지 않음).
 - `tools.md` 영역 도구 표 UI 행에 `ui_animcmd_emu.py`, `ui_minimap.py`, `ui_vcall_scan.py`(가상 호출 슬롯 공존 스캔 — 다른 영역도 사용 가능) 추가를 제안합니다.
 - 2026-10-02 [camrest]: 카메라 행에 `camera_stick_emu.py`(오른쪽 스틱 기록·반전 원본 에뮬), UI 행에 `ui_animorder_emu.py`(TraceGauge→setFrame→레이아웃 애니 적용 루프 원본 에뮬), `ui_minimap_shader.py`(미니맵 재질 Hoian_UBER 프로그램 역번역), `ui_minimap.py cam`(맵 카메라 기저 재구현) 추가를 제안합니다. README 카메라 행 상태는 "반전 설정·붐 질의 효과·슈퍼점프 카메라 판독, 질의 형상·사망 화면 카메라 미확정"으로 바꾸기를 제안합니다.
+
+
+### 11.6. 사망 카메라 받는 쪽 해소 (2026-10-03 r9)
+
+§1 표의 “받는 쪽 미확정”은 [판독]+[실행]으로 해소했습니다. 다른 SplPlayer의 PlayerCamera가 수신해0에서시작하는 rate로일반 리그 Pos/At을추종하며, snapshot factory24e6184/publisher24dffd8과실제 Behavior 교환이이를 연결 Actor getter2676548에공급합니다. 자기 메인은활성snapshot을C+d4에복사하고24e50c0이선택해기존Spectator/포저에전달합니다. 초기rate0, 위치계산후rate+=f32((1-rate)*.01), 해제6c2b6a0f는ec/ed/ef만0이며저장포즈보존. 상세 [r9_lifecycle.md](r9_lifecycle.md) §3~11, camera_snapshot_emu.json factory1/publish1024/swap1024/reader2048/maincopy1024/getter1024/reset3 0bad. 수신/보간은camera_death_emu.json의새r9근거. hardwareposture/최종픽셀과실제솔로사망사건을실행으로확대하지않습니다.

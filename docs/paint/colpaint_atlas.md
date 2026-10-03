@@ -2,7 +2,7 @@
 
 지형(충돌 메시)에 칠할 때 쓰는 도색 텍스처의 UV 아틀라스를 원본이 **실행 중에** 어떻게 만드는지 정리합니다. 상위 문서 [paint_and_score.md](paint_and_score.md) §3.2, 표기 규칙 [../README.md](../README.md#확정-수준-표기).
 
-상태: **분석 진행(4차, [paint4])**. 프리즘 분류·기저·슬랩·정점 공유·패널 병합·재투영·패킹은 원본 함수 unicorn 실행과 재구현이 일치합니다(§9). 패널 연결(띠)·패턴 인식·시각 모델 매핑은 개요만 판독했습니다. 2026-10-03 [r5 paint]: 런타임 칠 경로(월드 → 패널 좌표 → 시드 위치, 회전·높이 마스크·초기화) §7.1 추가, 좌표 변환 원본 실행 6000/6000.
+상태: **분석 진행(4차, [paint4])**. 프리즘 분류·기저·슬랩·정점 공유·패널 병합·재투영·패킹은 원본 함수 unicorn 실행과 재구현이 일치합니다(§9). 패널 연결(띠)·패턴 인식·시각 모델 매핑은 개요만 판독했습니다. 2026-10-03 7차: 시각 모델 정점의 도색 UV/전환/접선 작성 경로를 §7.2에 판독하고 원본 버퍼 바이트를 검증했습니다. 실제 시각 삼각형→패널 배정과 이음매 후처리는 계속 미확정입니다. 2026-10-03 [r5 paint]: 런타임 칠 경로(월드 → 패널 좌표 → 시드 위치, 회전·높이 마스크·초기화) §7.1 추가, 좌표 변환 원본 실행 6000/6000.
 
 ## 1. 개요
 
@@ -176,7 +176,7 @@ else:                       위 (x0, y0+h, x0+w, y1), 오른쪽 (x0+w, y0, x1, y
 
 - 도색 요청의 Col 대상 id = 패널 id. 같은 요청은 분배 1회 안에서 패널마다 한 번만 칠합니다(중복 비트 0x1400개) — [paint_and_score.md](paint_and_score.md) §3.5.1.
 - 패널 런타임 레코드(관리자+0x2c0 → +0x398[id]): +0x3c..+0x50 매핑 AABB, +0x54 매핑 방향. 0x7102c3f0c4 는 요청 크기를 `(Δu + 0.875, Δv + 0.875)`, 위치를 매핑 AABB 중심으로 채우고, 0x7102c4a6bc 는 위치를 매핑 방향 기저(0x7102bd7b2c)로 패널 좌표로 바꿉니다 **[판독]**.
-- 시각 메시에 도색이 보이는 경로(setupMapModel_, 0x7102b71960/0x7102b71fd8 계열)는 [gfx4] 영역과 겹쳐 이번에 판독하지 않았습니다 **[미확정]**.
+- 시각 메시에 도색이 보이는 경로는 §7.2에서 7차에 추적했습니다 **[판독]+[실행] (부분)**. 이전 기록(2026-10-03 정정 이유 보존): "setupMapModel_, 0x7102b71960/0x7102b71fd8 계열은 미판독" — 두 후보는 미니맵 모델 생성 경로였고 실제 도색 정점 writer는 0x7102be50fc 이하였습니다.
 
 ### 7.1 칠 요청 → 패널 좌표 → 아틀라스 (2026-10-03 [r5 paint])
 
@@ -192,6 +192,54 @@ else:                       위 (x0, y0+h, x0+w, y1), 오른쪽 (x0+w, y0, x1, y
 
 - **되돌림 오차 [실행]**: 강체·트리 행렬이 단위여도 p → (u,v,w) → p' 는 f32 반올림 때문에 원래 월드 위치와 비트로 같지 않은 경우가 많습니다(3000건 중 791건만 같음). 시드 `|fcvtzs((z+(x+y))·100)| + N+4`는 3000건 중 2995건이 같았습니다. 웹이 월드 위치로 시드를 만들면 0.2% 정도의 요청에서 변형 번호가 원본과 다를 수 있습니다.
 - 메시 트리(+0x3a8)·패널 트리(+0x3d8)에 실제로 어떤 행렬이 들어가는지(정지 지형에서 단위인지)는 **[미확정]** — 다음: 두 트리에 노드를 넣는 빌더 함수(colpaint_r1.c 의 +0x3a8/+0x3d8 쓰기).
+
+### 7.2 패널 UV → 시각 지형 정점 버퍼 — 7차(2026-10-03) [판독]+[실행] (부분)
+
+**실제 표시 경로** [판독]: `ColPaintBuilder::buildOriginal_` 0x7102bcb6b0의 프로파일 문자열 `setupMapModel_` 구간은 `0x7102bd00a4`로 ColPaintBuildMeshModel(vtable 0x710567c850, 0x88 B)을 만들고, `0x7102be2b8c`를 실행합니다. 2be2b8c는 `0x7102bdde10` 뒤 `regist_tri_to_vert`(정점↔삼각형 인접 목록)와 `allocate_panel`(삼각형→패널)을 처리합니다. 후자의 vtable 0x710567c350 첫 함수 **0x7102be54f8**는 **0x7102bdec2c**의 결과 패널을 삼각형 작업 레코드+0x10에 쓰고 모델 작업 vt+0x60에 넘깁니다. 정점 작성 콜백은 **0x7102be50fc→0x7102be2de4**입니다. 실제 Lby_Lobby00 시각 삼각형에 어느 패널이 배정되는지와 배정 식 전체는 §11에 남겼습니다.
+
+정정 이유(2026-10-03): 기존 후보 **0x7102b71960/0x7102b71fd8**은 이 표시 정점 writer가 아닙니다. 2b71960은 `CreateMapModelArg`를 만들고 프리즘별0x80 B 인자를 2b73540으로 채웁니다. 2b71fd8은 `MiniMapTmpHeapNoPaint`로 2b759f4를 부르는 미니맵 모델 생성기입니다. `setupMapModel_` 문자열과 뒤에 있는 미니맵 생성 호출을 같은 단계로 묶은 이전 주소 설명을 정정합니다. 새 디컴파일 `analysis/decomp/r7_paint/model.c`는 후보 제외 근거로 보존했습니다.
+
+2be50fc는 리소스 속성 조회 **0x7102bd108c**로 `_pu0`, `_pu1`, `_pu2`를 찾아 버퍼를 매핑(083d938), 0으로 초기화, 작성 후 플러시/매핑 해제(083d950/083d94c)합니다 [판독]. 실행 조건은 `_pu0` 포맷 값 **0x1502**, `_pu1` **0x202**, `_pu0` 버퍼 포인터 비0입니다. `_pu2`는 이 함수에서 포맷 값을 따로 검사하지 않고 버퍼 포인터가 있으면 쓰며, 없으면 콜백이 건너뜁니다. 속성 정보 기준 +0 버퍼 핸들, +8 바이트 수, +0x10 stride, +0x18 정점 내 offset, +0x20 포맷입니다. 자원 조회·매핑 API 전체는 이번 Unicorn에서 실행하지 않았습니다.
+
+| 표시 속성 | writer와 메모리 쓰기 | 확인 범위 |
+|---|---|---|
+| `_pu0` (셰이더 aPaintUV, location14) | vt0x710567c3f8의 첫 함수 **0x7102be59f0**. `(uv0.x,uv0.y,uv1.x,uv1.y)×32767.0f`를 `fcvtzs`로 0쪽 절삭, 하위16비트씩 8 B 기록 | [판독]+[실행] |
+| `_pu1` (aPaintUVSwitch, location15) | vt0x710567c430의 첫 함수 **0x7102be5ae8**. `switch×127.0f` 절삭 후 하위8비트 기록 | [판독]+[실행] |
+| `_pu2` (aPaintUVTangent, location13) | vt0x710567c468의 첫 함수 **0x7102be5ba4**. 아래 접선을 모델 행렬 변환 후 ×511, ±0.5를 더해 절삭, 10비트×3으로 압축해 4 B 기록 | [판독]+[실행] |
+
+세 콜백 모두 실제 주소는 `*bufferPointer + stride·vertexIndex + offset`이며 `*bufferPointer==0`이면 아무것도 쓰지 않습니다. **클램프를 추가하지 않습니다**. 위 표는 CPU 원본 바이트와 스케일을 확정한 것이며, GPU 포맷 열거 이름을 임의로 붙이지 않았습니다.
+
+**한 정점의 UV·접선** (`2be2de4→2bed910/2bedb98`) [판독]+[실행]: 정점 작업 레코드는 0x50 B(+0 위치, +0xc 플래그, +0x10 인접 삼각형 수, +0x18 삼각형 포인터 목록), 삼각형 작업 레코드는 0x18 B(+0 세 정점 번호, +0x10 패널)입니다. 정점의 인접 삼각형에서 비0 패널을 중복 제거해 최대6개 모읍니다. 패널1개이면 UV 두 후보는 동일하고 switch는 초기0을 유지합니다. 패널2개 이상이면 패널+0x10 id의 작은 두 개 순서로 UV를 쓰고, 접선은 첫 패널에서 만듭니다. 두 UV의 u 또는 v 차가 **0.005보다 크면** 정점 flag bit0을 켜고 자신의 switch를0으로 씁니다. 두 번째 패널에 연결된 이웃 정점은 flag bit0이 꺼져 있을 때 switch−1로 씁니다. 패널3개 이상은 flag bit1도 켭니다. 수평 재매핑·특수 패턴의 flag bit2/3와 삼각형 단위 후처리는 아래 검증에서 제외했습니다.
+
+```text
+// 0x7102bed910, 기본 산술은 각각 f32·FMA 없음. B=basis(panel+0x54).
+cu = (panel[0x3c] + panel[0x48])·0.5
+cv = (panel[0x40] + panel[0x4c])·0.5
+u = dot(B0, modelWorkVertex.position) − cu
+v = dot(B1, modelWorkVertex.position) − cv
+UV.x = m2 + (u·m0 + v·m1)
+UV.y = m5 + (u·m3 + v·m4)        # m = *(panel+0x18), 2×3 UV 행렬
+// 위 괄호를 지킴: m2+u*m0+v*m1의 좌측부터 계산하면 원본과 다를 수 있음.
+
+// 0x7102bedb98: UV의 +u 방향 접선. UV 행렬 없는 경우 (0,1,0).
+det = m0·m4 − m1·m3
+(x,y) = (m4·(1/det), −m3·(1/det))
+(x,y) /= sqrt(x²+y²)            # 양수 길이에서만
+T = x·B0 + y·B1 + 0·B2         # 세 성분은 S0/S1/S2로 반환
+// det==0 분기는 s8/s9 이전값을 읽음: 이번 정상행렬 검증 밖. 임의 fallback을 넣지 않음.
+
+// 0x7102be5ba4, M은 2be50fc가 작업 모델+0x50에서 0fa6fd4로 얻은 3×4.
+Ti = dot(M.row_i.xyz, T)         # 평행이동 성분은 쓰지 않음
+zi = Ti·511; qi = fcvtzs(zi + (zi>=0 ? +0.5 : −0.5))
+pack10(q) = ((uint32(q)>>6)&0x200) | (uint32(q)&0x1ff)
+packed = pack10(qx) | (pack10(qy)<<10) | (pack10(qz)<<20)
+```
+
+기존 지면 셰이더 판독과의 연결은 [../graphics/stage_rendering.md](../graphics/stage_rendering.md) §5.2·§7을 재사용합니다. 셰이더가 `switch<0`이면 UV.zw, 아니면 xy를 고르고, `col_paint_uv_offset`를 더해 **y를1−y로 바꿔** 도색 텍스처를 샘플합니다. `_pu2`는 셰이더에서 ShpMtx3×3을 다시 곱하는 도색 접선입니다. 따라서 원본은 충돌 메시를 띄운 오버레이만 만드는 것이 아니라 **시각 지형 정점의 두 UV 후보·전환값·접선으로 같은 아틀라스를 소비**합니다 [판독]. 오프셋 런타임 writer·GPU 양자화 포맷 해석·실제 로비 정점 배정은 이번 전체 실행 검증 밖입니다.
+
+**새 실행 결과**: `web/tools/r7_paint_display_emu.py` — 원본 writer3개(임의 stride/offset·UV/전환/접선/모델3×3) **4096/4096 바이트 일치**, 원본 `2be2de4→2bed910/2bedb98→writer` 사슬(단일 정점·패널1/2/3개·방향42종·id순서4/1/9) **1200/1200**, UV8 B·switch1 B·접선4 B·정점flag 모두 독립 식과 일치했습니다. 사슬의 모델3×3은 단위이고, 원본 basis 및 SDK sinf/cosf는 그대로 실행했습니다. 유일한 함수 스텁은 **합성 모델 작업 vt+0x58 getter**(미리 구성한 정점/인접 패널 정보를 반환)입니다. BFRES 조회/매핑·삼각형 이음매 후처리·실제 시각 패널 배정·GPU 렌더·ColPaint 전체 빌드는 실행하지 않았습니다. 기존 기저의 확정을 새 확정으로 세지 않습니다.
+
+웹 반영 필요: `impl/paint.md` 표시 행의 충돌 오버레이를 시각 지형의 UV0/UV1/switch/tangent 소비 구조와 대조해야 합니다. 원본과 같은 버퍼 양자화(32767 절삭·127 절삭·511 반올림)와 UV 연산 순서를 유지해야 합니다. 실제 모델→패널 배정을 확인하기 전에는 가까운 충돌 삼각형을 임의로 선택해 원본 확정값으로 삼지 않습니다. 코드는 변경하지 않았습니다.
 
 ## 8. 웹 포팅
 
@@ -232,7 +280,19 @@ else:                       위 (x0, y0+h, x0+w, y1), 오른쪽 (x0+w, y0, x1, y
 | 원본 실행(에뮬), 함수 연결 | 위 콜백 → aggregatePrismInFace_ → mergeInsidePanel_ (옥트리·패널 생성 원본 그대로) | 원본 1174→1016 패널. 재구현 분할과 다름(§5.1 원인), 같은 패널은 AABB 일치 |
 | 원본 실행(에뮬) 2026-10-03 | 런타임 월드 → 패널 좌표 0x7102c3fef0(kind 2), 패널 좌표 → 시드 위치 0x7102c4a6bc, 6000건(강체 단위/임의 반반, 매핑 방향 0..0x29) — `web/tools/r5_paint_colxform_emu.py` | 9성분·3성분 모두 6000/6000 비트 일치. 스텁: 0x7102c71e50(대상 정보) 고정값, 트리 비움(단위) — paint_and_score.md §8 |
 
-결과 `analysis/paint4/emu_out.txt`. 스텁: PLT는 0 반환, atan2f/cosf/sinf/sqrtf는 파이썬 double 계산 → f32(원본 nn libm과 1ulp 차이 가능 — 재구현과 에뮬이 같은 계산을 써서 이 차이는 검증 밖), malloc(0x710083d2f0)·free 는 범프 할당기. 연결(띠)·패턴·UV 행렬 기록·런타임 그리기는 실행하지 않았습니다.
+결과 `analysis/paint4/emu_out.txt`. 스텁: PLT는 0 반환, atan2f/cosf/sinf/sqrtf는 파이썬 double 계산 → f32(원본 nn libm과 1ulp 차이 가능 — 재구현과 에뮬이 같은 계산을 써서 이 차이는 검증 밖), malloc(0x710083d2f0)·free 는 범프 할당기. 연결(띠)·패턴·UV 행렬 기록·런타임 그리기는 위 paint4 실행에서 검증하지 않았습니다. 7차 시각 정점 UV/전환/접선 작성은 §7.2와 아래 §11의 한정 범위입니다.
+
+### r8 패턴 판독 정정 (2026-10-03)
+
+세 recognizer 전체 분기·실제 모델 callback·11/12 보정을 [panel_patterns.md](panel_patterns.md) §3~§8에 확정했다 [판독]. 연결조건/겹침판정 새9,216건 원본실행이 일치했다 [실행]. 기존 §2/§10의 해당 미판독 표시를 이 근거로 정정하며 전역enum의 미생산값3/9/10/16·group·연결생성·최종GPU는 미확정으로 유지한다.
+
+### 2026-10-03 r8 묶음·장면 writer 정정 [판독]+[데이터]
+
+[panel_groups.md](panel_groups.md) §3~§9에 GroupWithDir 생성, 공유 패널 좌표 변환, bbox+6, 안정 정렬과 띠→패널 분할의 전체 분기를 기록했다. 200 비교 대상 manager+E0는 MissionStageTable **BigWorldSceneName(+78)**의 basename writer로 확정했다. 기본값은 BigWorld이고 Lby_Lobby00는 불일치하므로 400 및 분할 한도3200이다. 초기 empty만의 과거 기록은 writer 확보 전의 결과다. connectPanel/fixConnection 기하 전체와 atlas 최종 packing은 별도로 유지한다.
+
+### 2026-10-03 r8 연결 생성·절단·띠 전체 [판독]+[실행]
+
+[panel_connections.md](panel_connections.md) §3~§9: 방향별7/8 bucket octree와 세functor, .001 공유 삼각형 모서리, slot/flag/pair, component/P17/벽 절단과 opposite=(1,0,3,2), 띠 회전·8배ceil·최단endpoint(동률둘째)를 확정했다. 특히2bfd864는 **s0/s1 두성분 반환**이며 C의 단일float오표기를 교정했다. 새원본sharededge2048+projection2048 bitmatch. driver전체실행/GPU packing은 별도 미확정이다.
 
 ## 10. 미확정 — 다음에 볼 곳
 
@@ -247,5 +307,17 @@ else:                       위 (x0, y0+h, x0+w, y1), 오른쪽 (x0+w, y0, x1, y
 | 칠 가능 텍셀 d | 2026-10-03 [r6]: 스텐실 3 = 높이 텍스처 지우기 값(−10000)이 남은 텍셀(CopyBuffer COPY_TYPE=1, paint_and_score.md §3.5.4) [판독] → 빈 아틀라스 칸은 d 에서 빠짐. 마스크 그리기 0x7102bd919c 내용 [미확정] |
 | 물·KeepOut 벽 등이 대상 충돌 목록에 들어가는지 / 칠 가능 텍셀(d)이 패널 삼각형 래스터인지 | build 호출자의 TargetCollisionList 구성, 모드 3(0x7102c49844)·모드 13(0x7102c17e90) 사용처(디컴파일 `analysis/decomp/paint4/p4_misc1.c`, 미판독). 2026-10-03 [r5 paint]: 모드 13 = 초기화(색·스텐실 0, 깊이 far), 모드 3 = 높이 텍스처 대상 초기화에서 COPY 프로그램으로 스텐실 3(모드 4~6·11·17 모두 통과 못 하는 값)을 남김 [판독] — §7.1. 남은 것: COPY 셰이더가 버리는 텍셀 조건(=칠 불가 텍셀 정의)과 높이 텍스처 작성 시점 |
 | 메시 트리(+0x3a8)·패널 트리(+0x3d8) 행렬 값 | §7.1 — 트리 노드를 넣는 빌더 |
-| 시각 메시 도색 표시(setupMapModel_) | 0x7102bcb6b0 후반, 0x7102b71960 — [gfx4]와 조율 |
+| 시각 메시 도색 표시(setupMapModel_) | 7차 §7.2: 실제 경로2bd00a4→2be2b8c→2be50fc/2be2de4 판독, UV/전환/접선 writer4096·패널→버퍼사슬1200 원본일치. 2b71960/2b71fd8은 미니맵 후보로 정정. 남은 실제 삼각형→패널 배정·이음매 후처리는 §11 |
 | 그래피티·ChangePaintableArea 메시 | setupGraffiti_/setupChangePaintableArea_ (build 0x7102bc7e88 안) |
+
+## 11. 시각 도색 연결의 남은 범위 — 7차(2026-10-03)
+
+- [미확정] 실제 시각 삼각형→충돌 패널 배정: 0x7102be2b8c의 allocate_panel 콜백2be54f8→**0x7102bdec2c**(3056 B), 선행 **0x7102bdde10**(2972 B). decomp_index의 기존 C를 찾았지만 이 배정 식 전체와 Lby_Lobby00 실제 모델 입력은 실행하지 않았습니다. 다음은 이 두 함수·모델 vt+0x60의 레코드 공급자입니다.
+- [미확정] 이음매의 삼각형 후처리: 2be2de4 뒤쪽(2be35ac 이후), 2be3ccc/2be3ed8. 현재 합성 사슬은 정점1개·삼각형수0으로 이 단계에 들어가지 않습니다. UV 차0.005·이웃 switch−1 조건은 명령 판독만이며 이웃 정점 전체 배열 검증이 남았습니다.
+- [미확정] UV 행렬 det0 입력의 생산 가능성·s8/s9 이전값, 0fa6fd4 모델 행렬 역변환의 전체 의미, GPU 포맷 열거0x1502/0x202의 정확한 API 이름과 포맷 소비, col_paint_uv_offset runtime writer. 원본 CPU 바이트 쓰기를 GPU 화면 전체 검증으로 확대하지 않습니다.
+- 검증 코드/결과: `.venv/Scripts/python web/tools/r7_paint_display_emu.py` → writer4096/4096·패널→표시버퍼1200/1200, exit0. `analysis/completion/r7/paint_emu.json` 및 실제 명령/실패 기록 `paint_commands.md`. 새 디컴파일 `analysis/decomp/r7_paint/attributes.c`, 후보 제외 `model.c`, writer/UV/tangent `.asm`.
+
+
+### 11.1 r8 정정(2026-10-03) — 실제 시각 삼각형 배정·후처리
+
+기존 §7.2/§11의 삼각형→패널과 후처리 질문을 [model_panel_mapping.md §3~§10](model_panel_mapping.md)의 실제 BFRES 입력·재질힌트·옥트리질의·후보우선순위0..11·이음매후처리 판독으로 해소했다 [판독]+[실행]. 새384입력/3456정점·비교4096/4096일치. setupper vt60는2be7d28→2bee2e8 mapBox 투영이며 BuildMeshModel vt60의 삼각형배열할당과 다르다. 실제로비전체atlas/GPU는미실행, 연결pattern/group/전체잉크조명은별도미확정유지. r7의writer성과는재계상하지않았다.

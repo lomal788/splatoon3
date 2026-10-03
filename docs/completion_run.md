@@ -219,3 +219,10 @@ cwd는 모두 C:/dev/splatoon3. PY=.venv/Scripts/python.exe. Python 출력은 PY
 - `.venv/Scripts/python.exe web/tools/analysis_completion.py verify`: 성공. 보호 파일 592개 SHA-256 대조, 변경 0건·추가 0건. `analysis/completion/protected_verify.json` 저장.
 
 분석 전체 100%는 미달성이다. 확정 불가 종결 0건이며, 조사 중·부분 확정·대기 항목을 확정으로 올리지 않았다. 웹 소스/impl 수정과 commit/push 없이 이번 회차를 마무리했다.
+
+
+## 7차 추가 분석 (2026-10-03)
+
+**확정 382/986 = 38.74%**, 6차 370/986에서 **12개 출처 기록 추가 확정**. 이번 갱신은 31개 기록이다. 중복 출처를 보존한 목록 처리율이며 게임 전체 파악도를 뜻하지 않는다. 부분 해소는 확정으로 세지 않았다.
+
+[7차 보고](completion_r7.md)에 실행 건수·경계·실패 로그를 모았다. 보호 파일592개 변경/추가0. 재현은 analysis/completion/r7/merge_and_report.py.

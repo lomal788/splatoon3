@@ -144,6 +144,9 @@ mgr = singleton(0x7105850618) + 8 + team*0x15e8      // 팀별 관리자 3개
 
 ### 3.5 착탄·피격 [판독 + 데이터]
 
+**2026-10-03 r8 정정 [판독]+[데이터]+[실행]**: 아래 원문의 순서/Constant 추정을 보존하고 정정한다. 실제27B877C는 **로컬 S1/E1을 처리한 뒤27E24A8 컬링**, 이후S2/코드emitter/E2문자열을 처리한다. 신규5880소비+5FIFO+16컬링 원본실행 모두일치0. 코드emitter는E2문자열의대체가아니며둘다시도한다. 원본27B4704의result×70+row×560+material×2|local이반응열을확정한다. 지형의막는접촉/noReceiver가1(Constant)을생성하는기존판독과연결해Constant_Default→インクヒット가그경로착탄음임을확정;Constant전체가지형전용이라는역명제는근거없다. 자세한원본필드/게이트/정정/검증경계는[hit_effect_pipeline.md](../combat/hit_effect_pipeline.md) §3–11. 고정r7 L186 질문해소이며최종오디오/GPU실행은주장하지않는다.
+
+
 ※ 정정: 1차 문서는 히트 이펙트 분배를 `0x71027b84e0`이라 했지만, 이 주소는 668 B짜리 별도 함수(두 객체의 +0x40 종류·참조 비교)입니다. 실제 분배는 **`0x71027b877c`**(7,588 B, vtable 0x7105649130 슬롯, network 담당이 `analysis/decomp/network/net_player.c`에 디컴파일)입니다. 착탄 스플래시 호출 `0x71027b9978`도 이 함수 안입니다. 근거: 전체 분석 함수 경계(`func_lookup.py`), BL 호출자.
 
 **히트 요청 구조**(분배 함수 param_2, 웹 권장 이름 `HitFxRequest`) [판독]:
@@ -346,6 +349,10 @@ function subjective(p: Player, viewer: Player) { return p === viewer ? 'Focused'
 - 거리 컬링: 기준점에서 600.0 초과면 생략, 정확히 600.0이면 방출(엄격 부등호 `R² < d²`) [판독].
 
 스텁·미검증 범위: 원본 게임은 실행하지 않았습니다. Switch 선택 순서·Curve 보간·compare·Random2·Grid는 이제 [판독] 규칙의 재구현이고(합성 테스트 26/26), 원본 실행 비교는 아닙니다. Alto 롤오프 모델은 재구현 합성 테스트(`sound_alto.py selftest` 7/7)만 했습니다. 이미터 파티클 운동, 그룹 제한은 구현·검증하지 않았습니다.
+
+### 7.4 r9 사운드 제한기·정지 시간 신규 확정 (2026-10-03)
+
+[사운드 제한기 런타임](sound_limiter_runtime.md) §3–10: 그룹1B8의0.016은초단위정지duration이며4종전체적용/타이머/실제CPU정지경로4096원본대조0bad,originalenvelope768생성/10284진행0bad. type0인슈터그룹에는동시발음개수제한기로쓰지않는다. 이전§5/§8의0.016미확정및4종미실행은정정한다. 마지막SDKPCM/전체XLink수명은별도미확정이다.
 
 ## 8. 미확정과 다음 근거
 
