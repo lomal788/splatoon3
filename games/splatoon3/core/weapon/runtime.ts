@@ -376,7 +376,8 @@ export class WeaponRuntime {
   // ---- 사격 -----------------------------------------------------------
   private fire(w: World): void {
     const sv = readShooter(w, 0);
-    if (sv.camPos && sv.camAt) {
+    if (sv.camAxis) this.axis = sv.camAxis;
+    else if (sv.camPos && sv.camAt) {
       const a = cameraAxis(sv.camPos, sv.camAt, [0, 0, 0]);
       if (a) this.axis = a;
     }

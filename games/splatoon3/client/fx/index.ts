@@ -1,6 +1,7 @@
 // 담당: [fx] — docs/impl/fx.md 에 구현 상태·미확정을 기록한다.
 // 코어 이벤트 → 탄 파티클(OneEmitter), 머즐 플래시(InkAction → ELink State[0]), 착탄·피격 이펙트(HitEffectConfig E1/E2),
 // 플레이어 ELink(SplPlayer 액션 슬롯). 근거 docs/effect_sound/effect_sound.md §3, effect_resources.md §2.2~3.
+import { CameraShakeMixer, type ShakeParam } from "../../core/camera/shake.ts";
 import * as THREE from "three";
 import type { ClientContext, View } from "../context.ts";
 import { DEV } from "../env.ts";
@@ -65,11 +66,14 @@ export class FxSystem implements XSink {
   readonly missing = new Set<string>();
   readonly log: string[] = [];
   private readonly rnd = Math.random;
+  private readonly shakes: CameraShakeMixer;
 
   constructor(w: World, cam: THREE.Camera, data: FxData) {
     this.w = w;
     this.cam = cam;
     this.data = data;
+    const singletons = w.data.tables["singletons"] as { game__CameraModuleParam?: { Rumble?: Record<string, ShakeParam> } } | undefined;
+    this.shakes = new CameraShakeMixer(singletons?.game__CameraModuleParam?.Rumble ?? {});
     this.root.name = "fx";
   }
 
@@ -158,6 +162,7 @@ export class FxSystem implements XSink {
     const scale = typeof p.Scale === "number" && Number.isFinite(p.Scale) ? p.Scale : 1;
     const getM = ctx.matrix as (() => EmitMatrix) | undefined;
     const m = getM ? getM() : identityMatrix((ctx.pos as V3 | undefined) ?? [0, 0, 0]);
+    const shakeEmitterOrigin: V3 = [...m.o];
     const py = typeof p.PositionY === "number" ? p.PositionY : 0;
     if (py) m.o = [m.o[0] + m.y[0] * py, m.o[1] + m.y[1] * py, m.o[2] + m.y[2] * py];
     const color = (ctx.color as V3 | undefined) ?? this.teamColor(0);
@@ -165,7 +170,19 @@ export class FxSystem implements XSink {
     const h = this.spawnEset(a.name, m, color, delay, scale);
     // 뼈(Bone) 붙은 에셋은 이미터 행렬이 뼈를 따라간다. 파티클 follow 는 이미터 followType 대로.
     if (h && getM) for (const i of h.instances) i.followFn = getM;
-    return h;
+    const shakeName = typeof p.CameraRumbleName === "string" ? p.CameraRumbleName : "";
+    const shake = shakeName ? this.shakes.start(shakeName, () => getM ? getM().o : shakeEmitterOrigin,
+      typeof p.DistanceAttenuate === "number" ? p.DistanceAttenuate : 1,
+      typeof p.CameraRumbleFrame === "number" ? p.CameraRumbleFrame : -1) : null;
+    if (!shake) return h;
+    // A finite shake continues after its visual emitter ends. Keep the existing
+    // ELink handle lifetime; a shake is not an extra particle/asset owner.
+    if (!h) return null;
+    return {
+      alive: () => h.alive(),
+      fade: () => { h.fade(); if (this.shakes.parameters[shakeName]?.IsLooped) shake.stop(); },
+      onEnd: cb => h.onEnd?.(cb),
+    };
   }
 
   // ---- 무기(머즐 플래시) ------------------------------------------------------
@@ -313,6 +330,10 @@ export class FxSystem implements XSink {
       if (inst.followAll) inst.batch.follow(inst);
     }
     for (let i = this.live.length - 1; i >= 0; i--) if (this.live[i].finishedBy(f)) this.live.splice(i, 1);
+    const cameraState = this.w.shared.get("camera") as { pos?: ArrayLike<number> } | undefined;
+    this.shakes.step(cameraState?.pos ?? [0, 0, 0]);
+    const so = this.shakes.offset;
+    this.cam.userData.shakeOffset = { x: so[0], y: so[1], z: so[2] };
   }
 
   private onFire(e: Record<string, unknown>, f: number): void {

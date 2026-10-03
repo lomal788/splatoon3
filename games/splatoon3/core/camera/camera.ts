@@ -2,24 +2,28 @@
 // 원문 analysis/decomp/camrest/cam_main_full.c(0x71024d9ae8 메인 1~3652행, 0x71024e0178 입력 3653~6297행),
 // analysis/decomp/camera/batch1.c(리셋 0x71024d6598, 리그 0x71024d6e84, 붐 0x71024d8f94).
 // 구현 범위·생략·이식 차이는 docs/impl/camera.md.
-import { Layer, type CollisionWorld } from "../types.ts";
+import { Layer, type CollisionWorld, type SphereQueryFilter } from "../types.ts";
+import { F, add, sub, mul, div, mix, dot, length, directionSlerp, updateBasis, power0 } from "./native_math.ts";
+import { rotateY } from "../weapon/swerve.ts";
+import { advanceBoom, forwardCoefficient, collisionSpring, boomPosition } from "./boom.ts";
 import type { PadState } from "../input.ts";
 import { bias, clamp01, invLerp01 } from "./curves.ts";
 import { aimDirection, aimPitchDeg, pitchAngleToP, pitchMaxDeg } from "./pitch.ts";
 import { blendedRig, elevationDeg, rigPose, RIG, type RigValues } from "./rig.ts";
 
 /** 바닥 법선 한계(0x71058bc4e0)와 벽 쪽 한계(0x71058bc4e8). */
-const FLOOR_NY = 0.64144969;
-const WALL_NY = 0.08541697;
+const FLOOR_NY = F(0.64144969);
+const WALL_NY = F(0.08541697);
 /** 공중 프레임 임계(0x71058bbc20 = 4). */
 const AIR_FRAMES = 4;
 /** 점프 초기 속도(0x71058bbc60 = 0.115) — 수직 추종 비율의 분모. */
-const JUMP_VEL = 0.115;
+const JUMP_VEL = F(0.11499999463558197); // original bits 0x3deb851e, r9_state_sources
 /** 사람 형태 FOV 목표(본체+0x6dc). writer 미발견, 리셋값 55와 같다고 둠 [추정]. */
 const HUMAN_FOV = 55;
-/** 붐 형상 질의 근사: 구 반경(=near 0.2, 근평면이 벽을 덜 파고들게) [웹 선택], 대상 레이어 [추정]. */
-export const BOOM_PROBE_RADIUS = 0.2;
-export const BOOM_PROBE_MASK = Layer.Ground;
+/** Sphere/.3: r9_boom_query §6.1. near=.2 is independent. */
+export const BOOM_PROBE_RADIUS = F(0.3);
+export const BOOM_PROBE_MASK = Layer.Ground | Layer.KeepOut;
+export const BOOM_QUERY: SphereQueryFilter = { layerIndex: 7, subIndex: 0, hitMask: 8, subMask: 0xffffffff };
 
 /** shared "player"(physics)에서 카메라가 읽는 필드. 없으면 기본값. 원본 본체 오프셋은 docs/impl/camera.md. */
 export interface CameraPlayerInput {
@@ -35,6 +39,24 @@ export interface CameraPlayerInput {
   airRatio?: number;
   squid?: boolean;
   formHeight?: number;
+  /** B+e4, distinct from B+114 moveVel. */
+  finalVel?: ArrayLike<number>;
+  /** Raw native consumers. Their scene producers are not inferred from web flags. */
+  native?: CameraNativeInput;
+}
+export interface CameraNativeInput {
+  springDelta?: ArrayLike<number>; // rig/head producer D
+  bodyResidual?: ArrayLike<number>; // B210, not B1f8
+  springHold?: number; // B e0c
+  wall7a0?: boolean;
+  ad0?: number;
+  d9?: boolean;
+  blend1760?: number;
+  positionGateDe0?: number;
+  skipQueries?: boolean; // additional native Dokan/global gates
+  skipBoom?: boolean; // pipeline/a6d0+38
+  minimumQueryOffset?: number; // rare state82..84 producer offS, default .8
+  humanFov?: number; // B6dc producer
 }
 
 /** shared "camera" 에 쓰는 값. */
@@ -53,6 +75,11 @@ export interface CameraShared {
   rigForward: Float32Array;
   /** 3D 조준 방향 = rigForward 를 pitch 만큼 올린 단위벡터(0x7102551fe0). 흔들림 회전 전 */
   aimDir: Float32Array;
+  /** Original X/Y/Z basis columns; Z points backwards. */
+  right: Float32Array;
+  up: Float32Array;
+  viewZ: Float32Array;
+  viewForward: Float32Array;
   pos: Float32Array;
   target: Float32Array;
   /** 수직 FOV(도) */
@@ -63,6 +90,9 @@ export interface CameraShared {
   prevPos: Float32Array;
   prevTarget: Float32Array;
   prevFov: number;
+  prevRight: Float32Array;
+  prevUp: Float32Array;
+  prevViewZ: Float32Array;
   squidBlend: number;
   boomRatio: number;
 }
@@ -78,6 +108,7 @@ export class PlayerCamera {
     aimForward: v3(0, 0, 1),
     rigForward: v3(0, 0, 1),
     aimDir: v3(0, 0, 1),
+    right: v3(1, 0, 0), up: v3(0, 1, 0), viewZ: v3(0, 0, 1), viewForward: v3(0, 0, -1),
     pos: v3(),
     target: v3(),
     fov: RIG.fov,
@@ -86,6 +117,7 @@ export class PlayerCamera {
     prevPos: v3(),
     prevTarget: v3(),
     prevFov: RIG.fov,
+    prevRight: v3(1, 0, 0), prevUp: v3(0, 1, 0), prevViewZ: v3(0, 0, 1),
     squidBlend: 0,
     boomRatio: 1,
   };
@@ -112,16 +144,17 @@ export class PlayerCamera {
   private slopeU = 0; // +0x14d0
   private boomRatio = 1; // +0x14c4
   private boomRatioTarget = 1; // +0x14c8
-  private boomLength = 0; // +0x14cc
   private boomRate = 1; // +0x14c0
   private boomUnder = 1; // +0x14f0
   private boomSpd = 0; // +0x14f4
   private viewTurn = 0; // +0x14bc
-  private viewDir = v3(0, 0, 1); // *(+0x68)+0x18
+  private viewDir = this.out.viewZ; // *(+0x68)+0x18
   private prevViewDir = v3(); // +0x14b0
   private prevRigCam = v3(); // +0x1498
   private prevRigAt = v3(); // +0x14a4
-  private hitN = v3(0, 0, -1); // 마지막 적중 법선(부호 반전)
+  private hitN = v3(0, 0, 1);
+  private spring = v3(); // C144; raw producer inputs remain explicit
+  private forwardK = 0; // C14ec
 
   private readonly rv: RigValues = { H: 0, F: 0, D: 0, S: 0 };
   private readonly rt: RigValues = { H: 0, F: 0, D: 0, S: 0 };
@@ -157,13 +190,15 @@ export class PlayerCamera {
     this.vFollow = 0.25;
     this.vFollowBoost = 0;
     this.acc1558 = 0;
+    this.spring.fill(0);
+    this.forwardK = 0;
     this.rig(pl);
     this.rigAt.set(this.at0);
     this.rigCam.set(this.cam0);
     this.desiredAtY = this.rigAt[1];
     o.pos.set(this.rigCam);
     o.target.set(this.rigAt);
-    this.boomLength = this.boomDef(pl, true);
+    this.boomDef(pl, true);
     this.boomRatio = this.boomRatioTarget = 1;
     this.boomRate = 1;
     this.boomUnder = 1;
@@ -176,6 +211,7 @@ export class PlayerCamera {
     o.prevPos.set(o.pos);
     o.prevTarget.set(o.target);
     o.prevFov = o.fov;
+    o.prevRight.set(o.right); o.prevUp.set(o.up); o.prevViewZ.set(o.viewZ);
     this.initialized = true;
   }
 
@@ -185,6 +221,7 @@ export class PlayerCamera {
     o.prevPos.set(o.pos);
     o.prevTarget.set(o.target);
     o.prevFov = o.fov;
+    o.prevRight.set(o.right); o.prevUp.set(o.up); o.prevViewZ.set(o.viewZ);
 
     // 추종 위치·바닥 법선 (메인 앞부분 228~360행)
     this.trackPrev.set(this.track);
@@ -193,6 +230,10 @@ export class PlayerCamera {
     const fn = pl?.floorNormal ?? [0, 1, 0];
     this.followNormal(fn);
 
+    const native = pl?.native;
+    collisionSpring(this.spring, this.track, native?.springDelta ?? [0, 0, 0],
+      native?.bodyResidual ?? [0, 0, 0], pl?.finalVel ?? [0, 0, 0],
+      o.aimForward, this.boomRatio, native?.springHold ?? 0);
     this.input(pad);
 
     // 오징어 블렌드 가중치 +0x1764 (500~545행)
@@ -200,82 +241,77 @@ export class PlayerCamera {
     const air = (pl?.airFrames ?? 0) >= AIR_FRAMES;
     const inc = air ? 0.001 : 0.025;
     if (squid) {
-      this.squidAccOn = Math.min(this.squidAccOn + inc, 0.2);
+      this.squidAccOn = Math.min(add(this.squidAccOn, inc), F(0.2));
       this.squidAccOff = 0;
-      this.squidW += this.squidAccOn * (1 - this.squidW);
+      this.squidW = mix(this.squidW, 1, this.squidAccOn);
     } else {
-      this.squidAccOff = Math.min(this.squidAccOff + inc, 0.2);
+      this.squidAccOff = Math.min(add(this.squidAccOff, inc), F(0.2));
       this.squidAccOn = 0;
-      this.squidW += this.squidAccOff * (0 - this.squidW);
+      this.squidW = mix(this.squidW, 0, this.squidAccOff);
     }
-    this.acc1558 = Math.min(this.acc1558 + inc, 0.2);
+    this.acc1558 = Math.min(add(this.acc1558, inc), F(0.2));
 
     // FOV·고각 목표 (1056~1126행)
-    const u = Math.min(1 - this.normal[1], 1);
+    const u = Math.min(sub(1, this.normal[1]), 1);
     const rate = Math.min(squid ? this.squidAccOn : this.squidAccOff, this.acc1558);
-    const tUp = squid ? u * 40 + 20 : 60;
-    const tDown = squid ? u * -15 - 60 : -75;
+    const tUp = squid ? add(mul(u, 40), 20) : 60;
+    const tDown = squid ? add(mul(u, -15), -60) : -75;
     const tA = squid ? 0 : -7.5;
-    this.elevUp += rate * (tUp - this.elevUp);
-    this.elevA += rate * (tA - this.elevA);
-    this.elevDown += rate * (tDown - this.elevDown);
-    o.fov += rate * ((squid ? RIG.squid.fov : HUMAN_FOV) - o.fov);
+    this.elevUp = mix(this.elevUp, tUp, rate);
+    this.elevA = mix(this.elevA, tA, rate);
+    this.elevDown = mix(this.elevDown, tDown, rate);
+    o.fov = mix(o.fov, squid ? RIG.squid.fov : (native?.humanFov ?? HUMAN_FOV), rate);
 
     this.rig(pl);
     this.verticalFollow(pl);
-    this.boom(pl, collision);
+    if (native?.skipBoom) { o.pos.set(this.rigCam); o.target.set(this.rigAt); }
+    else this.boom(pl, collision);
     this.finishOutput();
   }
 
   /** 입력 0x71024e0178 중 마우스로 대체되는 부분. docs/impl/camera.md "입력 이식 차이". */
   private input(pad: PadState): void {
     const o = this.out;
-    const fr = o.fov / RIG.fov;
+    const fr = div(o.fov, RIG.fov);
     const fovRatio = fr < 0 ? 0 : fr > 1 ? 1 : fr;
-    const yaw = pad.lookYaw * fovRatio;
+    const yaw = mul(pad.lookYaw, fovRatio);
     if (yaw !== 0) {
       const f = o.aimForward;
-      const c = Math.cos(yaw), s = Math.sin(yaw);
-      const x = f[0] * c + f[2] * s;
-      const z = f[2] * c - f[0] * s;
-      const l = Math.hypot(x, z);
-      f[0] = x / l;
-      f[1] = 0;
-      f[2] = z / l;
+      const rotated: [number, number, number] = [0, 0, 0];
+      rotateY([f[0], f[1], f[2]], yaw, rotated);
+      const l = length(rotated);
+      f.set(l > 0 ? rotated.map(v => mul(v, div(1, l))) : rotated);
     }
-    const ds = pad.lookPitch * 57.29578 * fovRatio;
+    const ds = mul(mul(pad.lookPitch, 57.29578), fovRatio);
     const yEq = Math.min(Math.abs(ds) / pitchMaxDeg(0), 1);
-    this.pFollow += (1 - this.pFollow) * yEq * 0.2;
-    let s = this.s + ds;
+    this.pFollow = add(this.pFollow, mul(mul(sub(1, this.pFollow), yEq), .2));
+    let s = add(this.s, ds);
     s = s > 90 ? 90 : s < -90 ? -90 : s;
     const [pt, corr] = pitchAngleToP(s - 75, 0, false, 0, 0, true);
-    this.s = s + corr;
-    this.p += this.pFollow * (pt - this.p);
+    this.s = add(s, corr);
+    this.p = mix(this.p, pt, this.pFollow);
     o.rigForward.set(o.aimForward);
   }
 
-  /** 카메라 바닥 법선 +0x138 ← 플레이어 +0x180 쪽으로 0.1 (0x7101252ff0 [보간 방식 추정: 선형 후 정규화]). */
+  /** 0x7101252ff0: sead table slerp with null opposite-direction axis. */
   private followNormal(fn: ArrayLike<number>): void {
-    const n = this.normal;
-    for (let i = 0; i < 3; i++) n[i] += (fn[i] - n[i]) * 0.1;
-    const l = Math.hypot(n[0], n[1], n[2]);
-    if (l > 0.001 && Math.abs(l - 1) > 0.01) for (let i = 0; i < 3; i++) n[i] /= l;
+    this.normal.set(directionSlerp(F(.1), this.normal, fn));
   }
 
   private rig(pl: CameraPlayerInput | null): void {
-    const u = Math.min(1 - this.normal[1], 1);
+    const u = Math.min(sub(1, this.normal[1]), 1);
     const v = blendedRig(this.p, this.squidW, u, this.rv, this.rt);
-    v.H += pl?.formHeight ?? 0;
+    v.H = add(v.H, pl?.formHeight ?? 0);
     const el = elevationDeg(this.p, this.elevA, this.elevUp, this.elevDown);
     rigPose(this.track, this.out.rigForward, v, el, this.at0, this.cam0);
   }
 
   /** 수직 추종 (1660~1850행 일반 경로). rigAt/rigCam 을 채운다. */
   private verticalFollow(pl: CameraPlayerInput | null): void {
-    let ratio = ((pl?.velY ?? 0) + (pl?.jumpVel3dY ?? 0)) / JUMP_VEL;
+    let ratio = div(add(pl?.velY ?? 0, pl?.jumpVel3dY ?? 0), JUMP_VEL);
     if (ratio > 1) ratio = 1;
     let target: number;
-    if (ratio <= 0) target = ratio === 0 ? 0.25 : ratio <= -1 ? 0.7 : ratio * -0.45 + 0.25;
+    if (ratio <= 0) target = ratio === 0 ? 0.25 : ratio <= -1 ? 0.7 : add(mul(ratio, -.45), .25);
     else {
       const q = -0.22;
       const ny = pl?.floorNormal?.[1] ?? 1;
@@ -285,226 +321,164 @@ export class PlayerCamera {
         const r = ny / FLOOR_NY;
         g = Math.abs(r) >= 0.001 ? bias(r, 0.3) * 0.7 + 0.3 : 0.3;
       }
-      target = q * ratio * g + 0.25;
+      target = add(mul(mul(q, ratio), g), .25);
     }
-    if (this.vFollow <= target) target = this.vFollow + (target - this.vFollow) * 0.01;
+    if (this.vFollow <= target) target = mix(this.vFollow, target, .01);
     this.vFollow = target;
-    this.vFollowBoost *= 0.9;
+    this.vFollowBoost = mul(this.vFollowBoost, .9);
     if (target <= this.vFollowBoost) target = this.vFollowBoost;
     this.vFollow = target;
-    let r = 0.3 - this.boomUnder * 0.3;
+    let r = sub(.3, mul(this.boomUnder, .3));
     if (r <= target) r = target;
     const desired = this.at0[1];
     const cur = this.rigAt[1];
     const k = r <= 1 || desired <= cur ? r : 1;
-    const atY = cur + (desired - cur) * k;
+    const atY = mix(cur, desired, k);
     this.rigAt[0] = this.at0[0];
     this.rigAt[1] = atY;
     this.rigAt[2] = this.at0[2];
     this.desiredAtY = desired;
     this.rigCam[0] = this.cam0[0];
-    this.rigCam[1] = this.cam0[1] - (desired - atY);
+    this.rigCam[1] = sub(this.cam0[1], sub(desired, atY));
     this.rigCam[2] = this.cam0[2];
   }
 
   /**
    * 붐 정의 0x71024d8f94: 피벗(pivot)·방향(dir)·길이 반환, minDist·e 는 this 에 남김.
-   * 생략: 다운·수몰 높이(본체+0xdf4/+0xe10), Jetpack·SuperLanding 보정, 충돌 밀림 오프셋(+0x144, 0으로 둠).
+   * 생략: 다운·수몰 높이(본체+0xdf4/+0xe10), Jetpack·SuperLanding 보정, 일부 특수 상태 공급자(impl/camera.md 참고).
    */
   private minDist = 0.8;
   private boomE = 0;
   private boomDef(pl: CameraPlayerInput | null, noDecay: boolean): number {
-    let u = Math.min(1 - this.normal[1], 1);
-    if (!noDecay && u <= this.slopeU && u < this.slopeU - 0.02) u = this.slopeU - 0.02;
+    let u = Math.min(sub(1, this.normal[1]), 1);
+    if (!noDecay && u <= this.slopeU && u < sub(this.slopeU, .02)) u = sub(this.slopeU, .02);
     this.slopeU = u;
     const form = pl?.formHeight ?? 0;
     const py = pl?.pos?.[1] ?? this.track[1];
-    let lift = py - this.track[1];
+    let lift = sub(py, this.track[1]);
     if (lift <= 0) lift = 0;
-    const base = form - lift;
+    const base = sub(form, lift);
     const atY = this.rigAt[1];
     const br = this.boomRatio;
-    const ramp = br < 1 ? (br - 0.2) / 0.8 : 1;
-    let h = this.squidW * (1 - u) * (br > 0.2 ? ramp : 0) - 0.5;
-    h = atY - base + h + u * (-1.5 - h);
+    const ramp = br < 1 ? div(sub(br, .2), .8) : 1;
+    let h = sub(mul(mul(this.squidW, sub(1, u)), br > F(.2) ? ramp : 0), .5);
+    h = add(add(sub(atY, base), h), mul(u, sub(-1.5, h)));
     const desired = this.desiredAtY;
-    this.boomE = desired <= atY ? -form : -form + (desired - atY);
-    let py2 = desired <= atY ? h : desired - atY + h;
+    this.boomE = desired <= atY ? F(-form) : add(-form, sub(desired, atY));
+    let py2 = desired <= atY ? h : add(sub(desired, atY), h);
     const pv = this.pivot;
-    pv[0] = this.rigAt[0];
-    pv[2] = this.rigAt[2];
+    pv[0] = add(this.rigAt[0], this.spring[0]);
+    pv[2] = add(this.rigAt[2], this.spring[2]);
     if (this.p < 0) {
       const t = Math.abs(this.p) >= 0.001 ? bias(-this.p, 0.4) : 0;
-      const m = -(1 - this.squidW) * 0.9 * t;
+      const m = mul(mul(F(-sub(1, this.squidW)), .9), t);
       const a = this.out.aimForward;
-      pv[0] += a[0] * m;
-      py2 += a[1] * m;
-      pv[2] += a[2] * m;
+      pv[0] = add(pv[0], mul(a[0], m));
+      py2 = add(py2, mul(a[1], m));
+      pv[2] = add(pv[2], mul(a[2], m));
     }
     pv[1] = py2;
-    let dx = this.rigCam[0] - pv[0], dy = this.rigCam[1] - pv[1], dz = this.rigCam[2] - pv[2];
-    let l = Math.hypot(dx, dy, dz);
+    let dx = sub(this.rigCam[0], pv[0]), dy = sub(this.rigCam[1], pv[1]), dz = sub(this.rigCam[2], pv[2]);
+    let l = length([dx, dy, dz]);
     if (l > 0) {
-      dx /= l;
-      dy /= l;
-      dz /= l;
+      const inv = div(1, l);
+      dx = mul(dx, inv); dy = mul(dy, inv); dz = mul(dz, inv);
     }
     const n = this.normal;
-    const dn = dx * n[0] + dy * n[1] + dz * n[2];
-    let k = dn <= 0 ? 0.8 : dn >= 1 ? 0 : 0.8 - dn * 0.8;
+    const dn = dot([dx, dy, dz], n);
+    let k = dn <= 0 ? F(.8) : dn >= 1 ? 0 : sub(.8, mul(dn, .8));
     const ny = pl?.surfaceNormalY ?? pl?.floorNormal?.[1] ?? 1;
-    if (FLOOR_NY <= ny) k *= u;
-    else k *= Math.abs(u) >= 0.001 ? Math.sign(u) * Math.pow(Math.abs(u), 0.15200314) : 0;
-    pv[0] += n[0] * k;
-    pv[1] += n[1] * k;
-    pv[2] += n[2] * k;
+    if (FLOOR_NY <= ny) k = mul(k, u);
+    else k = mul(k, power0(u, F(.15200314)));
+    pv[0] = add(pv[0], mul(n[0], k));
+    pv[1] = add(pv[1], mul(n[1], k));
+    pv[2] = add(pv[2], mul(n[2], k));
     const d = this.dir;
-    d[0] = this.rigCam[0] - pv[0];
-    d[1] = this.rigCam[1] - pv[1];
-    d[2] = this.rigCam[2] - pv[2];
-    l = Math.hypot(d[0], d[1], d[2]);
-    if (l > 0) for (let i = 0; i < 3; i++) d[i] /= l;
+    d[0] = sub(this.rigCam[0], pv[0]);
+    d[1] = sub(this.rigCam[1], pv[1]);
+    d[2] = sub(this.rigCam[2], pv[2]);
+    l = length(d);
+    if (l > 0) { const inv = div(1, l); for (let i = 0; i < 3; i++) d[i] = mul(d[i], inv); }
     if (l < 0.001) d.set(this.out.aimForward);
-    this.minDist = 0.8;
+    this.minDist = add(.8, Math.max(dot(d, this.spring), 0));
     return l <= 0.001 ? 0.001 : l;
   }
 
-  /** 붐 질의·거리 비율·위치 반영 (2150~3530행). 질의 1·전진 오징어 계수(+0x14ec)는 생략 → 질의 2 시작 오프셋 0.8. */
+  /** Two casts and C14ec/C14c0..14f4 consumers, r7/r9 original evidence. */
   private boom(pl: CameraPlayerInput | null, col: CollisionWorld | null): void {
-    const o = this.out;
+    const o = this.out, n = pl?.native;
     const len = this.boomDef(pl, false);
-    this.boomLength = len;
     const pv = this.pivot, d = this.dir;
-    const off = 0.8;
-    let hitDist = len;
-    const rest = Math.max(len - off, 0);
-    if (col && rest > 0) {
-      const a = this.qFrom, b = this.qTo;
-      for (let i = 0; i < 3; i++) {
-        a[i] = pv[i] + d[i] * off;
-        b[i] = a[i] + d[i] * rest;
-      }
-      const hit = col.sweepSphere(a, b, BOOM_PROBE_RADIUS, BOOM_PROBE_MASK);
+    let near = 0, hitDist = len;
+    const blend = n?.blend1760 ?? 0;
+    const cast = !!col && blend <= F(.1) && !n?.skipQueries;
+    this.hitN.set(o.aimForward);
+    if (cast) {
+      for (let i = 0; i < 3; i++) this.qTo[i] = add(pv[i], mul(d[i], len));
+      const hit = col!.sweepSphere(pv, this.qTo, BOOM_PROBE_RADIUS, BOOM_PROBE_MASK, BOOM_QUERY);
       if (hit) {
-        hitDist = Math.max(this.minDist, off + hit.t * rest);
-        for (let i = 0; i < 3; i++) this.hitN[i] = -hit.normal[i];
+        // CollisionWorld.point is the surface contact. Native raw point adapters
+        // convert pos+direction*depth before returning this common contract.
+        near = sub(1, clamp01(div(sub(length([0, 1, 2].map(i => sub(hit.point[i], pv[i]))), .6), .1)));
       }
     }
-
-    // 최소거리 미달 정도 +0x14f0
-    const c = this.minDist / len;
-    const r = this.boomRatioTarget;
-    let under: number;
-    if (c <= 1) under = r <= c ? 0 : r < 1 && 1 - c !== 0 ? (r - c) / (1 - c) : 1;
-    else under = 1 - (r <= 1 ? 0 : r < c && c - 1 !== 0 ? (r - 1) / (c - 1) : 1);
-    this.boomUnder = under;
-
-    // 복귀 속도 spd (2960~3048행)
-    const mx = this.track[0] - this.trackPrev[0];
-    let my = this.track[1] - this.trackPrev[1];
-    const mz = this.track[2] - this.trackPrev[2];
-    if ((pl?.airFrames ?? 0) >= AIR_FRAMES) my -= pl?.velY ?? 0;
-    const along = Math.abs((mx * d[0] + my * d[1] + mz * d[2]) * ((pl?.airRatio ?? 0) * -0.7 + 1)) * 0.5;
-    const vd = this.viewDir, pd = this.prevViewDir;
-    const cx = vd[1] * pd[2] - vd[2] * pd[1];
-    const cy = vd[2] * pd[0] - vd[0] * pd[2];
-    const cz = vd[0] * pd[1] - vd[1] * pd[0];
-    const ang = Math.atan2(Math.hypot(cx, cy, cz), vd[0] * pd[0] + vd[1] * pd[1] + vd[2] * pd[2]);
-    const turn = ang > 0 ? (ang >= 0.01 ? 1 : ang / 0.01) : 0;
-    this.viewTurn += (turn - this.viewTurn) * 0.2;
-    this.prevViewDir.set(vd);
-    let spd = this.viewTurn * (0.05 + this.boomUnder * (0.01 - 0.05));
-    if (spd <= this.boomSpd) spd = this.boomSpd + (spd - this.boomSpd) * 0.02;
-    this.boomSpd = spd;
-    if (spd <= along) spd = along;
-
-    const denom = Math.max(this.minDist, this.boomLength * this.boomRatioTarget);
-    const hr = hitDist / this.boomLength;
-    const lim = hr >= 0 ? Math.min(hr, 1) : 0;
-    this.boomRatioTarget += spd / denom;
-    const tgt = Math.min(this.boomRatioTarget, lim);
-    let rate: number;
-    if (this.boomRatio <= tgt) {
-      const df = tgt - this.boomRatio;
-      rate = df <= 0 ? 0.1 : df >= 1 ? 0.25 : df * 0.15 + 0.1;
-      rate += tgt * (1 - rate);
-      if (this.boomRate <= rate) rate = this.boomRate + (rate - this.boomRate) * 0.05;
-    } else rate = this.shrinkRate(pl, tgt);
-    this.boomRate = rate;
-    this.boomRatioTarget = Math.min(this.boomRatioTarget, hr);
-    this.boomRatio += rate * (this.boomRatioTarget - this.boomRatio);
-
-    // 위치 반영 (3500~3530행)
-    const L = this.boomRatio * len;
-    for (let i = 0; i < 3; i++) o.pos[i] = d[i] * L + pv[i];
-    const dA = Math.hypot(pv[0] - o.pos[0], pv[2] - o.pos[2]);
-    const dR = Math.hypot(pv[0] - this.rigCam[0], pv[2] - this.rigCam[2]);
-    if (dR > 0) o.pos[1] -= (this.boomE * (dR - dA)) / dR;
+    this.forwardK = forwardCoefficient(pl?.finalVel ?? [0, 0, 0], o.aimForward, !!pl?.squid, this.forwardK);
+    const wall = invLerp01(FLOOR_NY, WALL_NY, this.normal[1]);
+    let off = add(.8, mul(.8, clamp01(mul(mul(sub(1, near), sub(1, wall)), this.forwardK))));
+    if (this.vFollow > F(.03)) off = mix(off, .8, clamp01(div(sub(this.vFollow, .03), .22)));
+    off = add(Math.max(off, n?.minimumQueryOffset ?? F(.8), F(.8)), Math.max(dot(d, this.spring), 0));
+    const rest = Math.max(sub(len, off), 0);
+    if (cast && rest > 0) {
+      for (let i = 0; i < 3; i++) {
+        this.qFrom[i] = add(pv[i], mul(d[i], off));
+        this.qTo[i] = add(this.qFrom[i], mul(d[i], rest));
+      }
+      const hit = col!.sweepSphere(this.qFrom, this.qTo, BOOM_PROBE_RADIUS, BOOM_PROBE_MASK, BOOM_QUERY);
+      if (hit) {
+        hitDist = Math.max(this.minDist, add(off, mul(hit.t, rest)));
+        // Native point normal: entry bit0 determines sign. Web geometry supplies
+        // outward normals instead, converted once to the camera's inward normal.
+        const sign = hit.nativeEntryFlags === undefined ? -1 : (hit.nativeEntryFlags & 1) ? 1 : -1;
+        for (let i = 0; i < 3; i++) this.hitN[i] = mul(hit.normal[i], sign);
+      }
+    }
+    const state = { target: this.boomRatioTarget, ratio: this.boomRatio, rate: this.boomRate,
+      speed: this.boomSpd, angle: this.viewTurn, under: this.boomUnder };
+    advanceBoom(state, { minimum: this.minDist, length: len,
+      move: [0, 1, 2].map(i => sub(this.track[i], this.trackPrev[i])),
+      vy: pl?.velY ?? 0, dc: pl?.airRatio ?? 0, air: pl?.airFrames ?? 0,
+      wall: n?.wall7a0 ?? false, normalY: this.normal[1], basis: this.viewDir, prevBasis: this.prevViewDir,
+      aim: o.aimForward, dir: d, ad0: n?.ad0 ?? 0, d9: n?.d9 ?? false, d0: this.slopeU,
+      blend, hitN: this.hitN, hitDist, camDelta: [0, 1, 2].map(i => sub(this.rigCam[i], this.prevRigCam[i])),
+      atDelta: [0, 1, 2].map(i => sub(this.rigAt[i], this.prevRigAt[i])), vel: pl?.moveVel ?? [0, 0, 0] });
+    this.boomRatioTarget = state.target; this.boomRatio = state.ratio; this.boomRate = state.rate;
+    this.boomSpd = state.speed; this.viewTurn = state.angle; this.boomUnder = state.under;
+    this.prevViewDir.set(this.viewDir);
+    boomPosition(o.pos, pv, d, this.boomRatio, len, this.boomE, this.rigCam, n?.positionGateDe0 ?? 0);
     o.target.set(this.rigAt);
-    if (this.boomRatio < 0.999) {
-      const w = invLerp01(FLOOR_NY, WALL_NY, this.normal[1]);
+    if (this.boomRatio < F(.999)) {
       const py = pl?.pos?.[1] ?? this.track[1];
-      const k = w * (py - this.rigAt[1] + 0.4) - 0.4;
-      o.target[1] += k + this.boomRatio * (0 - k);
+      const k = sub(mul(wall, add(sub(py, this.rigAt[1]), .4)), .4);
+      o.target[1] = add(o.target[1], mix(k, 0, this.boomRatio));
     }
-    this.prevRigCam.set(this.rigCam);
-    this.prevRigAt.set(this.rigAt);
-  }
-
-  /** 붐이 줄어들 때 평활 비율 (3071~3241행). n = 적중 법선 반대(붐 방향 쪽). */
-  private shrinkRate(pl: CameraPlayerInput | null, tgt: number): number {
-    const n = this.hitN, a = this.out.aimForward;
-    const dcx = this.rigCam[0] - this.prevRigCam[0];
-    const dcy = this.rigCam[1] - this.prevRigCam[1];
-    const dcz = this.rigCam[2] - this.prevRigCam[2];
-    const dax = this.rigAt[0] - this.prevRigAt[0];
-    const day = this.rigAt[1] - this.prevRigAt[1];
-    const daz = this.rigAt[2] - this.prevRigAt[2];
-    const rx = dcx - dax, ry = dcy - day, rz = dcz - daz;
-    const nr = n[0] * rx + n[1] * ry + n[2] * rz;
-    const na = n[0] * dax + n[1] * day + n[2] * daz;
-    let side =
-      (a[2] - n[2]) * (rz - n[2] * nr) + (a[0] - n[0]) * (rx - n[0] * nr) + (a[1] - n[1]) * (ry - n[1] * nr);
-    const mv = pl?.moveVel ?? [0, 0, 0];
-    let fwd = a[0] * mv[0] + a[1] * mv[1] + a[2] * mv[2];
-    if (fwd <= 0) fwd = 0;
-    if (side <= 0) side = 0;
-    const push = side * fwd * 0.5 - (n[0] * dcx + n[1] * dcy + n[2] * dcz);
-    let gap = this.boomRatio - tgt;
-    if (gap <= 0) gap = 0;
-    const e = (this.boomRatio - 0.5) / -0.45 - gap;
-    const pushN = clamp01(push / 0.3);
-    const g = clamp01((e >= 0 ? 1 - Math.min(e, 1) : 1) * pushN);
-    const gB = Math.abs(g) >= 0.001 ? bias(g, 0.35) : 0;
-    const back = clamp01(na / -0.2);
-    const backB = Math.abs(back) >= 0.001 ? bias(back, 0.35) : 0;
-    const f48 = na < -0.001 ? -1 - push / na : 1;
-    let rate = f48 >= 0 ? Math.min(f48, 1) * 0.35 + 0.35 : 0.35;
-    rate = Math.min(gB * 0.9 + 0.1, rate);
-    const minRate = backB * 0.9 + 0.1;
-    const facing = Math.abs(n[0] * a[0] + n[1] * a[1] + n[2] * a[2]);
-    const fB = facing >= 0.001 ? bias(facing, 0.3) : 0;
-    rate += (0.25 - rate) * fB;
-    if (rate > 0.25 && tgt < this.boomRatioTarget) {
-      const dd = this.boomRatioTarget - tgt;
-      const ddB = Math.abs(dd) >= 0.001 ? bias(dd, 0.3) : 0;
-      rate += (0.25 - rate) * ddB;
+    for (let i = 0; i < 3; i++) {
+      o.pos[i] = mix(o.pos[i], this.rigCam[i], blend);
+      o.target[i] = mix(o.target[i], this.rigAt[i], blend);
     }
-    return rate <= minRate ? minRate : rate;
+    this.prevRigCam.set(this.rigCam); this.prevRigAt.set(this.rigAt);
   }
 
   /** 근접 보정(2363~2378행) → 시선 방향 → 조준 방향·공유값. */
   private finishOutput(): void {
     const o = this.out;
     const a = o.aimForward;
-    const dd = (o.pos[0] - o.target[0]) * a[0] + (o.pos[1] - o.target[1]) * a[1] + (o.pos[2] - o.target[2]) * a[2];
-    if (dd > -0.16) {
-      const k = dd + 0.16;
-      for (let i = 0; i < 3; i++) o.pos[i] -= a[i] * k;
+    const dd = dot([0, 1, 2].map(i => sub(o.pos[i], o.target[i])), a);
+    if (dd > F(-.16)) {
+      const k = add(dd, .16);
+      for (let i = 0; i < 3; i++) o.pos[i] = sub(o.pos[i], mul(a[i], k));
     }
-    const vx = o.target[0] - o.pos[0], vy = o.target[1] - o.pos[1], vz = o.target[2] - o.pos[2];
-    const l = Math.hypot(vx, vy, vz);
-    if (l > 0 && Math.abs(vy / l) <= 0.9999999) this.viewDir.set([vx / l, vy / l, vz / l]);
+    updateBasis(o.pos, o.target, o.right, o.up, o.viewZ);
+    for (let i = 0; i < 3; i++) o.viewForward[i] = F(-o.viewZ[i]);
     o.yaw = Math.atan2(a[0], a[2]);
     o.pitchNorm = this.p;
     o.pitchAngleDeg = this.s;

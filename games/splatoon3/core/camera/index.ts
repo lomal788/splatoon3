@@ -2,10 +2,10 @@
 // shared "camera" = CameraShared(쓰기), shared "player" = CameraPlayerInput 필드(읽기, physics 담당).
 import { Btn } from "../input.ts";
 import type { System, World } from "../world.ts";
-import { PlayerCamera, type CameraPlayerInput } from "./camera.ts";
+import { PlayerCamera, type CameraPlayerInput, type CameraNativeInput } from "./camera.ts";
 
-export { PlayerCamera, BOOM_PROBE_MASK, BOOM_PROBE_RADIUS } from "./camera.ts";
-export type { CameraPlayerInput, CameraShared } from "./camera.ts";
+export { PlayerCamera, BOOM_PROBE_MASK, BOOM_PROBE_RADIUS, BOOM_QUERY } from "./camera.ts";
+export type { CameraPlayerInput, CameraShared, CameraNativeInput } from "./camera.ts";
 export { DEFAULT_AIM_PITCH, aimDirection, aimPitchDeg, pitchAngleToP, pitchMaxDeg, sensK, yawMaxDeg } from "./pitch.ts";
 export type { AimPitchCurve } from "./pitch.ts";
 export { RIG, baseRig, blendedRig, elevationDeg, rigPose, squidRig } from "./rig.ts";
@@ -25,6 +25,8 @@ interface PlayerLike {
   vy?: number;
   jump3d?: ArrayLike<number>;
   vel?: ArrayLike<number>;
+  final?: ArrayLike<number>;
+  cameraNative?: CameraNativeInput;
   airFrames?: number;
   airRatio?: number;
   state?: number;
@@ -45,6 +47,8 @@ export function readPlayer(w: World): CameraPlayerInput | null {
   view.velY = p.vy;
   view.jumpVel3dY = p.jump3d ? p.jump3d[1] : undefined;
   view.moveVel = p.vel;
+  view.finalVel = p.final;
+  view.native = p.cameraNative;
   view.airFrames = p.airFrames;
   view.airRatio = p.airRatio;
   view.squid = typeof p.state === "number" ? isCameraSquidState(p.state) : !!p.squid;

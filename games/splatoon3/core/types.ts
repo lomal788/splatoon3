@@ -23,11 +23,20 @@ export interface Hit {
   material: number;
   /** 충돌한 액터(표적 등)의 id. 지형이면 -1 */
   actor: number;
+  /** Raw native point normal when present; entry bit0 chooses camera normal sign. */
+  nativeEntryFlags?: number;
 }
 
+/** Native query layer/masks, separate from the web layer selection. */
+export interface SphereQueryFilter {
+  layerIndex: number;
+  subIndex: number;
+  hitMask: number;
+  subMask: number;
+}
 export interface CollisionWorld {
   raycast(origin: Vec3, dir: Vec3, maxDist: number, mask: number): Hit | null;
-  sweepSphere(from: Vec3, to: Vec3, radius: number, mask: number): Hit | null;
+  sweepSphere(from: Vec3, to: Vec3, radius: number, mask: number, query?: SphereQueryFilter): Hit | null;
   materialName(material: number): string;
   /** 움직이는 충돌체(표적 등) 등록·갱신 */
   setDynamic(actor: number, shape: DynamicShape | null): void;

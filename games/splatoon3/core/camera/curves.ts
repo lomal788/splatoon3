@@ -1,15 +1,10 @@
 // 카메라 공용 곡선. 근거: docs/camera/camera_feel.md §4.2(bias), player_camera.md §6.1(조각 3차 베지어).
-import { f32 } from "../fmath.ts";
+import { sub, div } from "./native_math.ts";
+import { biasCurve } from "../weapon/swerve.ts";
 
 /** Perlin bias (원본 인라인 코드 0x7102583ad8 등). |u|^(-log2 b), 부호 유지. */
 export function bias(u: number, b: number): number {
-  const d = b - 0.5;
-  if (!(d < -0.001 || d > 0.001)) return u;
-  const a = Math.abs(u);
-  if (a < 0.001) return 0;
-  if (b < 0.001) return a < 0.999 ? 0 : 1;
-  const p = f32(Math.exp(Math.log(a) * (Math.log(b) * -1.442695)));
-  return u < 0 ? -p : p;
+  return biasCurve(u, b);
 }
 
 /** 3차 베지어 (1-t)^3 P0 + 3t(1-t)^2 P1 + 3t^2(1-t) P2 + t^3 P3. */
@@ -41,11 +36,11 @@ export function invLerp01(a: number, b: number, x: number): number {
   if (a <= b) {
     if (x <= a) return 0;
     if (x >= b) return 1;
-    return b - a !== 0 ? (x - a) / (b - a) : 0;
+    return b - a !== 0 ? div(sub(x, a), sub(b, a)) : 0;
   }
   if (x <= b) return 1;
   if (x >= a) return 0;
-  return a - b !== 0 ? 1 - (x - b) / (a - b) : 1;
+  return a - b !== 0 ? sub(1, div(sub(x, b), sub(a, b))) : 1;
 }
 
 export function clamp01(x: number): number {

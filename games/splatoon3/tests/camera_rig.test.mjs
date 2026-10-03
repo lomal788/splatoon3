@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+const nativeRig = JSON.parse(readFileSync(new URL("./fixtures/camera_native.json", import.meta.url))).rig;
+const bits = a => Array.from(new Uint32Array(Float32Array.from(a).buffer));
 // 카메라 리그·피치 매핑·감도 — 기대값은 web/tools/camera_rig.py (selftest/table/altrig) 재구현 출력.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,14 +45,11 @@ test("리그 표 값 (camera_rig.py table)", () => {
   }
 });
 
-test("p=0 좌우 기울기 연속(C1), p=1 끝 기울기 0", () => {
-  const e = 1e-4;
-  for (const k of ["H", "F", "D", "S"]) {
-    const dl = (rig(0)[k] - rig(-e)[k]) / e;
-    const dr = (rig(e)[k] - rig(0)[k]) / e;
-    near(dl, dr, 1e-2, `${k} 기울기`);
+test("p=0 부근과 끝점 리그: 원본 float32 곡선 결과", () => {
+  for (const d of nativeRig.slice(10,14)) {
+    const v=rig(d.p);
+    assert.deepEqual(bits([v.H,v.F,v.D,v.S]),d.valueBits);
   }
-  near((rig(1).D - rig(1 - e).D) / e, 0, 1e-2, "D 끝 기울기");
 });
 
 test("고각 +7.5 / -60 / +75 (카메라가 위 +)", () => {
@@ -58,23 +58,11 @@ test("고각 +7.5 / -60 / +75 (카메라가 위 +)", () => {
   near(-elevationDeg(-1, -7.5, 60, -75), 75, 1e-9);
 });
 
-test("카메라 위치 (camera_pose, 플레이어 원점, dir=+Z)", () => {
-  const exp = {
-    "-1": [[0, 2.25, 1.0], [0, 9.204666, -0.863497]],
-    "-0.5": [[0, 2.2125, 0.825], [0, 6.986164, -4.61832]],
-    "0": [[0, 2.25, 0.5], [0, 3.137578, -6.241825]],
-    "0.5": [[0, 2.5375, 0.175], [0, 0.25529, -4.452863]],
-    "1": [[0, 2.75, 0.0], [0, -0.714102, -2.0]],
-  };
-  for (const [p, [at, cam]] of Object.entries(exp)) {
-    const r = pose(Number(p));
-    for (let i = 0; i < 3; i++) {
-      near(r.at[i], at[i], 1e-4, `at[${i}] p=${p}`);
-      near(r.cam[i], cam[i], 1e-4, `cam[${i}] p=${p}`);
-    }
+test("카메라 위치: 원점/+Z에서 원본 사인표 결과", () => {
+  for (const d of nativeRig.slice(0,10).filter(d=>d.squid===0)) {
+    const r=pose(d.p);
+    assert.deepEqual(bits([...r.at,...r.cam]),d.bits);
   }
-  const r = pose(0);
-  near(Math.hypot(r.cam[0] - r.at[0], r.cam[1] - r.at[1], r.cam[2] - r.at[2]), 6.8, 1e-4, "p=0 거리 = D");
 });
 
 test("피치각→p (스틱, gk=0): -28→-1, 0→0, +44→1, 단조, 범위 밖 보정량", () => {

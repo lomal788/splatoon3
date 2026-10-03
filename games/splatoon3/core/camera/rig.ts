@@ -1,8 +1,24 @@
 // 플레이어 카메라 리그(0x71024d6e84 mode 0) — p(-1..1) 별 주시점 높이 H·전방 F·거리 D·위 오프셋 S 와 고각 회전.
 // 근거: docs/camera/player_camera.md §4.1 상수(0x71024d63f0), §6.1 리그, §6.2 오징어 블록(batch1.c 1031~1200행 직접 판독).
-import { pieceBez, pieceCtrl } from "./curves.ts";
+import { F, add, sub, mul, div, mix } from "./native_math.ts";
+import { sinCos } from "../weapon/swerve.ts";
 
-/** 0x71024d63f0 상수 블록 (전역 조건 *0x7105791bd0+0x143d0 == 0 쪽 값, 의미 미확정). */
+function rigCubic(p: number, c: readonly number[]): number {
+  p=F(p);
+  const t=Math.abs(p),u=p<=0 ? add(p,1) : sub(1,p);
+  const m=mul(mul(p,p<=0 ? -3 : 3),u);
+  const c0=mul(mul(u,u),u),c1=mul(u,m),c2=mul(m,t),c3=mul(mul(p,p),t);
+  return add(mul(c3,c[3]),add(mul(c2,c[2]),add(mul(c0,c[0]),mul(c1,c[1]))));
+}
+function pieceBez(p: number, down: number, mid: number, up: number, k: number): number {
+  const tangent=mul(sub(up,down),k);
+  return rigCubic(p,p<=0 ? [mid,sub(mid,tangent),down,down] : [mid,add(mid,tangent),up,up]);
+}
+function pieceCtrl(p: number, neg: readonly number[], pos: readonly number[]): number {
+  return rigCubic(p,p<=0 ? neg : pos);
+}
+
+/** 0x71024d63f0 상수 블록 (Lby_Lobby00의 LobbyVersus: G+0x143d0=0, r9_state_sources §6.1). */
 export const RIG = {
   fov: 55, // +0x179c 기준 FOV(도)
   dist: [7.2, 6.8, 4.0], // +0x17a0..+0x17a8 (아래, 가운데, 위)
@@ -24,7 +40,7 @@ export const RIG = {
 } as const;
 
 /** 오징어 블록 안에서 바닥 법선 y 로 섞는 상수 곡선 (batch1.c 1046~1135행). [P0..P3] p<=0 / p>0 */
-const SQ_WALL_H = { neg: [1.45, 1.275, 1.45, 1.45], pos: [1.45, 1.625, 1.8, 1.8] } as const;
+const SQ_WALL_H = { neg: [1.45, 1.2750000953674316, 1.45, 1.45], pos: [1.45, 1.625, 1.8, 1.8] } as const;
 const SQ_WALL_D = { neg: [7.5, 7.5, 10, 10], pos: [7.5, 7.5, 10, 10] } as const;
 
 export interface RigValues {
@@ -58,10 +74,10 @@ export function squidRig(p: number, u: number, out: RigValues): RigValues {
   const f = pieceBez(p, q.targetForward[0], q.targetForward[1], q.targetForward[2], k);
   const d = pieceBez(p, q.dist[0], q.dist[1], q.dist[2], k);
   const s = pieceBez(p, q.upOffset[0], q.upOffset[1], q.upOffset[2], k);
-  out.H = h + u * (pieceCtrl(p, SQ_WALL_H.neg, SQ_WALL_H.pos) - h);
-  out.F = f + u * (0 - f);
-  out.D = d + u * (pieceCtrl(p, SQ_WALL_D.neg, SQ_WALL_D.pos) - d);
-  out.S = s + u * (0 - s);
+  out.H = mix(h, pieceCtrl(p, SQ_WALL_H.neg, SQ_WALL_H.pos), u);
+  out.F = mix(f, 0, u);
+  out.D = mix(d, pieceCtrl(p, SQ_WALL_D.neg, SQ_WALL_D.pos), u);
+  out.S = mix(s, 0, u);
   return out;
 }
 
@@ -70,10 +86,10 @@ export function blendedRig(p: number, squidW: number, u: number, out: RigValues,
   baseRig(p, out);
   if (squidW > 0) {
     squidRig(p, u, tmp);
-    out.H += squidW * (tmp.H - out.H);
-    out.F += squidW * (tmp.F - out.F);
-    out.D += squidW * (tmp.D - out.D);
-    out.S += squidW * (tmp.S - out.S);
+    out.H = mix(out.H, tmp.H, squidW);
+    out.F = mix(out.F, tmp.F, squidW);
+    out.D = mix(out.D, tmp.D, squidW);
+    out.S = mix(out.S, tmp.S, squidW);
   }
   return out;
 }
@@ -81,7 +97,7 @@ export function blendedRig(p: number, squidW: number, u: number, out: RigValues,
 /** 고각 변수(도): A + |p|(B - A), B = p>0 ? B↑ : B↓. 리그는 이 값의 음수만큼 돌린다(값이 음수면 카메라가 위로). */
 export function elevationDeg(p: number, A: number, Bup: number, Bdown: number): number {
   const B = p > 0 ? Bup : Bdown;
-  return A + Math.abs(p) * (B - A);
+  return mix(A, B, Math.abs(p));
 }
 
 /**
@@ -96,33 +112,23 @@ export function rigPose(
   at: Float32Array,
   cam: Float32Array,
 ): void {
-  const dx = dir[0], dy = dir[1], dz = dir[2];
-  const H = v.H;
-  at[0] = v.F * dx + base[0];
-  at[1] = v.F * dy + H + base[1];
-  at[2] = v.F * dz + base[2];
-  const wx = dz, wy = 0, wz = -dx;
-  let cx = at[0] - v.D * dx;
-  let cy = at[1] - v.D * dy;
-  let cz = at[2] - v.D * dz;
-  cx += (dy * wz - dz * wy) * v.S;
-  cy += (dz * wx - dx * wz) * v.S;
-  cz += (dx * wy - dy * wx) * v.S;
-  const vx = cx - at[0], vy = cy - at[1], vz = cz - at[2];
-  let ax = -vz, az = vx;
-  const n = Math.hypot(ax, az);
-  if (n > 0) {
-    ax /= n;
-    az /= n;
-    const th = elevDeg * -0.017453292;
-    const s = Math.sin(th), c = Math.cos(th);
-    const d = ax * vx + az * vz;
-    cam[0] = at[0] + -vy * az * s + ax * d + (vx - ax * d) * c;
-    cam[1] = at[1] + (vx * az - vz * ax) * s + vy * c;
-    cam[2] = at[2] + vy * ax * s + az * d + (vz - az * d) * c;
-  } else {
-    cam[0] = cx;
-    cam[1] = cy;
-    cam[2] = cz;
+  const dx=F(dir[0]),dy=F(dir[1]),dz=F(dir[2]),zeroH=mul(v.H,0);
+  at[0]=add(add(mul(v.F,dx),base[0]),zeroH);
+  at[1]=add(mul(v.F,dy),add(v.H,base[1]));
+  at[2]=add(add(mul(v.F,dz),zeroH),base[2]);
+  const wx=sub(dz,mul(dy,0)),wy=sub(mul(dx,0),mul(dz,0)),wz=sub(mul(dy,0),dx);
+  cam[0]=add(mul(sub(mul(dy,wz),mul(dz,wy)),v.S),sub(at[0],mul(v.D,dx)));
+  cam[1]=add(mul(sub(mul(dz,wx),mul(dx,wz)),v.S),sub(at[1],mul(v.D,dy)));
+  cam[2]=add(mul(sub(mul(dx,wy),mul(dy,wx)),v.S),sub(at[2],mul(v.D,dz)));
+  const vx=sub(cam[0],at[0]),vy=sub(cam[1],at[1]),vz=sub(cam[2],at[2]);
+  let ax=sub(mul(vy,0),vz),ay=sub(mul(vz,0),mul(vx,0)),az=sub(vx,mul(vy,0));
+  const n=F(Math.sqrt(add(add(mul(az,az),mul(ax,ax)),mul(ay,ay))));
+  if (n>0) {
+    const inv=div(1,n);ax=mul(inv,ax);ay=mul(inv,ay);az=mul(inv,az);
+    const [sn,cs]=sinCos(mul(elevDeg,-.017453292));
+    const dot=add(mul(vz,az),add(mul(vx,ax),mul(vy,ay)));
+    cam[0]=add(at[0],add(mul(sub(mul(vz,ay),mul(vy,az)),sn),add(mul(ax,dot),mul(sub(vx,mul(ax,dot)),cs))));
+    cam[1]=add(at[1],add(mul(sub(mul(vx,az),mul(vz,ax)),sn),add(mul(ay,dot),mul(sub(vy,mul(ay,dot)),cs))));
+    cam[2]=add(at[2],add(mul(sub(mul(vy,ax),mul(vx,ay)),sn),add(mul(az,dot),mul(sub(vz,mul(az,dot)),cs))));
   }
 }

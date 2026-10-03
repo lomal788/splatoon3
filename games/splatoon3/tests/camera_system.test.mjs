@@ -87,7 +87,7 @@ test("벽 회피: 뒤쪽 벽에 붐이 막히면 거리 비율이 즉시 줄고,
       const z0 = -3 + r;
       if (to[2] >= z0 || from[2] <= z0) return null;
       const t = (from[2] - z0) / (from[2] - to[2]);
-      return { t, point: new Float32Array(3), normal: Float32Array.of(0, 0, 1), layer: 1, material: 0, actor: -1 };
+      return { t, point: Float32Array.of(from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, -3), normal: Float32Array.of(0, 0, 1), layer: 1, material: 0, actor: -1 };
     },
     raycast: () => null,
     materialName: () => "",
@@ -97,7 +97,7 @@ test("벽 회피: 뒤쪽 벽에 붐이 막히면 거리 비율이 즉시 줄고,
   c.step(player(), emptyPad(), wall);
   assert.ok(c.out.boomRatio < 0.9, `첫 프레임부터 줄어듦 ${c.out.boomRatio}`);
   for (let i = 0; i < 30; i++) c.step(player(), emptyPad(), wall);
-  near(c.out.pos[2], -2.8, 0.01, "벽(z=-3) - 질의 반경 0.2 에서 멈춤");
+  near(c.out.pos[2], -2.7, 0.01, "벽(z=-3) - 원본 질의 반경 0.3 에서 멈춤");
   const blocked = c.out.boomRatio;
   c.step(player(), emptyPad(), null);
   assert.ok(c.out.boomRatio - blocked < 0.1, "1프레임에 다 풀리지 않음");

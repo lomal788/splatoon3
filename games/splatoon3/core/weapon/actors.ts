@@ -18,6 +18,7 @@ export interface ShooterView {
   /** 본체+0x544/+0x558 카메라 피치 p (−1..1) */
   pitch: number;
   /** 카메라 위치·주시점(조준 기준 축 a = 정규화(주시점 − 위치)) */
+  camAxis: V3 | null;
   camPos: V3 | null;
   camAt: V3 | null;
   /** 사격 불가 상태(오징어·전환 중 등) */
@@ -74,6 +75,7 @@ export function readShooter(w: World, index: number): ShooterView {
     aim,
     rigForward: rig,
     pitch,
+    camAxis: vec(pick(cam, "viewForward")),
     camPos: vec(pick(cam, "pos", "position", "eye")),
     camAt: vec(pick(cam, "target", "at", "lookAt")),
     blocked,

@@ -2,7 +2,7 @@
 // 입력: world.data.collision = { meta: collision.json, bin: ArrayBuffer } — 형식은 docs/impl/physics.md "충돌 데이터".
 import type { Vec3 } from "../fmath.ts";
 import { v3 } from "../fmath.ts";
-import { Layer, type CollisionWorld, type DynamicShape, type Hit } from "../types.ts";
+import { Layer, type CollisionWorld, type DynamicShape, type Hit, type SphereQueryFilter } from "../types.ts";
 import { LAYER_HIT_MASK, SUB_LAYER_HIT_MASK, hitsLayer, layerFromFilter, layerFromName, maskValue, PhiveLayer } from "./filter.ts";
 import { TriMesh, type Penetration, type SweepResult, type TriFilter } from "./mesh.ts";
 
@@ -98,16 +98,24 @@ export class MeshCollisionWorld implements CollisionWorld {
     return best;
   }
 
-  sweepSphere(from: Vec3, to: Vec3, radius: number, mask: number): Hit | null {
+  sweepSphere(from: Vec3, to: Vec3, radius: number, mask: number, query?: SphereQueryFilter): Hit | null {
     const mx = to[0] - from[0], my = to[1] - from[1], mz = to[2] - from[2];
     let best: Hit | null = null;
-    const r = this.mesh.sweepSegment(from[0], from[1], from[2], from[0], from[1], from[2], radius, mx, my, mz, this.layerFilter(mask), SR);
+    const r = this.mesh.sweepSegment(from[0], from[1], from[2], from[0], from[1], from[2], radius, mx, my, mz, query ? (tri) => {
+      const mt = this.materials[this.mesh.mat[tri]];
+      // Stage mesh entries are Ground bodies; raw shape masks retain camera-only
+      // barriers even when the legacy web layer was classified for bullets.
+      if (mt?.layer === Layer.Water) return false;
+      return hitsLayer(query.hitMask, PhiveLayer.Ground) &&
+        (mt?.hitMask == null ? ((mt?.layer ?? Layer.Ground) & mask) !== 0 :
+          hitsLayer(mt.hitMask, query.layerIndex) && hitsLayer(mt.subMask ?? 0xffffffff, query.subIndex));
+    } : this.layerFilter(mask), SR);
     if (r) best = this.triHit(r.tri, r.t, r.px, r.py, r.pz, r);
     const len = Math.hypot(mx, my, mz);
     if (len > 0) {
       const dir = v3(mx / len, my / len, mz / len);
       for (const d of this.dyn.values()) {
-        if ((d.shape.layer & mask) === 0) continue;
+        if (query || (d.shape.layer & mask) === 0) continue;
         const td = rayShape(from, dir, d.shape, radius);
         if (td < 0 || td > len) continue;
         const t = td / len;

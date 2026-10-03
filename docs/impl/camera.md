@@ -1,10 +1,136 @@
-# [camera] 카메라·조준 입력 구현 기록
+# 카메라 웹 반영 상태
+
+2026-10-03 · 현재 구현 기준. 사용자의 “카메라부분 web에 반영” 지시에 따라 코드와 문서를 수정했다.
+아래 §1~§11이 현재 상태이며, 이전 설명은 §11에 원문 보존한다. 원본 분석 완료율은 변경하지 않았다.
+
+## 1. 기능·범위
+
+Lby_Lobby00 1인 연습의 mode0 사람/오징어 카메라, 조준, 법선 추종, 붐 충돌 회피와 렌더 기저를 반영한다.
+이동과 탄이 같은 최종 기저를 읽는다. ELink 이름이 지정된 카메라 쉐이크를 연결한다.
+UI·다른 무기·장면·네트워크 구현은 변경하지 않았다.
+
+## 2. 재사용한 원본 근거
+
+| 근거 | 이번 소비 |
+|---|---|
+| [player_camera.md §6.1~6.8](../camera/player_camera.md) | mode0 리그·수직 추종·X/Y/Z 기저·두 붐 질의·복귀/축소 식 |
+| [movement_physics.md §6.3.3](../player/movement_physics.md) | 1252ff0 방향 slerp와 sead 사인/아탄 표 |
+| [r9_boom_query.md §6.1](../camera/r9_boom_query.md) | Sphere 반경 .3, layer7/mask8, 상대 camera 허용, iterator bit0 법선 |
+| [r9_collision_spring.md §6](../camera/r9_collision_spring.md) | C144 damping·B210 소비·C120 보정 |
+| [r9_state_sources.md §6](../camera/r9_state_sources.md) | LobbyVersus의 G143d0=0, 점프 분모의 실제 f32 |
+| [r9_reset_contexts.md §6](../camera/r9_reset_contexts.md) | reset 소비와 장면 공급자의 남은 경계 |
+| [shake_rumble.md §3.2](../camera/shake_rumble.md) | ELink 이름/frame·곡선·거리 15/25·월드 위치 합산 |
+
+이번 원본 호출은 이식 회귀 fixture 생성이다. 새 분석 확정 건수로 합산하지 않는다.
+
+## 3. 구현 점검률
+
+[port 고정 점검표](../port/implementation_status.md)의 CAM01~07 기준 **2/7 = 28.57%**.
+반영 확인 CAM01·CAM02, 일부 반영 CAM03~07이다. 이전 1/7 = 14.29%에서 **+14.29%p**.
+부분 기능의 fixture가 통과했다고 전체 행을 완료로 승격하지 않았다. 전체 원본 카메라의 “100% 동등”을 뜻하지 않는다.
+
+## 4. 달라진 동작
+
+- 법선의 선형 보간/재정규화 → 원본 1252ff0의 표 기반 방향 slerp(.1). 거의 반대 방향은 원본의 null 축 동작을 보존한다.
+- mode0 곡선·로드리게스 회전은 명령의 f32 연산/덧셈 순서와 원본 사인·코사인 표를 사용한다. SQ 음수 높이 제어점은 축약값 1.275가 아닌 **1.2750000953674316**이다.
+- 카메라 최종 기저는 Z=normalize(pos−at), X=normalize(up×Z), Y=Z×X. 길이0 또는 |Z.y|>0x3f7ffffe면 **세 열 모두 이전 값 유지**. right와 viewForward(−Z)를 공유한다.
+- 붐 반경 .2 → 원본 f32(.3). near .2와 구분한다. query1·C14ec 전진 계수·query2 시작점/거리, 미적중 법선 초기화, 정상 거리 복귀 및 축소 하한 min(…, .35)을 반영한다.
+- C144 오프셋 소비, 피벗 xz 및 최소거리의 dot 보정, C1760 질의 생략/ratio 혼합, Bde0 위치 보존 게이트와 후속 포즈 혼합을 추가한다. 공급자가 없는 값은 §9대로 남긴다.
+- 수직 속도 비율은 F(F(vy+jump3dY)/**0.11499999463558197**), 원본 분모 0x3deb851e이다. 보통 수직 추종·누산·FOV·근접 보정에 f32 연산을 적용한다.
+- 렌더 회전은 lookAt 재계산 대신 원본 기저로 만든 쿼터니언을 사용한다. 이전/현재 쿼터니언 보간은 웹 선택이다.
+- ELink CameraRumbleName/Frame, 거리 감쇠, Axis·곡선·Scale의 합을 실제 shakeOffset에 공급한다. 회전을 유지하고 월드 위치만 이동한다. 이름이 빈 슈터에 별도 발사 쉐이크를 만들지 않는다.
+
+## 5. 웹 갱신 순서
+
+코어의 기존 시스템 순서는 변경하지 않았다. 원본 actor↔physics 전체 순서의 미확정은 유지한다.
+
+카메라 내부: 이전 렌더값 저장 → 몸 위치/법선 추종 → C144 소비 → 입력 → 오징어/FOV/고각 누산 → 리그 → 수직 추종 → 붐 정의 → 두 질의/복귀·축소/위치 게이트·혼합 → 근접 보정 → 최종 기저.
+
+client/fx는 기존 고정 step 이벤트 배출에서 쉐이크를 계산하고, 마지막 camera view가 위치 offset과 기저 회전을 반영한다. 유한 쉐이크가 시각 이미터보다 오래 살아도 ELink 시각 핸들의 수명을 늘리지 않는다.
+
+## 6. 영역 간 계약
+
+| 필드/경로 | 원본 대응·현재 상태 |
+|---|---|
+| camera.right/up/viewZ | X/Y/Z 기저, 이전 값 prevRight/prevUp/prevViewZ도 공유 |
+| camera.viewForward | −Z. weapon이 재정규화한 pos/at 축보다 우선 사용 |
+| player.final → CameraPlayerInput.finalVel | B+e4. C14ec와 spring의 최종 속도 |
+| player.vel → moveVel | B+114. 축소 속도 계산용; final과 혼동하지 않음 |
+| player.cameraNative → CameraPlayerInput.native | 명시적 원본 소비 필드 계약. 현재 player는 이를 생산하지 않음 |
+| native.springDelta/bodyResidual/springHold | D/B210/B e0c. B1f8의 unexplained를 B210으로 대입하지 않음 |
+| native.wall7a0/ad0/d9/blend1760/positionGateDe0 | 이름을 추정해 web wallCling/사격 bool로 대체하지 않음 |
+| native.skipQueries/skipBoom/minimumQueryOffset/humanFov | 특수 게이트/offS/B6dc 소비 입력. 공급자가 없으면 기존 보통 경로 유지 |
+| SphereQueryFilter | query layer7/sub0, hitMask8/subMaskFFFFFFFF. 웹 Layer와 별개 |
+| Hit.nativeEntryFlags | native point normal일 때 bit0=1 그대로/0 반전. 일반 웹 outward normal은 카메라 inward로 한 번 변환 |
+| 지형 sweep | 원시 재질 mask의 camera 허용과 sub0을 검사. camera-only 장벽을 기존 bullet용 web Layer=0이라도 유지 |
+
+mesh 쪽은 현재 Ground 지형 컨테이너 전제를 사용한다. 실제 body LP의 레이어·Default/Same/Other 표·typed shape/태그·skip 목록 전체를 이식한 것이 아니다. 현재 Object 표적을 camera Ground query의 대상으로 확대하지 않았다.
+
+## 7. 입력·렌더 이식 선택
+
+마우스의 px→회전량·감도 설정과 PC 버튼 표현은 유지한다. yaw 회전은 sead 표를 쓴다.
+전체 원본 gyro/device posture·모듈 pose 공급은 미반영이다.
+60Hz와 렌더 alpha 보간, three 쿼터니언 정규화·투영은 웹 선택이다. 카메라의 native 기저를 이동·탄·렌더에 전달한 범위와 실제 GPU 화면의 동등성은 구분한다.
+
+## 8. 원본 실행 fixture 회귀
+
+[생성 도구](../../tools/camera_port_fixtures.py)는 기존 확정 함수·블록을 unicorn에서 실행하고
+[fixture](../../games/splatoon3/tests/fixtures/camera_native.json)에 원본 비트를 저장한다.
+[camera_native.test.mjs](../../games/splatoon3/tests/camera_native.test.mjs)가 TS 결과와 직접 비교한다.
+
+| 범위 | 원본 경우 수 | TS 비교 |
+|---|---:|---|
+| 최종 X/Y/Z 및 수직/길이0 보존 | 260 | 전부 비트 일치 |
+| 1252ff0 null 축 slerp | 131 | 전부 비트 일치 |
+| C144/C120 소비 블록 | 128 | 전부 비트 일치 |
+| Bde0 위치 게이트·C1760 postmix | 128 | 전부 비트 일치 |
+| 붐 under/angle/speed/rate/target/ratio | 128 | 전부 비트 일치 |
+| C14ec 전진 계수 | 128 | 전부 비트 일치 |
+| mode0 사람/오징어 리그 값·최종 pose | 128 | 전부 비트 일치 |
+| **합계** | **1,031** | **표본 전부 일치** |
+
+합성 입력에서 원본 명령을 호출했다. whole 원본 카메라/actor·physics·query/frame은 실행하지 않았다.
+SDK logf/expf와 JS Math의 일반적인 마지막 비트 차이가 알려져 있으므로 이 128개 표본 일치를 모든 입력으로 확대하지 않는다.
+쉐이크는 판독 식/데이터 연결 및 웹 회귀 테스트이며 이번 원본 실행 수에 넣지 않았다.
+
+## 9. 남은 차이·다음 지시
+
+| 항목 | 상태와 다음 작업 |
+|---|---|
+| spring 실제 생산 | 소비는 이식됐지만 player가 D/B210/e0c를 공급하지 않아 보통 실행은 0 입력이다. 원본 rig/head 차이 생산자와 B210 실제 컴포넌트를 physics 계약으로 연결해야 한다. |
+| formHeight/B6dc/상태 게이트 | formHeight는 아직 미공급(기존 기본0), humanFov는 미공급시 기존55. wall7a0/ad0/d9/blend1760/de0와 희귀 offS/장면 게이트도 원본 생산자 연결이 필요하다. |
+| query 전체 | 웹 custom mesh sweep/다면체 근사·Ground 컨테이너 전제는 남는다. native LP·양방향 표·typed 태그·real stage TOI를 이식해야 한다. |
+| reset/모듈 | 첫 player·respawns 웹 매핑은 유지했다. 원본 First/Warp/Recorder 조건·module quaternion/상태 리그의 실제 장면 공급은 후속이다. |
+| 조준 scalar/libm | pitchAngleToP와 aimPitchDeg/aimDirection의 일부 double 계산 및 SDK libm 차이는 남는다. 전체 조준 함수를 모든 입력에서 비트 동일하다고 주장하지 않는다. |
+| 쉐이크 수명 | 비루프 종료 비교는 원본 미확정이라 MaxX 경계를 웹 정책으로 쓴다. 소유자 generation/follow·기존 XLink delay와 전체 이벤트 수명 동등성은 미검증이다. loop fade는 웹 종료 연결이다. |
+| 쉐이크 listener | 현재 unshaken shared camera.pos를 사용한다. 모듈 listener+1c8의 장면 공급 동등성은 별도 확인 필요. |
+| 실제 체감·화면 비교 | 현행 웹 실행은 확인했다. 원본 플레이 녹화/동일 입력의 전체 화면·조작감 대조는 하지 않았다. |
+
+다음에는 CAM04~05의 실제 physics→camera 공급과 CAM03의 지형 질의 계약을 먼저 연결하면 된다.
+위 경계 때문에 CAM03~07은 일부 반영으로 유지한다.
+
+## 10. 실제 검증·명령
+
+최종 명령 및 로그는 [analysis/port_camera/commands.md](../../../analysis/port_camera/commands.md)에 기록한다.
+기존 이식 선택 테스트의 .2 벽 기대값과 배정밀도 리그 기대값은 원본 .3/표 결과를 기대하도록 정정했다.
+float32의 미분 잡음을 원본 오차로 판정하던 C1 유한차분 검사는 원본 경계 fixture 직접 비교로 바꿨다.
+
+## 11. 변경·정정 기록
+
+2026-10-03: 이전 본문의 “질의1/C14ec 생략”, “법선 선형”, “near=.2에서 반경 추정”, “normalize(at−pos)만 출력”,
+“쉐이크 producer 없음”은 이번 구현으로 변경됐다. 기존 분석 결론을 삭제하지 않고 아래 당시 구현 기록을 보존한다.
+원본 MD의 분석 inventory·확정 수와 SHARED/FUNCS는 새 분석으로 계산해 수정하지 않았다.
+
+<details>
+<summary>이전 구현 기록 — 2026-10-03 카메라 포팅 전 상태</summary>
+
+### [camera] 카메라·조준 입력 구현 기록
 
 담당 폴더: `games/splatoon3/core/camera/`, `games/splatoon3/client/camera/`, `games/splatoon3/client/input.ts`.
 근거 문서: [../camera/player_camera.md](../camera/player_camera.md), [../camera/camera_feel.md](../camera/camera_feel.md), [../camera/aim_swerve.md](../camera/aim_swerve.md), [../camera/shake_rumble.md](../camera/shake_rumble.md).
 원문 디컴파일: `analysis/decomp/camrest/cam_main_full.c`(메인 0x71024d9ae8 = 1~3652행, 입력 0x71024e0178 = 3653~6297행), `analysis/decomp/camera/batch1.c`(리셋 0x71024d6598, 리그 0x71024d6e84, 붐 정의 0x71024d8f94), 이번에 추가한 `analysis/decomp/camimpl/aim.c`(0x7102551fe0, 0x7102551640), `aim2.c`(0x7102551780).
 
-## 1. 구현한 것
+### 1. 구현한 것
 
 ### 1.1 파일
 
@@ -66,7 +192,7 @@ player_camera.md 가 "표로 옮기지 않았다"고 남긴 부분을 이번에 
 - 0x7102551fe0: 축 normalize(−h.z, 0, h.x) 둘레 쿼터니언 회전(cosf/sinf, 사인표 아님), 양의 각 = 위 [판독].
 - 슈터의 vt+0xe0 은 0x710258868c: `this+0x270`(InkActionShooter 객체 +0x2a0)의 파라미터 객체로 0x7102551780 을 부릅니다. 그 객체가 어느 GameParameter 인지·값은 [미확정] — 웹은 기본 곡선을 씁니다(§3).
 
-## 2. 원본과 다른 점
+### 2. 원본과 다른 점
 
 ### 2.1 입력 이식 차이 (필수 표)
 
@@ -104,7 +230,7 @@ player_camera.md 가 "표로 옮기지 않았다"고 남긴 부분을 이번에 
 
 원본 질의 형상·반경·필터는 [미확정]입니다(player_camera.md §6.8). 웹: `world.collision.sweepSphere(시작, 끝, 0.2, Layer.Ground)`, 적중 거리 = `t·|끝−시작|`(원본 Q+0x54 와 같은 의미), 법선은 `hit.normal` 부호 반전을 원본 hitN 으로 씀. 반경 0.2 는 near 와 같게 둔 웹 선택(근평면이 벽을 덜 파고들게), 레이어 Ground 만은 [추정](맵 오브젝트·표적에 카메라가 걸리지 않게; 원본 충돌 태그 22 `SplKeepOutPlayerAndCamera` 는 지형 쪽). `BOOM_PROBE_RADIUS`/`BOOM_PROBE_MASK` 로 export.
 
-## 3. 미확정·추가 분석 필요
+### 3. 미확정·추가 분석 필요
 
 | 항목 | 풀리는 곳 |
 |---|---|
@@ -116,17 +242,19 @@ player_camera.md 가 "표로 옮기지 않았다"고 남긴 부분을 이번에 
 | 본체+0x1cc 의미(웹은 physics `surfN.y` = 본체+0x1c8 의 y 로 봄) | physics player_state.md 표면 법선 |
 | 카메라·플레이어 시스템 순서 | DESIGN §3 [미확정] 그대로 |
 
-## 4. 검증
+### 4. 검증
 
 - `tests/camera_rig.test.mjs` (9): 리그 끝점·표 값·C1 연속·끝 기울기·고각·카메라 위치가 `web/tools/camera_rig.py selftest`/`table`/`camera_pose` 출력과 1e-4~1e-6 안에서 일치. `pitchAngleToP`(−28→−1, 0→0, +44→1, 단조, 보정량 12/−6, 중간값 3개 일치), 감도 속도(2.4/4/7, 1.0/1.8/2.8), bias(0.5,0.8)=0.5^0.3219, 조준 곡선 끝점(−70/5/75)과 회전 방향.
 - `tests/camera_system.test.mjs` (8): 정지 시 카메라 = 리그 위치(0, 3.1376, −6.2418), 수평 즉시·주시점 y 0.25 비율 지연, lookYaw 부호, 피치 끝(s 44/−28, 조준 75°), 오징어 가중치 0→0.9 접지 14·공중 67 프레임(`camera_rig.py altrig` 와 일치), 오징어 FOV 60·거리 6.8·높이 1.45, 벽 회피(첫 프레임부터 줄고 벽 − 반경에서 멈춤, 이동 시 천천히 복귀), 마우스 대응식 비율.
 - 헤드리스(Chrome, 개발 서버): 콘솔 오류 없음, three 카메라 = core 카메라, 조준 입력 주입(yaw 30°, s +20°) 후 p 0.5365·조준 43.8°·붐 질의 동작 확인. physics 가 shared `player` 를 아직 쓰지 않아 원점 기준으로만 확인.
 - 원본 실행 대조는 없습니다(카메라 메인 함수 에뮬 미실시).
 
-## 5. 조정 요청
+### 5. 조정 요청
 
 1. **[physics] shared `player` 필드**: 카메라는 `core/camera/index.ts` 의 `PlayerLike` 이름으로 읽습니다 — `pos`(+0x10), `facing`(리셋 방향, 원본은 본체+0x34), `floorN`(+0x180), `surfN`(+0x1c8, y 가 +0x1cc), `vy`(+0x73c), `jump3d`(+0x750, y 사용), `vel`(+0x114), `airFrames`(+0xc0), `airRatio`(+0xdc), `state`(상태 번호 → Sq 판정), `respawns`(바뀌면 재시작 리셋, 원본 isRestart=1). 현재 PlayerState 와 같은 이름입니다. 추가로 본체+0xcf0(형태별 주시점 추가 높이)을 `formHeight` 로 주면 리그에 더합니다. 카메라 상대 이동에는 shared `camera.rigForward`(원본 본체+0x538 = 카메라 +0x1a4 사본, 0x7102458630)를 쓰면 됩니다.
 2. **[weapon]** 탄 조준 = shared `camera.aimDir`(0x71024aff7c 결과, 흔들림 전). 무기별 곡선이 확정되면 `aimPitchDeg(camera.pitchNorm, curve)` + `aimDirection(camera.rigForward, rad, out)` 로 직접 계산 가능(core/camera/index.ts export).
 3. **[fx]** 카메라 쉐이크는 `ctx.camera.userData.shakeOffset = {x,y,z}`(월드) 로 넘겨 주세요. 카메라 뷰가 마지막에 위치·주시점에 같이 더합니다(원본: 위치에 더하고 회전 불변).
 4. **[조정] `core/input.ts` 주석**: `lookPitch` 의 의미를 "피치 누적각(+0x150c) 변화량(라디안, 위 +)"으로, `lookYaw` 를 "양수 = +Z→+X(왼쪽) 회전"으로 적어 주세요. DESIGN §6 마우스 행 비고에 "대응식 docs/impl/camera.md §2.1" 링크 추가를 제안합니다.
 5. **[조정] 시스템 순서**: 지금 순서(camera → player)에서는 카메라가 직전 스텝의 플레이어 위치를 따라가 1스텝 늦습니다. 원본 순서 근거는 없으나, 플레이어가 카메라 +0x1a4 사본을 매 프레임 읽는 구조(0x7102458630)와 맞추려면 현재 순서 유지, 표시 지연을 없애려면 player 뒤로 옮기는 것을 검토해 주세요(결정은 조정자).
+
+</details>

@@ -28,7 +28,7 @@ export * as PlayerConst from "./consts.ts";
 const INK_RECOVER_STD = [600, 410, 220] as const; // InkRecoverFrm_Std_Low/Mid/High
 const INK_RECOVER_STEALTH = [180, 148.5, 117] as const; // InkRecoverFrm_Stealth_Low/Mid/High
 
-/** shared "camera" 에서 조준 수평 방향(본체+0x538 = PlayerCamera+0x1a4)과 오른쪽 벡터(PlayerCamera+0x68 → 오른쪽 [추정]). */
+/** shared "camera" 에서 조준 수평 방향(본체+0x538 = PlayerCamera+0x1a4)과 오른쪽 벡터(PlayerCamera+0x68 → X 기저 [실행: player_camera §6.7]). */
 export function readCamera(w: World, aim: Vec3, right: Vec3): void {
   const cam = w.shared.get("camera") as Record<string, unknown> | undefined;
   let fx = 0, fz = 1;
