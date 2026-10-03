@@ -86,6 +86,14 @@ normal = (sin(theta)*cos(phi), sin(theta)*sin(phi), z)
 - ResEmitter+0xE4의 모든 이미터 공통 의미는 [미확정]입니다.
 - 검증: 실제 bulletshtr_vsp 83×6의 A half 498/498 비트 복원 [데이터 대조/재구현, `web/tools/completion_vat_normal_check.py`]. 원본 GPU 실행이 아니며 sin/cos/log2/exp2/FMA 비트 일치를 주장하지 않습니다.
 
+### 2.1.2 분열 탄 ball_Copy1 (program1385) — 2026-10-03 추가 [판독]+[데이터]
+
+기존 emitter 값/slot800 매핑은 §2.2.6/§3의 근거를 재사용한다. 신규 역번역 `analysis/visual_gap/p1385.vert/.frag/.options.txt`(variation5583)에서 bulletcmn_vsp의 H64×W8 VAT를 두 열 보간, clamp 시간, compact-normal로 소비함을 확인했다. `ink_visual_audit.py` 실제 half512/512 복원 일치(데이터+재구현, GPU 실행 아님). scale 키3개·CPU/follow ALL이며 main p1383를 그대로 선택하는 웹 Splash 경로는 원본과 다르다.
+
+**§2.1.1 좌표 정정:** 구면 좌표 표기 `(sinθcosφ,sinθsinφ,z)`가 실제 local 회전 인자에서는 **`(sinθcosφ,z,sinθsinφ)`** 순서다(p1385 temp137/138/139, 기존 p1383 temp135/129/136). 극 성분은 local Y. 기존 수식의 압축값 복호화는 유지하며 소비 좌표 순서를 보완한다.
+
+p1385 fragment는 normal 기반 조명·environment array layer6을 사용하고 최종 A=`clamp(fma(clamp(v0.w*v2.w)*v1.x,Custom1[11].x,Custom1[11].y))`다. **v2.w는 해당 vertex dump에 export가 없어 실제 linked/default 입력은 미확정**이다. alpha1=3 데이터로 대신 채우지 않는다. Custom1[12].x runtime writer 역시 남는다. 근거·11절/다음 분석은 [graphics/ink_visual_path §6·10·11](../graphics/ink_visual_path.md).
+
 ## 2.2 VFXB v46 EmitterData 필드표 [판독 + 셰이더 판독 + 데이터]
 
 ### 2.2.1 근거와 도구
@@ -416,6 +424,8 @@ if R[D3F] == 0: R[800:804] = R[D5C:D60]  // alpha1
 - 1747의 정점 셰이더는 location 4를 쓰지 않습니다. 그래서 프래그먼트의 `in_attr4.w` 값은 [미확정]입니다(하드웨어 기본값에 의존).
 - 1885(벽 Ripple)과 1202(머즐 Flash)는 역번역하지 않았습니다 [미확정].
 - 이 표는 6,285개 프로그램 전체의 일반식이 아닙니다.
+
+**추가 판독/정정(2026-10-03, 시각 r2):** 위 “1885/1202는 역번역하지 않았다” 기록은 당시 상태다. 현재 두 프로그램을 새로 판독했다. Flash1202는 `T1.a*T2.a*v4.w*A0`를 clamp한 뒤 fade를 곱하고 **.5 이하를 discard**한다. C0 키3.2→2/A0 키1.5→1, alpha1 FIXED3은 이 fragment 알파식에 쓰이지 않는다. Ripple1885는 `(T0.a*v4.w−A0)*A1`을 clamp한 뒤 fade를 곱하며, **A1은 ANIM2@.2→0@1**, C1 가산은 없다. sampler와 키/threshold/호출 경계는 [fx_shader_inputs_r2 §4~7](fx_shader_inputs_r2.md). 원시 Maxwell에서도 p1385 v2.w와 Flash v4.w export가 없어 실제 linked/default는 미확정이다. 이 부분을 alpha1이나1로 채우지 않는다.
 
 ### 2.2.5.2 이미터 +0x50 = 이번 갱신 시간 간격, 흔들림 reader 정정 (7차) [실행]+[판독]
 

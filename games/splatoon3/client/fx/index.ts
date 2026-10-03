@@ -13,7 +13,8 @@ import { HIT_CULL_R, PLAYER_ACTIONS } from "../audio/index.ts";
 import { damageReaction, drainEvents, matchHit, num, readCamera, playerProps, readPlayer, registerEvents, squidAnim, subjective, vec, weaponUser, type PlayerRead, type V3 } from "../audio/read.ts";
 import { XLinkInstance, type EmitContext, type XAsset, type XHandle, type XSink } from "../audio/xlink.ts";
 import { InkActionState } from "./inkaction.ts";
-import { EmitterInstance, ParticleBatch, identityMatrix, type EmitMatrix } from "./particles.ts";
+import { muzzlePoseMatrix } from "./muzzle.ts";
+import { EmitterInstance, ParticleBatch, identityMatrix, type EmitMatrix, type ParticleInputs } from "./particles.ts";
 import { HIT_ESET, WATER_ESET, floorMatrix, identityFloor, normalMatrix, pickSplash, wallMatrix } from "./splash.ts";
 
 // 팀 색(선형): graphics/team_color.md §8 OrangeBlue Original(set0 Alpha, set1 Bravo, set2 Neutral).
@@ -67,8 +68,10 @@ export class FxSystem implements XSink {
   readonly log: string[] = [];
   private readonly rnd = Math.random;
   private readonly shakes: CameraShakeMixer;
+  private readonly particleInputs:ParticleInputs;
 
-  constructor(w: World, cam: THREE.Camera, data: FxData) {
+  constructor(w: World, cam: THREE.Camera, data: FxData,particleInputs:ParticleInputs={}) {
+    this.particleInputs=particleInputs;
     this.w = w;
     this.cam = cam;
     this.data = data;
@@ -113,11 +116,18 @@ export class FxSystem implements XSink {
         break;
       }
     }
-    // 프리미티브(G3PR) 형상. 탄 ball 은 프리미티브 + VAT(정점 애니) — VAT 는 미구현, 프리미티브도 없으면 구로 근사(docs/impl/fx.md)
+    const samplerData=this.data as FxData&{emitterSamplers?:Map<string,{slot:number|null;name:string}[]>};
+    const samplers=new Map<number,THREE.Texture>();
+    for(const sampler of samplerData.emitterSamplers?.get(key)??[]){
+      const texture=this.data.textures.get(sampler.name);
+      if(texture&&sampler.slot!==null)samplers.set(sampler.slot,texture);
+    }
+    // Native primitive UV.z is a VAT row; missing resources retain an explicit web fallback.
     const pf = this.data.emitterPrim.get(key);
     const prim = pf ? this.data.prims.get(pf) ?? null : null;
     const sphere = key.endsWith("/ball") || key.endsWith("/ball_Copy1");
-    b = new ParticleBatch(key, def, sphere ? 512 : 256, map, prim, sphere);
+    b = new ParticleBatch(key, def, sphere ? 512 : 256, samplers.get(0)??map, prim, sphere,{...this.particleInputs,samplers});
+    if(sphere&&!(b.mesh.material as THREE.Material).userData.vat?.enabled)this.missing.add(`VAT input ${key}`);
     this.batches.set(key, b);
     this.root.add(b.mesh);
     return b;
@@ -125,6 +135,9 @@ export class FxSystem implements XSink {
 
   /** 이미터셋 하나 재생(ELink 에셋 실행 / OneEmitter 슬롯 추가) */
   spawnEset(eset: string, m: EmitMatrix, color: V3, delay = 0, scale = 1): EsetHandle | null {
+    // Do not permanently cache placeholder geometry/keys while real assets load.
+    // ready also becomes true on load failure, preserving the explicit fallback.
+    if (!this.data.ready) return null;
     const keys = this.emittersOf(eset);
     if (!keys.length) {
       if (!this.missing.has(eset)) {
@@ -203,8 +216,10 @@ export class FxSystem implements XSink {
     return wf;
   }
 
-  /** 총구 행렬. render 가 world.shared "muzzle" 을 주면 그것, 아니면 마지막 발사 위치 + 플레이어 이동량(근사). */
+  /** Animated Muzzle full matrix, or the explicit legacy bullet-position adapter when unavailable. */
   private muzzleMatrix(wf: WeaponFx): EmitMatrix {
+    const pose = muzzlePoseMatrix(this.w.shared.get("muzzle"), wf.owner);
+    if (pose) return pose;
     const sm = this.w.shared.get("muzzle") as Record<string, unknown> | undefined;
     let pos = vec(sm?.pos);
     let dir = vec(sm?.dir);
@@ -216,7 +231,7 @@ export class FxSystem implements XSink {
       }
     }
     if (!dir) dir = wf.lastDir ?? [0, 0, 1];
-    // 뼈 Muzzle 의 축은 확인하지 않았다 [추정]: 로컬 +Z = 발사 방향, +Y = 위쪽에 가까운 축.
+    // Legacy adapter only; the actual bone branch above preserves all three axes.
     const z = normalize(dir);
     let x = cross([0, 1, 0], z);
     if (Math.hypot(...x) < 1e-6) x = [1, 0, 0];
@@ -328,6 +343,7 @@ export class FxSystem implements XSink {
       if (inst.followFn) inst.setMatrix(inst.followFn());
       inst.step(f, this.rnd);
       if (inst.followAll) inst.batch.follow(inst);
+      else if(Number(inst.batch.def.followType)===2)inst.batch.followPosition(inst);
     }
     for (let i = this.live.length - 1; i >= 0; i--) if (this.live[i].finishedBy(f)) this.live.splice(i, 1);
     const cameraState = this.w.shared.get("camera") as { pos?: ArrayLike<number> } | undefined;
@@ -353,7 +369,7 @@ export class FxSystem implements XSink {
     // 팀 -1·3 은 무시(0x7101753bb4)
     if (team === -1 || team === 3) return;
     // 슈터 탄 = 슬롯 0x000 WpShtrBullet1Emit (BulletShooterBase vt106) [판독].
-    // 분열 탄(Splash) = 슬롯 0xA00 의 두 번째 WpShtrBullet1Emit 로 본다 [추정: 0x7101850364 의 탄 종류 미확인].
+    // 분열 탄(Splash) = BulletSplashShooter vt106 17ffc60 → OneEmitter slot800 WpCmnBulletSplash1Emit [판독].
     // 벽 낙하(WallDrop) 의 파티클 슬롯은 미확인 → 그리지 않는다.
     const kind = String(e.kind ?? "Shooter");
     if (kind !== "Shooter" && kind !== "Splash") {
@@ -361,7 +377,7 @@ export class FxSystem implements XSink {
       this.bullets.set(e.id, { h: null, prev: pos, cur: pos, team, vel: vec(e.vel) });
       return;
     }
-    const h = this.spawnEset("WpShtrBullet1Emit", identityMatrix(pos), this.teamColor(team));
+    const h = this.spawnEset(kind==="Splash"?"WpCmnBulletSplash1Emit":"WpShtrBullet1Emit", identityMatrix(pos), this.teamColor(team));
     this.bullets.set(e.id, { h, prev: pos, cur: pos, team, vel: vec(e.vel) });
   }
 
@@ -491,6 +507,7 @@ export class FxSystem implements XSink {
   render(alpha: number): void {
     const now = this.frameNo + alpha;
     for (const b of this.batches.values()) b.uniforms.uNow.value = now;
+    this.root.userData.needsSceneDepth=this.live.some(i=>!i.finishedBy(now)&&Number(i.batch.def.shaderIndex)===1897);
     // 탄은 이전·현재 위치 사이를 보간해 그린다
     for (const b of this.bullets.values()) {
       if (!b.h) continue;
@@ -526,12 +543,14 @@ function cross(a: V3, b: V3): V3 {
 
 export function createFxView(ctx: ClientContext): View {
   const data = fxData(ctx.assets, ctx.world);
-  const sys = new FxSystem(ctx.world, ctx.camera, data);
+  const sys = new FxSystem(ctx.world, ctx.camera, data,{lighting:ctx.fxLighting,depth:ctx.fxDepth});
   ctx.scene.add(sys.root);
   registerEvents(ctx.world, "fx");
   if (DEV) (globalThis as Record<string, unknown>).__splatoon3_fx = sys;
   let failed = 0;
   const step = (w: World, alpha: number): void => {
+      // Build ELink owners and particle batches after the shared bundle settles.
+      if (!data.ready) return;
       ctx.camera.updateMatrixWorld();
       const evs = drainEvents(w, "fx");
       const first = Math.max(sys.lastFrame + 1, w.frame - 8);

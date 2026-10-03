@@ -1,5 +1,7 @@
 # 스테이지 렌더링 — 대전 로비(Fld_VSLobby / 씬 LobbyVersus) 기준
 
+**2026-10-03 첨부 화면 분석 정정 [판독]:** 원시 Maxwell와 분석용 Negate 괄호 보완 CLI로 기존 역번역의 부호 괄호 결함을 확인했다. p1714 BRDF.y는 **−roughness**이며, 잉크 SH는 최종N과 world-up을 혼합하고 다시 정규화하지 않는다. cube array 층12는 **implicit LOD+bias0**로 샘플하며 명시 mip0 고정이 아니다. 기존 설명은 당시 기록으로 보존한다. [원시 주소·정정 이유·보완 출력](reference_ink_surface.md#6-계산식조건상세-의사코드). 원본 GPU 픽셀은 미검증이다.
+
 맵 모델을 원본처럼 그리기 위한 명세입니다. 데이터 연결(씬 → 렌더링 파라미터 → env → 베이크), 맵 재질 셰이더 식(역번역), 광원·그림자·안개·잉크 표시, 웹 근사안을 다룹니다. 확정 수준 표기는 [README](../README.md)를 따릅니다. 셰이더 식은 원본 SASS를 Ryujinx 번역기로 옮긴 GLSL을 판독한 것입니다([shaders.md §2](shaders.md)).
 
 관련 문서: [shaders.md](shaders.md)(Hoian_UBER 구조·BlitzUBO0), [team_color.md](team_color.md)(Ink 색과 주 광원), [../paint/paint_and_score.md](../paint/paint_and_score.md)(도색 텍스처), [../gimmick/collision_mesh.md](../gimmick/collision_mesh.md)(충돌 메시).
@@ -73,6 +75,9 @@ ColorGrading 곡선 `Data` 6개 = (x0, y0, 기울기0, x1, y1, 기울기1)로 �
 **정정(2026-10-03, 7차):** 위 문장은 이전 기록입니다. `Data = (X0, Y0, M0, X1, Y1, M1)`은 원본 함수로 해소했습니다. M은 **구간 정규 좌표의 접선**이며, 실제 X 단위의 기울기처럼 `(X1−X0)`를 곱하지 않습니다. 로비는 X 간격이 1이라 두 해석이 같은 숫자를 내지만, 비단위 X 간격의 합성 입력도 실행해 이 차이를 확인했습니다. 전체 LUT 결과까지 확정한 것은 아닙니다.
 
 ### 2.2.1 ColorGrading Hermit2D 곡선 (7차) [실행]+[판독]+[데이터]
+
+**2026-10-03 r2 추가 [실행-CPU]+[판독]+[데이터]:** 기존 Hermit2D 표본 확인에 이어 기본 mode0의 `35db354→115567c→35dc218` 원본 연쇄를 실제 로비 데이터와 128개 합성 입력으로 대조했다. 순서는 **HSV(0,1,1.0625)→RGB 8점 표본 선형 보간→Gamma(1,1,1,1)**, count3이다. used192B 계약에서 RGB·헤더·Gamma가 비트 일치했고 A 표본은 독립 대조에 넣지 않았다. 원본 LUT 좌표 공급 블록도128/128 일치했다. CB1 간접 분기표 누락을 보완해 셰이더를 재판독했으며, GPU LUT 픽셀·sampler·실제 최종 variant는 미확정이다. [ink_lighting_r2 §6·10·11](ink_lighting_r2.md).
+
 
 이름·번호 연결 [판독]: ColorGrading 방문 함수는 R/G/B 곡선을 각각 +0x70/+0x50/+0x30에 넣습니다. 파라미터 곡선 래퍼(vtable 0x7105553c78, 슬롯 4 = 0x71010080B0)는 BYAML 로더 0x71038C7F28을 부릅니다. 이 로더는 0x71038C8FC8이 문자열 0x710493E6B9를 분리한 이름 표의 **+0x38(번호 7, 0부터 세므로 여덟째)**와 `Type`을 비교하며, 0x71038C8344에서 7을 만들어 0x71038C8228에서 곡선 +8에 기록합니다. 문자열 배열의 번호 7은 `Hermit2D`입니다.
 
@@ -670,11 +675,11 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 | ~~Env UBO(gsys_environment 512 B) 칸 대응(주 광원 [5]/[23], 안개 [10..15], SH [25..31])~~ | **해소(6차)**: 기록자 0x71036b35c0·0x71036b1300, 레이아웃 원본 실행(§5.5.1). 남은 것: +0x1f8/+0x208 방향 배열의 좌표계, Hemisphere +0x198 의 의미. 5차 기록: 원천은 확인 — 안개 = env agl Fog 두 객체(§4), SH = 환경광 관리자 0x70 B 블록(gsys 뷰 레코드 +0x98/+0xa0, §5.6). gsys 가 이를 512 B 블록으로 옮기는 함수 미발견. 다음: 뷰 레코드 배열(*(env+0x190)+0x578, 0xd0 간격)을 읽는 gsys 함수(0x71036c9bf4 등 레코드 순회), agl Fog/DirectionalLight 필드(+0x128/+0x148/+0x188/+0x1a0/+0x1c0)를 함께 읽는 gsys 함수 |
 | ~~하늘 SH 송신원~~ | 해소(5차): 환경광 관리자 0x710102a3e8/0x7101029f6c → 이벤트 키 0x710580e818(§5.6). 6차: 로비 = 캡처 경로(§5.6.1) [판독]. 남은 것: 하늘 SH **값** — 입력 큐브가 실행 중 장면 렌더(BaseCubeMap 256² RGBA16F, 0x710102ce04 → 0x710103dd08)라 큐브 캡처 렌더 재현이 필요(맵 큐브 패스 셰이더 변형, Illuminate 광원 0x7101037098). 팀색에는 영향 없음(로비) |
 | BlitzUBO2 광원 격자 기록자 | §8 — 0x71034da0c8 은 2×0x2430 B 이중 버퍼 객체 생성자(6차 판독), 쓰기 함수 미발견. 다음: vtable 0x710571c350 갱신 슬롯, holder(*0x7105810020) 사용 함수 중 0x710104668c(+0x1398 저장) — 6차 추가: 0x710104668c 는 관리자(vtable 0x7105556ad8) 소멸자이고 +0x1398 은 gsys UBO 클래스(vtable 0x7105722198) 객체다. 0x71013776d0 은 이 UBO 를 CPU 버퍼 `*(관리자+0x1410)` 기준으로 셰이더 슬롯 2 에 바인딩하는 읽는 쪽이다 [판독]. 다음: `+0x1410` 버퍼에 쓰는 함수(ldr +0x1410 함수 9개: 0x71028de63c, 0x71028de7f0, 0x7102b39ab4, 0x7102cac4e0, 0x7102cad468, 0x710339ef8c, 0x71033a30a8, 0x71033a39d4), 관리자 vtable 0x7105556ad8 슬롯 |
-| BlitzUBO0 [22].w | 6차: [22].z = 1/(8·S)(S 200/400, 0x7102be8aec) 해소(§7). [22].w(holder+0xcc4) 기록자 미발견 — 멤버 포인터 경유·memcpy 쓰기 후보를 동적 추적(UC_HOOK_MEM_WRITE)으로 찾을 것. S 를 고르는 문자열 비교 대상(*0x71058a8da0 +0xe0 vs 0x7101323040 +0x2d8) |
+| BlitzUBO0 [22].w | 6차: [22].z = 1/(8·S)(S 200/400, 0x7102be8aec) 해소(§7). [22].w(holder+0xcc4) 기록자 미발견 — 멤버 포인터 경유·memcpy 쓰기 후보를 동적 추적(UC_HOOK_MEM_WRITE)으로 찾을 것. S 를 고르는 문자열 비교 대상(*0x71058a8da0 +0xe0 vs 0x7101323040 +0x2d8)  **2026-10-03 r2 정정:** S 문자열은 기존 [panel_groups §9](../paint/panel_groups.md#9-200400-장면-문자열-판독데이터) BigWorld 비교로 이미 해소, Lby S400/Z1⁄3200. 새 [floor_ink_inputs_r2 §3~10](floor_ink_inputs_r2.md) 원본 init→texel→staging28건은 W초기0 보존/두store모두Z를 확인. W 후속 writer·whole GPU는 여전히 미확정. |
 | ~~RadialFog 필드 이름·기본값~~ | 해소(6차, §4): BlendFactor/Color/Intens/LobeCtrl/ShadowInfluence/SizeCtrl. 남은 것: 이벤트 +0x38 vec4(0x71010bb2b0 MainLight 쪽 계산)의 식 |
 | ~~톤매핑 변형·노출 계산~~ | 해소(5차): 톤매핑 4, 노출 = White2D.w × exp2(Value)(§3.2·§3.3) |
 | 감마 변형의 로비 값 | 6차: 블룸 = finalblend 1(가산) 해소, 장면+0x1c0 +0xf00 = `linear_lighting_enable` true 해소(§3.2·§3.0). 남은 것: 장면+0x523c bit4 / +0x5239 bit4(장면+0x4918 하위 객체 +0x924/+0x921) 기록자 — 정적 스캔 0건, 장면 객체 갱신 함수 동적 추적 필요 |
-| 색 보정 LUT 내용 | **7차: Hermit2D Data6·reader·로비 8점 표본은 해소(§2.2.1), 원본2127/2127 [실행]. 전체 LUT는 조사중 유지.** 6차: bit4 해소(생성 시 0x71035db354, CC = 1). LUT 는 0x71035dc218 이 12칸 연산 UBO 를 만들어 GPU 로 8³ 를 그린다 — agl 색 보정 셰이더 역번역 + 0x710115567c 가 채우는 연산 칸(종류 0~9) 대응이 필요 |
+| 색 보정 LUT 내용 | **7차: Hermit2D Data6·reader·로비 8점 표본은 해소(§2.2.1), 원본2127/2127 [실행]. 전체 LUT는 조사중 유지.** 6차: bit4 해소(생성 시 0x71035db354, CC = 1). LUT 는 0x71035dc218 이 12칸 연산 UBO 를 만들어 GPU 로 8³ 를 그린다 — agl 색 보정 셰이더 역번역 + 0x710115567c 가 채우는 연산 칸(종류 0~9) 대응이 필요  **r2 2026-10-03 추가/정정:** 기본 CPU연쇄128/128은 kind0→6→1, GLSL BRX표의 선택지는 kind1..10으로 복원했다. LUT좌표블록128/128; [ink_lighting_r2](ink_lighting_r2.md)§6/10. GPU bake/texel/filter/최종variant는 미확정 유지 |
 | 블룸 셰이더 식 | agl `bloom_mask/gaussian/reduce/compose` 역번역(`agl_technique_pfx.sharcb`) |
 | 적용 함수의 구조체 이름 | 6차: 세 함수 동작 판독(§4). 남은 것: 0x7102b66c54 의 vt+0x80 구조체·env+0x2800 객체 이름, 0x7102b68ef4 의 vt+0x90 구조체(ShadowPPBlur/DynamicShadowMap 후보), 0x7102b60200 = GlobalWind 대응 확인(RenderingDay 접근자 vt+0xc8 구현) |
 | DynamicLight.GridSize 기록 위치 | 0x7102b61c20 이 아니었음(§4 정정). 적용 목록 미판독분 또는 0x71010bxxxx 안개 관리자 쪽 |
@@ -720,3 +725,27 @@ for k in 0..3: i = (word >> 8k) & 0xFF ; if (i >= 30) break
 ### 11.2 r8 ProjShadow 자원·필드·렌더 소비 (2026-10-03)
 
 [판독]+[실행] vt80은Shadow→ProjShadow이며 Density/Rotate/Scale/Trans/ScrollAnim/RotateAnim 전체writer와 native 렌더의matrix48B·Density clamp두개·texture slot14 gate를 확인했다. [projected_shadow_runtime.md §3~§11](projected_shadow_runtime.md)의 apply/direct/consumer3,072건 mismatch0이다. 기존 적용 구조체 질문중 DOF와GlobalWind getter는renderparam_runtime.md에서 정정했으나 env2800 targetaglprojsdw/VT572CC18·배정은추가생성구간64건/126레코드에서해소했다. live로비config·frame matrix/factor생산과ColorGrading전체연산칸 등큰묶음남은부분은별도여서조사중을유지한다.
+
+### 2026-10-03 common_render_r5 정정·현재 웹 구현
+
+이전 §6의Three LightProbe/단일그림자와미연결LUT는당시구현이다. [환경광](common_lighting_web_port.md)·[그림자](common_shadow_web_port.md)·[최종색](common_post_web_port.md)의새기록을우선한다.
+
+**투영식 정정 [판독]:** §5.6/§6의“같은가중SH9”는선형면텍셀+입체각가중으로대체할수없다. 확보된shader128은sin 각도좌표·균일가중7MRT 가산이다. 새`103289c` 판독은texture+30 width>>1이256입력에서128변형을선택함을확인했다. UBO cMipLevel은texture-view+AA byte;live값은미확정이므로웹mip1을명시적정책으로분리했다. `10325d4+1034608` 원본128회 추가재생,3584bit불일치0. 이실행은기존2000건과별도포팅fixture이며원본GPU실행아니다.
+
+웹은capture256²/near4/far1024/2회·sin7MRT·nativeCPU포장·2×1024shadow·Tone4뒤8³LUT를연결했다. 원본cube변형/Illuminate/saturation·12layer/BRDF·SPP/fade/PCF/nativebias·liveLUTsampler/rounding/gamma·Bloom/DOF는남는다. 기존결론을지우지않고날짜별정정으로보존했다. 고정inventorywhole승격0.
+
+
+### 2026-10-03 common_render_r6 정정·현재 웹 구현
+
+[조명 r6](common_lighting_r6.md)의 cube27 판독에 따라 mSky 환경광 캡처 saturation.4를 연결했다. IlluminateEnvMap.bfres는 성공 BFRES dump상 **모델0·embedded64² BC1_SRGB highlight texture1/mip7**이다. 앞선 그릴모델 설명은 정정하며 Fld_Emission4EnvMap의 cube모델24indices와 구분한다. native Illuminate/12layer/BRDF는 판독된 호출·식과 실제미연결을 함께 기록한다.
+
+[그림자 r6](common_shadow_r6.md)는 rawPCF1/4/9/16비교·strict20경계·receiver near1.5 cutoff없음·SPP/fadeCPU식을확인했다. Default의fade40~60을웹에연결했으며 ctorfalse100~1000과구분한다. §11.2와r5의PCF/SPP/fade미확정은이좁은계산범위에서정정한다. projection/compare sampler·static/fullSPP·live선택은남는다.
+
+[Bloom r6](common_post_r6.md)는 mask/reduce/HV/compose생산·DefaultDayold_calc=false를연결했다. HDR×2+Bloom뒤Tone4/LUT를소비하며 DOF방문자+40은masterEnable이아닌IsEnableFarCancel이었다. 기존typedpacket실행은바이트결과로유지하고DOF활성을그값으로확정하지않는다. [현재 웹 검증](../port/common_render_r6.md), fixedinventory whole승격0.
+
+
+### 2026-10-03 잉크 surface r7 포팅 후속·정정
+
+[현재 실제 구현·검증·잔여](../port/ink_surface_r7.md), [좌표/geometry](ink_visual_geometry_r7.md), [원본 판독식 소비](ink_surface_web_r7.md). 이전 별도 collision overlay/.35/단일색 미반영은 당시 상태다. 현재는 actual visual triangle에 원본 packed writer 값과 밝은 경계·법선·두께·F0.015/.05·공통 조명을 연결했다. 베이크 UV1은 paint UV로 바꾸지 않았고 clone의 shader hook/USE_UV1 defines를 유지한다.
+
+원본 panel/atlas 전체는 customchart adapter, 환경반사는 PMREM/Three BRDF이다. native Z1/3200과 웹 페이지 폭 역수를 구별하고 초기 W0/emission0을 live 원본값으로 확정하지 않는다. 실제게임/GPU 검증은 포트 링크의 명령/실패를 따른다. fixed986/556 및 web13/62 유지, PNT06만 차이→일부.

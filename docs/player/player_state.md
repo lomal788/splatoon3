@@ -322,6 +322,8 @@ T의 원본: B781!=0이면2. 아니면 `((B7f4==0 || B7f9==0) && PlayerInkRail+1
 
 이 신규 producer의 의미는 **위 조건을 지연/유지하는 byte**다. 빠른HP회복의 나머지조건·Replica 상태의 게임 이름과 원본실행은 [../combat/hitbox.md](../combat/hitbox.md) 담당이며 이 부분만으로 HP 전체질문이나 슬롯19 전체 질문을 확정으로 바꾸지 않는다. 원본 정적 초기화 스냅숏에서 delay상수58bbcfc=5,58bbd00/04/08/0c/10/14=10/5/10/1/3/3을 읽었다 [데이터].
 
+**2026-10-03 r2 실행 보완:** 위 ordinary 후보 생산 `248c16c..248c7dc`를 원본 `2458cfc`·GrindRail getter `2531028`까지 연결하여 **10,800건/불일치0/스텁0**으로 대조했다. 별도로 초기 쓰기 블록 512건에서 hidden0/delay0/age9999, 법선 일치 4,096건, 지연 tail 8,192건을 확인했다. 표시 whole SM·holder와 연결한 272프레임도 일치했다. StepPaint/Phive 필드와 PlayerParam+13c=60은 입력 fixture이며 실제 로비 공급값 확정이 아니다. 유효 특수와 전체 슬롯19/프레임·GPU에는 이 결과를 확대하지 않는다. [squid_ink_visibility_r2 §6·10·11](../graphics/squid_ink_visibility_r2.md).
+
 ### 6.2 전환 단계 진행 0x710243e7d0 [판독]
 
 현재 상태가 {0x82, 0x83, 0x91, 0x96, 0xad, 0xf1} 이면(비트마스크 0x108003 기준 0x82) 활성 슬롯의 진행 프레임 `cur`(슬롯+0x30)와 클립 끝 프레임 `end`(0x710245064c)를 비교해 **`end < cur + 3.0`** 이면 다음 상태로 넘긴다.

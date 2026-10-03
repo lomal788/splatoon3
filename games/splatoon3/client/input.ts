@@ -82,12 +82,16 @@ export class InputDevice {
   private dx = 0;
   private dy = 0;
   private prevHold = 0;
+  private focused = true;
 
   constructor(el: HTMLElement) {
     this.el = el;
     addEventListener("keydown", this.onKey);
     addEventListener("keyup", this.onKey);
     addEventListener("blur", this.onBlur);
+    addEventListener("focus", this.onFocus);
+    document.addEventListener("pointerlockchange", this.onPointerLockChange);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
     addEventListener("mouseup", this.onMouseUp);
     addEventListener("mousemove", this.onMouseMove);
     el.addEventListener("mousedown", this.onMouseDown);
@@ -98,8 +102,12 @@ export class InputDevice {
     return document.pointerLockElement === this.el;
   }
 
-  sample(): PadState {
+  /** Split a render frame's pending displacement across its remaining fixed steps.
+   * No magnitude clamp: every finite displacement is consumed exactly once. */
+  sample(remainingSteps = 1): PadState {
     const p = emptyPad();
+    p.lookMode = "mouse";
+    if (!this.ownsInput()) this.clearPending();
     const k = (c: string): number => (this.keys.has(c) ? 1 : 0);
     let x = k("KeyD") - k("KeyA");
     let y = k("KeyW") - k("KeyS");
@@ -110,8 +118,11 @@ export class InputDevice {
     }
     p.moveX = x;
     p.moveY = y;
-    [p.lookYaw, p.lookPitch] = mouseToLook(this.dx, this.dy, this.settings);
-    this.dx = this.dy = 0;
+    const steps = Number.isFinite(remainingSteps) ? Math.max(1, Math.floor(remainingSteps)) : 1;
+    const dx = this.dx / steps, dy = this.dy / steps;
+    [p.lookYaw, p.lookPitch] = mouseToLook(dx, dy, this.settings);
+    this.dx -= dx;
+    this.dy -= dy;
     let hold = 0;
     for (const [code, bit] of Object.entries(KEYS)) if (this.keys.has(code)) hold |= bit;
     if (this.mouseButtons & 1) hold |= Btn.Fire; // 왼쪽 버튼 = ZR
@@ -124,29 +135,54 @@ export class InputDevice {
   }
 
   setSettings(next: CameraInputSettings): void {
-    this.settings = next;
-    saveCameraSettings(next);
+    const old = this.settings;
+    this.settings = {
+      sens: Number.isFinite(next.sens) ? Math.round(Math.min(5, Math.max(-5, next.sens)) * 2) / 2 : old.sens,
+      mouseScale: Number.isFinite(next.mouseScale) ? Math.min(20, Math.max(.05, next.mouseScale)) : old.mouseScale,
+      invertX: !!next.invertX, invertY: !!next.invertY,
+    };
+    saveCameraSettings(this.settings);
   }
 
   dispose(): void {
     removeEventListener("keydown", this.onKey);
     removeEventListener("keyup", this.onKey);
     removeEventListener("blur", this.onBlur);
+    removeEventListener("focus", this.onFocus);
+    document.removeEventListener("pointerlockchange", this.onPointerLockChange);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     removeEventListener("mouseup", this.onMouseUp);
     removeEventListener("mousemove", this.onMouseMove);
     this.el.removeEventListener("mousedown", this.onMouseDown);
     this.el.removeEventListener("contextmenu", this.onContextMenu);
+    this.clearPending();
   }
 
   private onKey = (e: KeyboardEvent): void => {
-    if (e.type === "keydown") this.keys.add(e.code);
+    if (e.type === "keydown" && this.ownsInput()) this.keys.add(e.code);
     else this.keys.delete(e.code);
     if (e.code === "Space") e.preventDefault();
   };
 
-  private onBlur = (): void => {
+  private ownsInput(): boolean {
+    return this.locked && this.focused && document.visibilityState !== "hidden";
+  }
+
+  private clearPending(): void {
     this.keys.clear();
     this.mouseButtons = 0;
+    this.dx = this.dy = 0;
+    // Keep prevHold for one sample, so held actions receive their release edge.
+  }
+
+  private onBlur = (): void => {
+    this.focused = false;
+    this.clearPending();
+  };
+  private onFocus = (): void => { this.focused = true; };
+  private onPointerLockChange = (): void => { this.clearPending(); };
+  private onVisibilityChange = (): void => {
+    if (document.visibilityState === "hidden") this.clearPending();
   };
 
   private onMouseDown = (e: MouseEvent): void => {
@@ -154,7 +190,7 @@ export class InputDevice {
       void this.el.requestPointerLock();
       return;
     }
-    this.mouseButtons |= 1 << e.button;
+    if (this.ownsInput()) this.mouseButtons |= 1 << e.button;
   };
 
   private onMouseUp = (e: MouseEvent): void => {
@@ -162,9 +198,9 @@ export class InputDevice {
   };
 
   private onMouseMove = (e: MouseEvent): void => {
-    if (!this.locked) return;
-    this.dx += e.movementX;
-    this.dy += e.movementY;
+    if (!this.ownsInput()) return;
+    if (Number.isFinite(e.movementX)) this.dx += e.movementX;
+    if (Number.isFinite(e.movementY)) this.dy += e.movementY;
   };
 
   private onContextMenu = (e: Event): void => {

@@ -5,8 +5,12 @@ import type { World } from "../../core/world.ts";
 import { type Bundle, bundlesFor } from "../assets.ts";
 import type { ClientContext, View } from "../context.ts";
 import { DEV } from "../env.ts";
-import { MapView } from "./map.ts";
+import { MapView, parseEnv } from "./map.ts";
+import { HDRCompose } from "./post.ts";
+import { FxSceneDepth } from "./fx_depth.ts";
+import { applyCommonShadowReceivers } from "./forward.ts";
 import { PlayerView } from "./player.ts";
+import type { MuzzlePose } from "../fx/muzzle.ts";
 import { readPlayer } from "./shared.ts";
 import { buildTeamSets, FALLBACK_ROW, materialTeamParams, type TeamColorRow, type TeamSet } from "./teamcolor.ts";
 
@@ -25,6 +29,19 @@ export function createRenderView(ctx: ClientContext): View {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const map = new MapView(scene);
+  ctx.paintMap = map;
+  const post = new HDRCompose();
+  const fxDepth = new FxSceneDepth();
+  ctx.fxLighting = map.lighting.uniforms;
+  ctx.fxDepth = fxDepth.uniforms;
+  let capturingEnvironment = false;
+  ctx.renderScene = () => {
+    if(capturingEnvironment)return;
+    applyCommonShadowReceivers(scene,map.lighting);
+    map.shadows.capture(renderer,scene,ctx.camera,map.env.direction);
+    fxDepth.capture(renderer, scene, ctx.camera);
+    post.render(renderer, scene, ctx.camera);
+  };
   const player = new PlayerView(scene);
   let sets: TeamSet[] | null = null;
   let ready = false;
@@ -42,14 +59,20 @@ export function createRenderView(ctx: ClientContext): View {
     }
     // 팀 세트: 조명(Ink/InkBright 입력)은 맵 env 의 주 방향광 (team_color.md §5.3). 경기 시작 때 한 번 계산
     const mapB = bundles.get(`map/${spec.map}`);
-    map.load(scene, mapB, materialTeamParams(buildTeamSets(teamRow(world))[0]));
-    sets = buildTeamSets(teamRow(world), false, map.env.light);
+    const rawEnv = mapB?.has("env.json") ? mapB.json("env.json") : null;
+    sets = buildTeamSets(teamRow(world), false, parseEnv(rawEnv).light);
+    map.load(scene, mapB, materialTeamParams(sets[0]), sets[0]);
+    post.configure(rawEnv);
     const myTeam = Math.max(0, Math.min(2, p0?.team ?? 0));
     const team = materialTeamParams(sets[myTeam]);
-    player.load(p0 ? bundles.get(`character/${p0.character}`) : undefined, p0 ? bundles.get(`weapon/${p0.weapon}`) : undefined, team, WEAPON_ABBR);
-    ready = true;
+    player.load(p0 ? bundles.get(`character/${p0.character}`) : undefined, p0 ? bundles.get(`weapon/${p0.weapon}`) : undefined, team, WEAPON_ABBR, undefined, map.lighting, sets[myTeam]);
+    await player.materialReady;
+    capturingEnvironment = true;
+    try { await map.captureEnvironment(renderer, scene); }
+    catch (error) { console.warn("[render] environment capture failed; last valid SH retained", error); }
+    finally {capturingEnvironment=false;ready=true;}
     if (DEV) {
-      (globalThis as Record<string, unknown>).__splatoon3_render = { map, player, sets, team };
+      (globalThis as Record<string, unknown>).__splatoon3_render = { map, player, sets, team, post, fxDepth, shadows:map.shadows };
       console.info("[render]", { map: map.stats, env: map.env.source, player: player.info });
     }
   })();
@@ -60,11 +83,15 @@ export function createRenderView(ctx: ClientContext): View {
       // 게임 프레임마다 한 번 진행(원본 60Hz). 한 렌더 프레임에 여러 스텝이 지나가면 마지막 상태로 그만큼 진행
       const steps = lastFrame < 0 ? 1 : Math.min(w.frame - lastFrame, 5);
       if (steps > 0) {
-        const snap = readPlayer(w) ?? { pos: [0, 0, 0], yaw: 0, speed: 0, state: null, sub: null, squid: false, team: 0, dead: false, formCounter: null, animSpeed: null, animRate: null };
+        const snap = readPlayer(w) ?? { pos: [0, 0, 0], yaw: 0, speed: 0, state: null, sub: null, squid: false, team: 0, dead: false, formCounter: null, animSpeed: null, animRate: null, displayHidden: null };
         for (let i = 0; i < steps; i++) player.step(snap);
         lastFrame = w.frame;
       }
       player.draw(alpha);
+      const muzzle = player.muzzleMatrix();
+      const owner = (w.shared.get("player") as { id?: unknown } | undefined)?.id;
+      if (muzzle && owner !== undefined) w.shared.set("muzzle", { owner, frame: w.frame, source: "Weapon_R/Root/Muzzle", matrix: muzzle } satisfies MuzzlePose);
+      else w.shared.delete("muzzle");
       map.follow(player.root.position);
       if (DEV) {
         const dbg = (w.shared.get("debug") as Record<string, unknown> | undefined) ?? {};
@@ -77,7 +104,9 @@ export function createRenderView(ctx: ClientContext): View {
       }
     },
     dispose(): void {
-      scene.remove(map.root, player.root);
+      map.dispose(scene); player.dispose(); post.dispose(); fxDepth.dispose();
+      world.shared.delete("muzzle");
+      ctx.renderScene = undefined; ctx.fxLighting = undefined; ctx.fxDepth = undefined; ctx.paintMap = undefined;
     },
   };
 }

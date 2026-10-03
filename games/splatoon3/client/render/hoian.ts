@@ -1,190 +1,183 @@
-// Hoian_UBER 재질의 웹 근사. 근거: docs/graphics/shaders.md §3.6(팀색 혼합식·calc_color), §3.7(UV), team_color.md §6·§7.3.
-// 원본 식 그대로인 부분: 팀색 혼합(team_color_map_type 2/3), emission_color_type 1/2 의 방출 색, calc_color 일부(알베도 대상).
-// 근사인 부분: 최종 셰이딩(three MeshStandardMaterial PBR) — 원본 조명 블록(Env/Context/BlitzUBO1·2)은 미해독.
+// Known Hoian color/UV/calc consumers. Final lighting/SSS/film scope is recorded in impl/render.md.
 import * as THREE from "three";
 import type { MaterialTeamParams } from "./teamcolor.ts";
-
-/** glTF material.extras.fres (graphics_bfres2gltf 출력) 중 쓰는 부분 */
+import type {NativeTexSrt} from "./anim/material_channels.ts";
+import {nativeTexSrtRowsZeroRotation} from "./anim/material_texsrt.ts";
 export interface FresMaterial {
-  name?: string;
-  shader?: { archive?: string; options?: Record<string, string>; samplerAssign?: Record<string, string> };
-  renderInfo?: Record<string, unknown>;
-  params?: Record<string, { type?: string; value?: unknown }>;
-  samplers?: { sampler: string; texture: string; slots: string[] }[];
+  name?:string;
+  shader?:{archive?:string;options?:Record<string,string>;samplerAssign?:Record<string,string>;attribAssign?:Record<string,string>};
+  renderInfo?:Record<string,unknown>;
+  params?:Record<string,{type?:string;value?:unknown}>;
+  samplers?:{sampler:string;texture:string;slots:string[]}[];
 }
-
-export type TexResolver = (name: string) => Promise<THREE.Texture | null>;
-
-const opt = (f: FresMaterial, k: string, def: string): string => {
-  const v = f.shader?.options?.[k];
-  return v === undefined || v === "<Default Value>" ? def : v;
+export type TexResolver=(name:string)=>Promise<THREE.Texture|null>;
+export const HOIAN_MATERIAL_END="// H_NATIVE_MATERIAL_END";
+export const option=(f:FresMaterial,k:string,d:string):string=>{
+  const v=f.shader?.options?.[k];return v===undefined||v==="<Default Value>"?d:v;
 };
-const pnum = (f: FresMaterial, k: string, def: number): number => {
-  const v = f.params?.[k]?.value;
-  if (Array.isArray(v)) return typeof v[0] === "number" ? v[0] : def;
-  return typeof v === "number" ? v : def;
+export const parameter=(f:FresMaterial,k:string,d:number):number=>{
+  const v=f.params?.[k]?.value;return typeof v==="number"?Math.fround(v):Array.isArray(v)&&typeof v[0]==="number"?Math.fround(v[0]):d;
 };
-const pvec = (f: FresMaterial, k: string, def: number[]): number[] => {
-  const v = f.params?.[k]?.value;
-  return Array.isArray(v) && v.length >= 3 ? (v as number[]) : def;
+const vector=(f:FresMaterial,k:string,d:number[]):number[]=>{
+  const v=f.params?.[k]?.value;return Array.isArray(v)?v.map(Number):d;
 };
-/** 슬롯(셰이더 샘플러 이름, 예 _su0)에 꽂힌 텍스처 이름 */
-export function textureForSlot(f: FresMaterial, slot: string): string | null {
-  return f.samplers?.find((s) => s.slots.includes(slot))?.texture ?? null;
+export function textureForSlot(f:FresMaterial,slot:string):string|null {return f.samplers?.find(s=>s.slots.includes(slot))?.texture??null;}
+const literal=(v:number):string=>Number.isInteger(v)?v+".0":Math.fround(v).toString();
+const vec=(v:number[]):string=>"vec4("+v.slice(0,4).map(literal).join(",")+")";
+export interface HoianUniforms {myTeamColor:{value:THREE.Vector3};myTeamColorHueComplement:{value:THREE.Vector3};texMatrices?:Record<number,{row0:{value:THREE.Vector4};row1:{value:THREE.Vector4};verified:boolean}>}
+/** Native Mat two-vec4 matrix input. TexSrt -> matrix producer is a separate native question. */
+export function setHoianTexMatrix(u:HoianUniforms,index:number,packed:readonly number[]):void {
+  const m=u.texMatrices?.[index];if(!m||packed.length!==8||packed.some(v=>!Number.isFinite(v)))throw new Error("Hoian native texture matrix unavailable: "+index);
+  m.row0.value.fromArray(packed.slice(0,4));m.row1.value.fromArray(packed.slice(4,8));m.verified=true;
 }
-
-/** 이 재질이 팀색을 읽는가 — 아니면 셰이더를 고치지 않는다 */
-function usesTeam(f: FresMaterial): boolean {
-  const tcm = opt(f, "team_color_map_type", "0");
-  const ect = opt(f, "emission_color_type", "0");
-  if (tcm === "2" || tcm === "3" || ect === "1" || ect === "2") return true;
-  for (let i = 0; i < 4; i++) {
-    if (opt(f, `enable_calc_color${i}`, "False") !== "True") continue;
-    for (const s of ["A", "B", "C", "D"]) if (opt(f, `blitz_calc_color${i}_${s}`, "0") === "50") return true;
+/** Native callback writes six consumed floats. The unused carrier padding is web-owned zero. */
+export function setHoianMaterialTexSrt(mat:THREE.MeshStandardMaterial,name:string,raw:NativeTexSrt):boolean {
+  const index:Record<string,number>={tex_mtx0:0,tex_mtx1:2,tex_mtx2:3},i=index[name];
+  if(i===undefined||!(mat.userData.hoianTexSrtParams as Set<string>|undefined)?.has(name))return false;
+  const matrices=mat.userData.hoianTexMatrices as HoianUniforms["texMatrices"],m=matrices?.[i];if(!m)return false;
+  const rows=nativeTexSrtRowsZeroRotation(raw);m.verified=!!rows;
+  const stats=mat.userData.characterMaterialStats as {nativeUvMatrices:boolean}|undefined;
+  if(stats)stats.nativeUvMatrices=Object.values(matrices!).every(matrix=>matrix.verified);
+  if(!rows)return false;
+  m.row0.value.fromArray(rows.slice(0,4));m.row1.value.set(rows[4],rows[5],0,0);return true;
+}
+export function textureUvSelector(f:FresMaterial,key:string,legacy?:string):number {
+  return Number(option(f,key,legacy?option(f,legacy,"0"):"0"));
+}
+const uvAttribute=(f:FresMaterial,index:number):number=>{
+  const assigned=f.shader?.attribAssign?.["_u"+index];
+  const match=assigned?.match(/^_u([0-3])$/);return match?Number(match[1]):index;
+};
+export function calcChannel(expr:string,channel:string):string|null {
+  const n=Number(channel);
+  if(n===0)return expr;if(n===1)return "(vec4(1.)-("+expr+"))";
+  if(n===2)return "(-("+expr+"))"; // Selected Tnk_Simple emission type22 uses -Resource0.
+  const index=Math.floor(n/10)-1;
+  if(index>=0&&index<4 && (n%10===0||n%10===1)) {
+    const x="("+expr+")."+["x","y","z","w"][index];
+    return "vec4("+(n%10===1?"1.-"+x:x)+")";
   }
-  return false;
-}
-
-export interface HoianUniforms {
-  myTeamColor: { value: THREE.Vector3 };
-  myTeamColorHueComplement: { value: THREE.Vector3 };
-}
-
-/** calc_color 소스(§3.6.4) → GLSL 식. 지원하지 않는 소스면 null */
-function calcSource(f: FresMaterial, id: string): string | null {
-  const n = +id;
-  if (n === 0) return "calcAlbedo"; // cTexAlbedo — 혼합 전 알베도 [추정: 알베도 대상 계산에서 현재 값]
-  if (n === 50) return "myTeamColor";
-  if (n >= 100 && n <= 102) {
-    const c = pvec(f, `const_color${n - 100}`, [1, 1, 1, 1]);
-    return `vec3(${c[0].toFixed(6)}, ${c[1].toFixed(6)}, ${c[2].toFixed(6)})`;
-  }
-  if (n === 110 || n === 111) return `vec3(${pnum(f, `const_value${n - 110}`, 0).toFixed(6)})`;
-  if (n >= 200 && n < 204) return `calc${n - 200}`;
   return null;
 }
-
-function calcChannel(expr: string, ch: string): string {
-  switch (+ch) {
-    case 0: return expr;
-    case 1: return `(vec3(1.0) - ${expr})`;
-    case 10: return `vec3((${expr}).x)`;
-    case 20: return `vec3((${expr}).y)`;
-    case 30: return `vec3((${expr}).z)`;
-    case 11: return `vec3(1.0 - (${expr}).x)`;
-    default: return expr;
-  }
-}
-
-/** calc_color0..3 중 알베도를 바꾸는 것만(replace_color 0) GLSL 로. 근거 §3.6.4 표, 미지원 조합은 건너뛰고 목록에 남긴다. */
-function calcColorGlsl(f: FresMaterial, skipped: string[]): string {
-  let src = "";
-  for (let i = 0; i < 4; i++) {
-    if (opt(f, `enable_calc_color${i}`, "False") !== "True") continue;
-    const replace = opt(f, `blitz_calc_color${i}_replace_color`, "0");
-    const type = opt(f, `blitz_calc_color${i}_calc_type`, "0");
-    const S = (s: string): string | null => {
-      const e = calcSource(f, opt(f, `blitz_calc_color${i}_${s}`, "0"));
-      return e === null ? null : calcChannel(e, opt(f, `blitz_calc_color${i}_${s}_channel`, "0"));
-    };
-    const [A, B, C, D] = [S("A"), S("B"), S("C"), S("D")];
-    let e: string | null = null;
-    if (type === "1" && A && B) e = `${A} + ${B}`;
-    else if (type === "2" && A && B) e = `${A} * ${B}`;
-    else if (type === "6" && A && B && C && D) e = `${A} * ${B} + ${C} * ${D}`;
-    else if (type === "8" && A && B && C) e = `${A} * ${B} + ${C}`;
-    else if (type === "9" && A && B) e = C ? `${A} * ${B} * ${C}` : `${A} * ${B}`; // C 가 텍스처(cTexResource 등)면 생략 — 근사
-    else if (type === "11" && A && B && C && D) e = `${A} * ${B} * ${C} * ${D}`;
-    if (e === null) {
-      if (type !== "0") skipped.push(`calc_color${i}(type ${type})`);
-      continue;
-    }
-    if (opt(f, `blitz_calc_color${i}_clamp01`, "False") === "True") e = `clamp(${e}, 0.0, 1.0)`;
-    src += `vec3 calc${i} = ${e};\n`;
-    if (replace === "0") src += `diffuseColor.rgb = calc${i};\n`;
-    else if (replace !== "100") skipped.push(`calc_color${i}(replace ${replace})`);
-  }
-  return src;
-}
-
-/**
- * glTF PBR 재질에 Hoian_UBER 팀색 식을 덧씌운다. 반환: 팀색 uniform(나중에 팀이 바뀌면 값만 갱신) 또는 null.
- * skipped 에 원본 기능 중 빠진 것을 남긴다.
- */
-export function applyHoian(
-  mat: THREE.MeshStandardMaterial,
-  f: FresMaterial,
-  team: MaterialTeamParams,
-  tex: TexResolver,
-  skipped: string[],
-): HoianUniforms | null {
-  if (f.shader?.archive && f.shader.archive !== "Hoian_UBER") return null;
-  if (!usesTeam(f)) return null;
-  const tcm = opt(f, "team_color_map_type", "0");
-  const ect = opt(f, "emission_color_type", "0");
-  const albedoTex = opt(f, "enable_albedo_tex", "1") !== "False" && opt(f, "enable_albedo_tex", "1") !== "0";
-  const albedoColor = pvec(f, "albedo_color", [1, 1, 1, 1]);
-  const u: HoianUniforms = {
-    myTeamColor: { value: new THREE.Vector3(...team.my_team_color.slice(0, 3)) },
-    myTeamColorHueComplement: { value: new THREE.Vector3(...team.my_team_color_hue_complement.slice(0, 3)) },
+/** Only read sources whose native data exists. Missing C is never dropped from A*B*C. */
+export function calcColorGlsl(f:FresMaterial,available:Set<number>,skipped:string[]):string {
+  let code="";const temporaries=new Set<number>();
+  const source=(id:number):string|null=>{
+    if(id===0)return "hCalcAlbedo";if(id===1)return "hCalcRoughness";if(id===2)return "hCalcMetalness";
+    if(id===3)return "hCalcEmission";if(id===5)return "hCalcUnderFilm";
+    if(id===4)return "hCalcTransmission";
+    if(id===9||id===10)return available.has(id)?"hResource"+(id-9):null;
+    if(id===50)return "vec4(myTeamColor,1.)";
+    if(id===58)return "vec4(myTeamColorHueComplement,1.)";
+    if(id>=100&&id<=102)return vec(vector(f,"const_color"+(id-100),[1,1,1,1]));
+    if(id===110||id===111)return "vec4("+literal(parameter(f,"const_value"+(id-110),0))+")";
+    if(id>=200&&id<204&&temporaries.has(id-200))return "hCalc"+(id-200);
+    return null;
   };
-  const tclUniform = { value: null as THREE.Texture | null };
-  const tclName = tcm === "2" ? textureForSlot(f, "_su0") : null;
-  if (tcm === "2" && tclName) {
-    void tex(tclName).then((t) => {
-      tclUniform.value = t;
-      if (!t) skipped.push(`_su0 텍스처 ${tclName} 없음`);
-      mat.needsUpdate = true;
-    });
+  for(let i=0;i<4;i++) {
+    if(!["True","1"].includes(option(f,"enable_calc_color"+i,"False")))continue;
+    const key="blitz_calc_color"+i+"_",type=option(f,key+"calc_type","0"),target=option(f,key+"replace_color","0");
+    const S=(s:string):string|null=>{const raw=source(Number(option(f,key+s,"0")));return raw===null?null:calcChannel(raw,option(f,key+s+"_channel","0"));};
+    const [a,b,c,d]=[S("A"),S("B"),S("C"),S("D")];let expression:string|null=null;
+    if(type==="1"&&a&&b)expression="("+a+"+"+b+")";
+    if(type==="2"&&a&&b)expression="("+a+"*"+b+")";
+    // Verified selected squid3358/hair2855: (Resource0 + hue complement) * under-film color.
+    if(type==="5"&&a&&b&&c)expression="(("+a+"+"+b+")*"+c+")";
+    if(type==="6"&&a&&b&&c&&d)expression="("+a+"*"+b+"+"+c+"*"+d+")";
+    if(type==="8"&&a&&b&&c)expression="("+a+"*"+b+"+"+c+")";
+    if(type==="9"&&a&&b&&c)expression="("+a+"*"+b+"*"+c+")";
+    if(type==="11"&&a&&b&&c&&d)expression="("+a+"*"+b+"*"+c+"*"+d+")";
+    if(type==="22"&&a&&b&&c&&d)expression="("+a+"*"+b+"+"+c+"+"+d+")";
+    if(!expression){if(type!=="0")skipped.push((f.name??"material")+": calc"+i+" type/source "+type);continue;}
+    if(["True","1"].includes(option(f,key+"clamp01","False")))expression="clamp("+expression+",0.,1.)";
+    code+="vec4 hCalc"+i+"="+expression+";\n";temporaries.add(i);
+    const destination:Record<string,string>={"0":"hCalcAlbedo","1":"hCalcTransmission","2":"hCalcEmission","4":"hCalcRoughness","5":"hCalcMetalness","6":"hCalcOpacity","7":"hCalcUnderFilm"};
+    if(destination[target])code+=destination[target]+"=hCalc"+i+";\n";
+    else if(target!=="100")skipped.push((f.name??"material")+": calc"+i+" target "+target);
   }
-  if (opt(f, "texcoord_select_teamcolormap", "0") !== "0") skipped.push("texcoord_select_teamcolormap≠0");
-  const calc = calcColorGlsl(f, skipped);
-  const blendAlpha = pnum(f, "team_color_blend_alpha", 0);
-  const blend = pnum(f, "team_color_blend", 0);
-  const emiInt = pnum(f, "emission_intensity", 0);
-  const emiCol = pvec(f, "emission_color", [1, 1, 1, 1]);
-  if (!albedoTex) {
-    mat.map = null;
-    mat.color.setRGB(1, 1, 1);
-  }
-  // vUv(TEXCOORD_0) 를 쓰려고 USE_UV 를 켠다 (@types/three 에는 MeshStandardMaterial.defines 가 없음)
-  const md = mat as unknown as { defines?: Record<string, string> };
-  md.defines = { ...(md.defines ?? {}), USE_UV: "" };
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.myTeamColor = u.myTeamColor;
-    sh.uniforms.myTeamColorHueComplement = u.myTeamColorHueComplement;
-    sh.uniforms.tclMap = tclUniform;
-    const hasTcl = !!tclUniform.value;
-    let frag = "";
-    frag += `vec3 calcAlbedo = ${albedoTex ? "diffuseColor.rgb" : `vec3(${albedoColor.slice(0, 3).map((x) => x.toFixed(6)).join(", ")})`};\n`;
-    if (tcm === "2") {
-      // §3.6.1: k = clamp(Tcl.r + team_color_blend_alpha), albedo = mix(base, my_team_color, k)
-      frag += `float tcK = clamp(${hasTcl ? "texture2D(tclMap, vUv).r" : "0.0"} + ${blendAlpha.toFixed(6)}, 0.0, 1.0);\n`;
-      frag += `diffuseColor.rgb = mix(calcAlbedo, myTeamColor, tcK);\n`;
-    } else if (tcm === "3") {
-      // §3.6.2: k = clamp(team_color_blend), albedo = mix(albedo_color, my_team_color, k)
-      frag += `diffuseColor.rgb = mix(vec3(${albedoColor.slice(0, 3).map((x) => x.toFixed(6)).join(", ")}), myTeamColor, clamp(${blend.toFixed(6)}, 0.0, 1.0));\n`;
-    } else frag += `diffuseColor.rgb = calcAlbedo;\n`;
-    frag += `calcAlbedo = diffuseColor.rgb;\n`;
-    frag += calc;
-    sh.fragmentShader = "uniform vec3 myTeamColor;\nuniform vec3 myTeamColorHueComplement;\nuniform sampler2D tclMap;\n" +
-      sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n" + frag);
-    if (ect === "2" || ect === "1") {
-      // §3.6.1: emission_color_type 2 = my_team_color, 1 = 혼합된 알베도 × _e0. 세기 = emission_intensity × emission_color (근사: 곱 순서)
-      const e = ect === "2" ? "myTeamColor" : "diffuseColor.rgb * emissiveColorTex";
-      sh.fragmentShader = sh.fragmentShader.replace(
-        "#include <emissivemap_fragment>",
-        `${ect === "1" ? "vec3 emissiveColorTex = vec3(1.0);\n#ifdef USE_EMISSIVEMAP\nemissiveColorTex = texture2D(emissiveMap, vEmissiveMapUv).rgb;\n#endif\n" : ""}` +
-          `totalEmissiveRadiance = ${e} * vec3(${(emiCol[0] * emiInt).toFixed(6)}, ${(emiCol[1] * emiInt).toFixed(6)}, ${(emiCol[2] * emiInt).toFixed(6)});\n`,
-      );
-    }
-  };
-  mat.customProgramCacheKey = () => `hoian:${tcm}:${ect}:${albedoTex}:${!!tclUniform.value}:${calc}`;
-  mat.needsUpdate = true;
-  return u;
+  return code;
 }
-
-export function setTeam(u: HoianUniforms, team: MaterialTeamParams): void {
-  u.myTeamColor.value.set(team.my_team_color[0], team.my_team_color[1], team.my_team_color[2]);
-  u.myTeamColorHueComplement.value.set(team.my_team_color_hue_complement[0], team.my_team_color_hue_complement[1], team.my_team_color_hue_complement[2]);
+export function applyHoian(mat:THREE.MeshStandardMaterial,f:FresMaterial,team:MaterialTeamParams,tex:TexResolver,skipped:string[],geometry?:THREE.BufferGeometry):HoianUniforms|null {
+  if(f.shader?.archive && f.shader.archive!=="Hoian_UBER")return null;
+  const uniforms:HoianUniforms={myTeamColor:{value:new THREE.Vector3(...team.my_team_color.slice(0,3))},myTeamColorHueComplement:{value:new THREE.Vector3(...team.my_team_color_hue_complement.slice(0,3))},texMatrices:{}};
+  const textures:Record<string,{value:THREE.Texture|null}>={};const uv:Set<number>=new Set([0]);
+  const selectors:Record<string,number>={};
+  const bind=(key:string,slot:string,select:string,legacy?:string):void=>{
+    const name=textureForSlot(f,slot);if(!name)return;
+    const index=textureUvSelector(f,select,legacy),attribute=uvAttribute(f,index);
+    if(![0,2,3].includes(index)||(geometry&&attribute>0&&!geometry.hasAttribute("uv"+attribute))){skipped.push(mat.name+": "+select+" UV"+index+" attribute "+attribute+" unavailable");return;}
+    uv.add(index);selectors[key]=index;textures[key]={value:null};
+    void tex(name).then(t=>{textures[key].value=t;if(!t)skipped.push(mat.name+": texture "+name+" unavailable");mat.needsUpdate=true;});
+  };
+  bind("hTcl","_su0","texcoord_select_teamcolormap");
+  bind("hResource0Tex","_re0","texcoord_select_res0","texcoord_select_resource0");
+  bind("hResource1Tex","_re1","texcoord_select_res1","texcoord_select_resource1");
+  bind("hResource2Tex","_re2","texcoord_select_res2","texcoord_select_resource2");
+  bind("hTransmissionTex","_t0","texcoord_select_trsmap","texcoord_select_transmission");
+  const rawCalcEmission=[0,1,2,3].some(i=>["True","1"].includes(option(f,"enable_calc_color"+i,"False"))&&option(f,"blitz_calc_color"+i+"_calc_type","0")==="22");
+  if(rawCalcEmission)bind("hNativeEmissionTex","_e0","texcoord_select_emmmap");
+  const pbrUV:[string,string,string][]=[["USE_MAP","vMapUv","texcoord_select_albedo"],["USE_NORMALMAP","vNormalMapUv","texcoord_select_normal"],
+    ["USE_ROUGHNESSMAP","vRoughnessMapUv","texcoord_select_rghmap"],["USE_METALNESSMAP","vMetalnessMapUv","texcoord_select_mtlmap"],["USE_EMISSIVEMAP","vEmissiveMapUv","texcoord_select_emmmap"]];
+  const pbrWrites:string[]=[];
+  for(const [define,varying,key] of pbrUV){const index=textureUvSelector(f,key),a=uvAttribute(f,index);
+    if(![0,2,3].includes(index)||(geometry&&a>0&&!geometry.hasAttribute("uv"+a))){skipped.push(mat.name+": "+key+" UV"+index+" attribute "+a+" unavailable");continue;}
+    uv.add(index);pbrWrites.push("#ifdef "+define+"\n"+varying+"=hUV"+index+";\n#endif\n");}
+  const d=mat as unknown as {defines:Record<string,string>};
+  d.defines={...(d.defines??{}),USE_UV:""};
+  for(const i of uv)if(i>0)d.defines["USE_UV"+i]="";
+  const texSrtParams=new Set<string>();
+  for(const i of uv){const name="tex_mtx"+(i===0?0:i===2?1:2),p=f.params?.[name]?.value as NativeTexSrt|undefined,rows=p?nativeTexSrtRowsZeroRotation(p):null;
+    if(p)texSrtParams.add(name);
+    uniforms.texMatrices![i]={row0:{value:rows?new THREE.Vector4().fromArray(rows.slice(0,4)):new THREE.Vector4(1,0,0,1)},row1:{value:rows?new THREE.Vector4(rows[4],rows[5],0,0):new THREE.Vector4(0,0,0,0)},verified:!!rows};
+    if(!rows)skipped.push(mat.name+": "+name+" native SRT-to-Mat mode/rotation consumer remains");}
+  mat.userData.hoianTexMatrices=uniforms.texMatrices;
+  mat.userData.hoianTexSrtParams=texSrtParams;
+  const tcm=option(f,"team_color_map_type","0"),ect=option(f,"emission_color_type","0");
+  const useAlbedo=!["False","0"].includes(option(f,"enable_albedo_tex","1"));
+  const alb=vector(f,"albedo_color",[1,1,1,1]),emi=vector(f,"emission_color",[1,1,1,1]),backlight=vector(f,"transmission_color_backlight",[1,1,1,1]);
+  if(!useAlbedo){mat.map=null;mat.color.setRGB(1,1,1);}
+  mat.onBeforeCompile=sh=>{
+    Object.assign(sh.uniforms,uniforms,textures);
+    const available=new Set<number>();
+    if(textures.hResource0Tex?.value)available.add(9);if(textures.hResource1Tex?.value)available.add(10);
+    if(textures.hTransmissionTex?.value)available.add(4);
+    let vertex="",fragment="",uvWrites="";
+    for(const i of uv) {
+      const a=uvAttribute(f,i),src=a===0?"uv":"uv"+a,m=uniforms.texMatrices![i];
+      vertex+="varying vec2 hUV"+i+";\nuniform vec4 hTexRow0_"+i+",hTexRow1_"+i+";\n";fragment+="varying vec2 hUV"+i+";\n";
+      sh.uniforms["hTexRow0_"+i]=m.row0;sh.uniforms["hTexRow1_"+i]=m.row1;
+      uvWrites+="hUV"+i+"=vec2("+src+".x*hTexRow0_"+i+".x+"+src+".y*hTexRow0_"+i+".z+hTexRow1_"+i+".x,"+src+".x*hTexRow0_"+i+".y+"+src+".y*hTexRow0_"+i+".w+hTexRow1_"+i+".y);\n";
+    }
+    for(const key of Object.keys(textures))fragment+="uniform sampler2D "+key+";\n";
+    const sample=(key:string):string=>"texture2D("+key+",hUV"+selectors[key]+")";
+    let setup="vec4 hCalcAlbedo="+(useAlbedo?"diffuseColor":vec(alb))+";\n";
+    if(tcm==="2"&&textures.hTcl?.value)setup+="hCalcAlbedo.rgb=mix(hCalcAlbedo.rgb,myTeamColor,clamp("+sample("hTcl")+".r+"+literal(parameter(f,"team_color_blend_alpha",0))+",0.,1.));\n";
+    else if(tcm==="3")setup+="hCalcAlbedo.rgb=mix("+vec(alb)+".rgb,myTeamColor,clamp("+literal(parameter(f,"team_color_blend",0))+",0.,1.));\n";
+    setup+="vec4 hCalcRoughness=vec4(max(roughnessFactor,.0001)),hCalcMetalness=vec4(metalnessFactor),hCalcTransmission="+vec(backlight)+",hCalcUnderFilm="+vec(vector(f,"under_film_color",[1,1,1,1]))+";\n";
+    setup+="vec4 hCalcOpacity=vec4(diffuseColor.a),hCalcEmission="+(rawCalcEmission&&textures.hNativeEmissionTex?.value?"vec4("+sample("hNativeEmissionTex")+".rgb*"+vec(emi)+".rgb,1.)":"vec4(totalEmissiveRadiance,1.)")+";\n";
+    if(available.has(9))setup+="vec4 hResource0="+sample("hResource0Tex")+";\n";
+    if(available.has(10))setup+="vec4 hResource1="+sample("hResource1Tex")+";\n";
+    if(available.has(4))setup+="hCalcTransmission="+sample("hTransmissionTex")+"*"+vec(backlight)+";\n";
+    if(option(f,"transmission_multi_color","0")==="2")setup+="hCalcTransmission.rgb*=myTeamColor;\n";
+    setup+=calcColorGlsl(f,available,skipped);
+    setup+="diffuseColor.rgb=hCalcAlbedo.rgb;diffuseColor.a=hCalcOpacity.w;roughnessFactor=hCalcRoughness.x;metalnessFactor=hCalcMetalness.x;\n";
+    const emiInt=literal(parameter(f,"emission_intensity",0));
+    if(ect==="1")setup+="totalEmissiveRadiance=diffuseColor.rgb*hCalcEmission.rgb;\n";
+    else if(ect==="2")setup+="totalEmissiveRadiance=myTeamColor*"+vec(emi)+".rgb*"+emiInt+";\n";
+    else if(["0","1","2","3"].some(i=>option(f,"enable_calc_color"+i,"False")==="True"&&option(f,"blitz_calc_color"+i+"_replace_color","0")==="2"))
+      setup+="totalEmissiveRadiance=hCalcEmission.rgb*"+emiInt+";\n";
+    setup+=HOIAN_MATERIAL_END+"\n";
+    sh.vertexShader=vertex+sh.vertexShader.replace("#include <uv_vertex>","#include <uv_vertex>\n"+uvWrites+pbrWrites.join(""));
+    sh.fragmentShader="uniform vec3 myTeamColor,myTeamColorHueComplement;\n"+fragment+sh.fragmentShader
+      .replace("#include <emissivemap_fragment>","#include <emissivemap_fragment>\n"+setup);
+    // Transmission/film values are kept for the native material consumers; full SSS isn't invented.
+    if(!mat.userData.nativeCharacterMaterial&&option(f,"enable_transfilm","False")==="True")skipped.push(mat.name+": native film lighting consumer remains");
+    if(!mat.userData.nativeCharacterMaterial&&option(f,"enable_taransmission","False")==="True")skipped.push(mat.name+": native taransmission/SSS lighting consumer remains");
+    if(option(f,"enable_transmission","False")==="True")skipped.push(mat.name+": separate native transmission option consumer remains");
+  };
+  mat.customProgramCacheKey=()=>JSON.stringify({options:f.shader?.options,params:f.params,uv:[...uv],loaded:Object.entries(textures).map(([k,v])=>[k,!!v.value])});
+  mat.needsUpdate=true;return uniforms;
+}
+export function setTeam(u:HoianUniforms,team:MaterialTeamParams):void {
+  u.myTeamColor.value.fromArray(team.my_team_color);u.myTeamColorHueComplement.value.fromArray(team.my_team_color_hue_complement);
 }

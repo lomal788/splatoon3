@@ -16,7 +16,7 @@ root 설정 플래그82/83/89와 PostEffect50가 없으면 기존 parent/세대/
 
 ## 4. DOFGaussian 적용 [판독]+[실행]
 
-`2B68EF4(S0=t,X0=A,X1=env,X2=B)`에서 D=`*(env+2AC8)`, 없으면 반환. DOFGaussian 필드는 End30, FarCancel34, Level38, Start3C, Enable40이며 set flag41..45다. `mix=B+(A−B)*t`는 FSUB→FMUL→FADD로 모두 f32, FMA가 아니다.
+`2B68EF4(S0=t,X0=A,X1=env,X2=B)`에서 D=`*(env+2AC8)`, 없으면 반환. DOFGaussian 필드는 End30, FarCancel34, Level38, Start3C, **IsEnableFarCancel40**이며 set flag41..45다. `mix=B+(A−B)*t`는 FSUB→FMUL→FADD로 모두 f32, FMA가 아니다. [2026-10-03 r6 정정] 기존 `Enable40` 명명은 전체 DOF 활성화와 원거리 취소 활성화를 혼동했다. 실제 visitor `119E29C`가 +40에 문자열 `IsEnableFarCancel`을 붙인다(기존 `gfx4/g3_visitors.c` 재사용).
 
 | 입력 | 실제 기록 |
 |---|---|
@@ -24,7 +24,7 @@ root 설정 플래그82/83/89와 PostEffect50가 없으면 기존 parent/세대/
 | Start3C | D1E8=mix |
 | End30 | D208=mix |
 | FarCancel34 | D2A8=mix |
-| Enable40 | abs(t)≤2^-23인 경우만 A의 bool을 D1A8에 기록; 바뀌면 rebuild |
+| IsEnableFarCancel40 | abs(t)≤2^-23인 경우만 A의 bool을 D1A8에 기록; 바뀌면 rebuild |
 
 abs(t)≤2^-23이면 D7D0을0으로 지운다. 마지막에 D68=true로 만들며, D1A8=true이고 D2A8<D1E8이면 다시 false로 만든다. 각 변경에 `35E553C(D+30)`을 부른다. 이 함수는 단순 dirty 기록이 아니라 DOF shader 선택 레코드를 재구성한다. 로비 값 Start484/End900/Level.5/FarCancel20은 원본 데이터다.
 
@@ -46,7 +46,7 @@ DOF render/픽셀 식, target 생성 전체, Shadow2800 live로비config·frame 
 
 ## 9. 웹 반영 필요
 
-impl/render.md: DOFGaussian typed 연결, Level clamp0..15, start/end/farcancel f32 보간·t≈0 enable 갱신·D68 gate를 보존한다. `toneMappingExposure`나 자동 노출 값으로 쓰면 원본과 다르다. 웹 코드와 impl 문서는 변경하지 않았다.
+impl/render.md: DOFGaussian typed 연결, Level clamp0..15, start/end/farcancel f32 보간·t≈0 **IsEnableFarCancel** 갱신·D68 gate를 보존한다. `toneMappingExposure`나 자동 노출 값으로 쓰면 원본과 다르다. 웹 코드와 impl 문서는 변경하지 않았다.
 
 ## 10. 검증과 명령
 
@@ -57,3 +57,5 @@ impl/render.md: DOFGaussian typed 연결, Level clamp0..15, start/end/farcancel 
 ## 11. 정정 이력
 
 2026-10-03: stage§4 env2AC8 자동 노출 추정을 DOF 원본 접근자·클래스 등록·writer 실행으로 정정. 이전 문장은 삭제하지 않는다. 묶음 stageL342·GearAlphaMask stale row의 기존 근거를 신규 성과로 재계상하지 않았다. 실제 명령/실패는 r8/graphics_commands.md에 남겼다.
+
+2026-10-03 common post r6: 이전 §4의 `Enable40`과 §9의 `t≈0 enable`은 **IsEnableFarCancel40**으로 정정했다. `param_reflect.py End FarCancel Level Start --json` 및 visitor `119E29C`의 문자열·오프셋이 근거다. 기존 원본 writer 1,024건의 바이트 일치는 유지되지만 명명이나 master DOF Enable의 증명은 아니었다. DefaultDay `DepthOfFieldObj0.enable=false`는 [데이터]이며 그 값이 실제 Lby 렌더 프레임의 master gate까지 유지되는지는 [미확정]이다. DOF blur를 켜는 근거로 FarCancel bool을 사용하지 않는다. 다음: `35E553C`, secondary VT5729690의 render reader 및 env DOF 기본 `enable` 적용 경로.

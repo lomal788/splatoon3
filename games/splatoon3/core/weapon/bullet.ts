@@ -1,6 +1,6 @@
 // 탄(spl::BulletShooterBase / spl::BulletSplashShooter) 한 발. 근거: docs/weapon/shooter_bullet.md §3~5,
 // physics/phive_controller.md §6, combat/damage_hit.md §6, paint/paint_shape.md §4~5·§7.7.
-// 갱신 순서: pre(슬롯18) → 물리(바디 스텝) → post(슬롯21·19) → 접촉(슬롯22 → 58/59/60).
+// 갱신 순서: pre(슬롯18) → 물리 → 접촉(슬롯22 → 58/59/60) → post(슬롯19·21).
 import { f32 } from "../fmath.ts";
 import type { Team } from "../types.ts";
 import { BulletBody } from "./body.ts";

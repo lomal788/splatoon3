@@ -5,6 +5,7 @@ import { v3, type Vec3 } from "../fmath.ts";
 import type { Team } from "../types.ts";
 import type { PlayerParam } from "./gear.ts";
 import { makePlayerParam } from "./gear.ts";
+import { createPlayerDisplayState, type PlayerDisplayState, type DisplayBinding } from "./display.ts";
 
 /** 발밑 잉크 PlayerStepPaint(본체+0xa688) — player_state.md §8 */
 export interface StepPaint {
@@ -191,6 +192,9 @@ export interface PlayerState {
   animSpeed: number;
   /** 아군 잉크 속 잠복 이동(0x7102458cfc) */
   swimming: boolean;
+  /** B7a0/B794/B798. Ordinary display producer before the SM; scope diagnostics separate. */
+  display: PlayerDisplayState;
+  displayBinding: DisplayBinding | null;
   /** 발밑 잉크 */
   step: StepPaint;
   /** 발사(벽 점프·롤) */
@@ -199,8 +203,18 @@ export interface PlayerState {
   // ---- 잉크 탱크 ----
   /** [본체+0x698] 잉크 잔량 0..1 — weapon 이 소비(감소)하고 physics 가 회복(증가) */
   ink: number;
-  /** 잉크 회복 정지 남은 프레임 — weapon 이 설정(WeaponShooterParam.InkRecoverStop), physics 가 1씩 줄임 */
+  /** [본체+0x6a8/6ac/6b0] 인간/부족/오징어 정지 카운터. 이전 max로 회복 판단 후 음수까지 감소. */
   inkRecoverStop: number;
+  inkRecoverStopNoInk: number;
+  inkRecoverStopSquid: number;
+  inkConsumeHold: number;
+  inkStealthFrames: number;
+  inkStealthBlend: number;
+  /** B7a0/24591c8 실제 공급을 받을 때 설정. 없으면 swimming 근사. */
+  inkFastStealth?: boolean;
+  mainInputFrames: number;
+  clearMainLatches: boolean;
+  mainInputGates: import("../weapon/input.ts").MainInputGate;
   /** weapon 소유 필드 */
   weapon: PlayerWeaponLink;
 
@@ -294,13 +308,17 @@ export function createPlayerState(id: number, team: Team): PlayerState {
     groundMaterial: -1,
     animSpeed: 0,
     swimming: false,
+    display: createPlayerDisplayState(),
+    displayBinding: null,
     step: {
       cls: 4, team: -1, own: 0, ownRaw: 0, ownThr: 0.65, enemy: 0, enemyRaw: 0, enemySlow: 0,
       enemyMove: 0, enemyMoveRate: 0, enemyThr: 0.35, lastOwn: 0, lastEnemy: 0, reused: false,
     },
     launch: { vel: v3(), active: false, apply: false, wallJump: false, wasSquid: false, count: 0 },
     ink: 1, // 본체 생성 0x71024575bc 가 1.0 으로 초기화 (network/04_player_state.md #15)
-    inkRecoverStop: 0,
+    inkRecoverStop: 0, inkRecoverStopNoInk: 0, inkRecoverStopSquid: 0, inkConsumeHold: 0, inkStealthFrames: 0, inkStealthBlend: 0,
+    mainInputFrames: 0, clearMainLatches: false,
+    mainInputGates: { blocked: false, inkBlocked: false, rFrames: 0, rFlag: false, aFrames: 0, aFlag: false, denied: false, sideMode: 0, sideAllowed: false },
     weapon: { shooting: false, moveSpeed: 0, frame: -1 },
     gear: makePlayerParam(),
     weaponMoveSpeed: 0,

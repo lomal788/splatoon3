@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net7.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><BaseOutputPath>../../../analysis/visual_gap_r2/fx/build/bin/</BaseOutputPath><BaseIntermediateOutputPath>../../../analysis/visual_gap_r2/fx/build/obj/</BaseIntermediateOutputPath></PropertyGroup>
+<ItemGroup>
+<Reference Include="ShaderLibrary"><HintPath>../../../analysis/shader/build/bin/Release/net7.0/ShaderLibrary.dll</HintPath></Reference>
+<Reference Include="Ryujinx.Graphics.Shader"><HintPath>../../../analysis/shader/build/bin/Release/net7.0/Ryujinx.Graphics.Shader.dll</HintPath></Reference>
+<Reference Include="Ryujinx.Common"><HintPath>../../../analysis/shader/build/bin/Release/net7.0/Ryujinx.Common.dll</HintPath></Reference>
+<Reference Include="Spv.Generator"><HintPath>../../../analysis/shader/build/bin/Release/net7.0/Spv.Generator.dll</HintPath></Reference>
+</ItemGroup></Project>

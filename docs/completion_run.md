@@ -226,3 +226,126 @@ cwd는 모두 C:/dev/splatoon3. PY=.venv/Scripts/python.exe. Python 출력은 PY
 **확정 382/986 = 38.74%**, 6차 370/986에서 **12개 출처 기록 추가 확정**. 이번 갱신은 31개 기록이다. 중복 출처를 보존한 목록 처리율이며 게임 전체 파악도를 뜻하지 않는다. 부분 해소는 확정으로 세지 않았다.
 
 [7차 보고](completion_r7.md)에 실행 건수·경계·실패 로그를 모았다. 보호 파일592개 변경/추가0. 재현은 analysis/completion/r7/merge_and_report.py.
+
+## 잉크·발사·잠영·광원 시각 추가 분석 r2 — 2026-10-03
+
+병렬 3개 에이전트(바닥·잠영·광원)와 parent(Flash/Ripple·도구·종합)가 원본 추가 근거를 MD에 반영했다. 새 상세 문서 4개는 1~11절과 로컬 링크 검사를 통과했다. 사용자 구현 지시는 [port/ink_visuals.md](port/ink_visuals.md), 상세 근거는 [ink_visual_path.md](graphics/ink_visual_path.md)에서 찾는다.
+
+| 실제 명령·대조 | 결과·경계 |
+|---|---|
+| PY analysis/visual_gap_r2/floor/floor_ubo_emu.py | init→texel→whole pack28/28, 비트불일치0/fault0; mutex ABI·합성 holder/table/S 입력, NVN 이전 staging |
+| PY web/tools/squid_visibility_r2_emu.py | ordinary 후보10,800·법선4,096·delay8,192·whole SM2,048·whole holder4,096·초기쓰기512, 불일치0/PLT0/fault0. 수동연결272프레임. StepPaint/Phive 공급 fixture·재질setter4개 capture/return |
+| PY analysis/visual_gap_r2/light/cclut_packet.py | CPU used192B 계약128/128(A독립대조제외), LUT 좌표 명령블록128/128. getterABI/ThreadID2개 공급·GPU전35DCA00중단 |
+| shader_dump CB1 보완 빌드·color_correction_map 재추출 | build warning1/error0. 기본0 BRX표 누락315행→실제상수공급1694행. 표준/독립보완 pixelSHA동일 |
+| shader_raw_audit + PY web/tools/fx_shader_gap_audit.py | 3program/6stage 보완전후SHA동일. 원시vertex p1385byte172·p1202byte204 export없음. Flash/Ripple 실제키·텍스처·discard 판독/데이터, GPU미실행 |
+| decomp_index.py 재빌드/--no-build 조회 | 6177함수 색인, 작은 신규C 8개를 analysis/decomp에 복사해 이후 중복분석 방지(원자료 유지) |
+| finalize 검증 첫 inline Python | cp949 UnicodeEncodeError; -X utf8로 재실행 성공 |
+| 종합 검증 첫 합계 assertion | 인수 요약의656 예상값으로 실패. 본표986행 직접 합산 실제확정556(56.39%)으로 정정; 영역별 분자/분모 변경없음. 첫 inline 수정은 PS 인용구 SyntaxError, 파일 직접 수정 뒤 재검증 |
+| port 집계 첫 검사 | 전체 문서의 본표와 잔여질문 부록에서 같은 ID를 두 번 읽어 assertion 실패. §6 본표만 파싱하여 고정62개 재검증 |
+| 보호 검사 첫 PowerShell Compare-Object | DateTime 자동변환 baseline와 문자열 after의 타입차로 false1270/exit1. rawJSON 문자열 비교로 정정:635파일 목록/크기/UTCmtime 차이0. 콘텐츠SHA검사는 아님; prod.keys/title.keys 제외 |
+
+개별 실제 인자·실패는 analysis/visual_gap_r2/{floor,squid,light,fx}/commands.md, 종합은 final_verification.json에 저장했다. SHARED 8줄·FUNCS 10줄 append, 기존 결론의 정정 이유/날짜를 본문에 남겼다. 보호 경로 games/scripts/impl/package/original은 변경하지 않았고 commit/push/삭제/이동은 수행하지 않았다.
+
+전체 복합 질문 승격0: 고정986의 확정556(56.39%), 도색52/100(52.00%), 그래픽102/204(50.00%), 이펙트·효과음60/140(42.86%) 유지. 구현13/62(20.97%), 해당 시각 부분0/16 유지. GPU 픽셀·sampler·실제 linked/default와 Custom1·팀색 공급·전체 player/잠영 파문이 남아 부분 실행으로 이 질문을 확정 처리하지 않는다.
+
+## 정지 마우스 시점 추가 분석 — 2026-10-03
+
+사용자 조건은 “가만히 서서 시점만 변경”이다. [mouse_view_jumps](camera/mouse_view_jumps.md), [입력 수명](camera/mouse_input_lifecycle.md), [원본 제어](camera/mouse_original_controls.md) 3문서를 11절로 저장하고 [port/mouse_camera](port/mouse_camera.md)에 수정 명세를 정리했다.
+
+| 실제 명령·검사 | 결과·경계 |
+|---|---|
+| node analysis/mouse_camera/render/view_probe.mjs | actual 웹 input/core/client view/Three CPU268assert PASS. dx1400 기본 raw−210°에 +150° 역방향 shortest 보간, catch-up5 pre-turn 이력소실, dy−200뒤60무입력 시선추가15.983365°. collision=null/고정player·shared fixture, GPU/browser event/original Unicorn 아님 |
+| node web/tools/mouse_input_lifecycle.mjs | actual InputDevice·저장actual frame callback30/30. fakeDOM/host, 이벤트원본·fullworld 제외. lock/blur/Reset은 별도 위험이며 사용자 사건으로 단정하지 않음 |
+| decomp_index.py --no-build + xref/effect_ptrscan/combat_vtname/full_decomp4주소 | 신규 원본 C1940 MissionTicketGateAction 및4tag/VT/name 사슬 확인. index6181. 원본 자동 yaw 덮어쓰기 순서 판독, 새 Unicorn0·기존실행 재사용 |
+| PY web/tools/mouse_native_camera_audit.py | 원본 바이트4타입 사슬 mismatch0. 첫 guard/tag ADD 혼동 AssertionError 후 실제tag즉치로 수정하여 성공 |
+| PY analysis/mouse_camera/verify.py | 3문서11절·4문서 로컬링크PASS, source634파일SHA차이0, original1파일목록/크기/mtime차이0(키제외/직전r2기준) |
+
+verify.py 최초 실행은 단일 파일 PowerShell JSON이 배열 대신 객체여서 TypeError로 실패했다. 객체/배열 입력 정규화 후 재시도하여 통과했다. git status는 C:\dev\splatoon3가 Git 저장소가 아니어서 실패했다. 최초 기본 sandbox 실행은 restricted-token split roots UnsupportedOperation으로 시작 거부됐다. scoped require_escalated로 재시도 성공했으며 auto-review rejection은 아니다. 없는 port/camera.md·client/camera.ts·client/render/camera.ts/player/physics.ts 읽기·검색 실패는 명령 기록에 남기고 실제 경로로 수정했다. native.func_lookup 선행 함수와 실제 type predicate prologue/RET를 구분했다. 로그: analysis/mouse_camera/{render,input,native}/commands.md와 final_verification.json.
+
+SHARED3줄/FUNCS4줄 append, 기존 “렌더 보간 동등성 영향 없음”과 C1940 의미는 날짜·이유를 보존하며 정정했다. fixed986/확정556(56.39%)·camera78/106(73.58%), port13/62(20.97%)·camera2/7(28.57%) 유지. 웹 재현은 원본 확정률로 계상하지 않는다. 실제 사용자의 delta/settings/timing/reset trace가 없어 사건 단일 원인은 미확정이다. 게임 소스·impl·package·original 변경/commit/push/삭제·이동은 없다.
+
+
+## 첨부 원본 화면 그래픽·이펙트 추가 분석 r3 — 2026-10-03
+
+사용자 사진6501/6499와 현재 소스·실제 웹 화면의 차이를 surface/character/FX 병렬3명과 parent(HDR·LUT·sampler·브라우저·통합)가 분석했다. 웹 코드 반영 요청이 아닌 분석·MD 요청으로 처리했다. [사진·현재 화면과 근거](graphics/reference_graphics_gap.md), [우선 구현 지시](port/reference_graphics.md)에 결과를 모았다. 새 상세5문서는 각각1~11절이며 요약1개를 추가했다.
+
+| 실제 명령·검증 | 결과와 실행 경계 |
+|---|---|
+| `.venv/Scripts/python.exe -X utf8 web/tools/decomp_index.py --no-build <주소>` → `func_lookup.py` → `sh web/tools/full_decomp.sh analysis/decomp/reference_graphics_r3/{post_texture,post_builder,post_sampler,post_sampler_builder}.c <주소>` | 신규6함수35B1C84/35B1DC4/3591474/1034078/35B7160/3591834 판독, exit0. 기존35B519C는 재사용. 각 파일의 실제 인자는 parent 명령 로그·디컴파일 헤더에 보존. |
+| `.venv/Scripts/python.exe -X utf8 analysis/reference_graphics_r3/parent/post_texture_emu.py` | 원본 metadata56/56 exact: driver-off28건 스텁0·driver-on28건은 native builder+14NVN API sink. 3D linear16/16은 원본35B519C·스텁0. 재실행한56건을 신규112건으로 세지 않음. |
+| `.venv/Scripts/python.exe -X utf8 analysis/reference_graphics_r3/parent/post_sampler_emu.py` | 원본 constructor1건 스텁0(default manager=null fixture), native builder12/12·11NVN API sink. min/mag5/1·wrap7/7/7·LOD0..15 숫자 계약. liveCC bind와 enum 이름·GPU 미확정. |
+| surface 분석 전용 paired CLI/raw audit |24/24, raw1326명령. p1714 NegA와 bundled Ryujinx Negate 괄호 결함 확인. eyeXYZ*(-invLen), BRDF y=−roughness, SH normal의 world-up 혼합·재정규화 없음, cube layer12의 implicitLOD+bias0. 원본GPU/Unicorn0·표준 도구·원래 shader 산출물 수정0. |
+| character actual material hook CPU |30/30 [웹 실행]. native cheapSSS/backlight·squid/hair film 소비 판독, grouped6stage와 rawNegA7 대조. 기존 material48값 재대조+sanity1을 신규 원본 실행49건으로 세지 않음. |
+| FX actual collectEmitters+ParticleBatch CPU |39/39 [웹 실행]. scale/alpha0/color0 시간 키가 actual constructor에 전달되지 않는 결손 확인. GLB26개의 normal 등 geometry 유실 확인. 원본 player emitter13개·ELink leaf9개·shader6program/12stage 데이터·판독, r8 native render11건 재사용·신규 원본CPU/GPU0. |
+| `node analysis/reference_graphics_r3/parent/browser_probe.mjs` |기존5190의 actual Lby3phase: page/console/HTTP 오류0. Edge headless SwiftShader·world.step 제어·ownInk stamp fixture. 현재 paint roughness.35/envMap없음, post uniforms3개, ownInk1/swimmingtrue/squid2mesh. 원본GPU 화면 아님. |
+| `node analysis/reference_graphics_r3/parent/browser_fire_pose.mjs` |40프레임 발사 유지 후 state0x59·weaponShooting=true·frame180/weaponFrame179, 오류0. 첫Fire0x56을 전체AS 미연결로 확정하지 않음. 최종 native leaf/pose 비교는 미실행. |
+| `.venv/Scripts/python.exe -X utf8 analysis/reference_graphics_r3/parent/verify.py` |새6문서 링크(이미지 포함) 오류0, 상세5문서11절, fixed986·port62 직접 집계 PASS. source634파일 SHA변경0, original 키제외1파일 목록/크기/mtime변경0(콘텐츠해시 아님). final_verification.json 저장. |
+
+실패도 기록했다. 큰 read/rg 출력이 잘려 대상 파일로 좁혔다. 없는 web/vite.config.ts와 shader_raw_audit.csproj 읽기는 실패했으며 실제 serve.mjs·기존 빌드 경로로 수정했다. agent 문서 생성 전 검색과 PowerShell에서 graphics/*.md를 경로로 넘긴 rg는 실패했고 생성 후·실제 directory/-g로 재확인했다. 최종 집계 방법 재사용을 위해 찾은 analysis/visual_gap_r2/finalize.py는 없어서 rg exit2였고 존재하는 mouse_camera/verify.py의 canonical 집계를 참고했다. 기능 실행 검사·최종 검증에는 실패0이다. 실제 명령과 각 담당 실패는 analysis/reference_graphics_r3/{parent,surface,character,fx}/commands.md에 남겼다.
+
+SHARED6줄·FUNCS7줄 append(신규 decompile6함수+기존helper 새3D경계 등록1). stage_rendering/shaders의 BRDF부호·LOD·SH/Negate 결론은 날짜·이유를 붙여 정정하고 옛 본문을 보존했다. 8³ LUT의 RGB11/11/10 unsigned floating·4B/texel·mip1·선형2048B와 기본 sampler 숫자 계약을 추가했다. NVN tiled allocation을2048B라고 확정하지 않았다.
+
+전체 복합 질문 승격0: 원본556/986=56.39%, 그래픽102/204=50.00%, 도색52/100=52.00%, 이펙트·효과음60/140=42.86% 유지. 웹13/62=20.97%, 그래픽0/10(일부7), 이펙트0/4(일부3) 유지. 부분 결과를 전체 확정으로 올리지 않았으며 GPU·동일 Lby 프레임 픽셀·live teamcolor/alpha/Custom1·sampler enum/override·full ColPaint/AS/cloth/LOD는 미확정이다. 사진은 정성 참고이며 v0·Lby·팀색·카메라가 검증된 원본 동일조건 캡처가 아니다.
+
+웹 반영 우선: animation key 전달→FX 속성·VAT·렌더 상태→ColPaint 잉크 normal/두께/InkBright/반사→캐릭터SSS/film·잠영 숨김/파문→공통HDR/LUT·그림자 순서. games/scripts/impl/package/original 수정, 키 읽기, commit/push, 삭제·이동은 수행하지 않았다.
+
+
+## 우선순위1·4 실제 웹 반영 r4 — 2026-10-03
+
+마우스 시점과 발사·탄·착탄 FX를 실제 구현했다. 데이터로더·이펙트 에셋·재현 도구는 최초 자동 승인 거부 후 사용자의 명시 승인으로 적용했다. [현재 요약](port/priority_1_4.md), [카메라](camera/mouse_web_port.md), [이펙트](effect_sound/shooter_web_port.md)에 경계와 재현을 기록했다.
+
+| 실제 명령·검사 | 최종 결과·경계 |
+|---|---|
+| `npm test` / `npm run typecheck` / `npm run build` | 226/226 PASS, 타입 검사·빌드 exit0. build 출력 절대경로가 C:/dev/splatoon3/web/dist 안인지 확인한 뒤 실행 |
+| mouse actual core/view/input·app 검사 | camera42/42, view268checks, input/appcallback30/30. 원본 native curve/리그·미지정 pad 유지; mouse-only 보간/입력 수명 정책 |
+| `node --test web/games/splatoon3/tests/fx_data_port.test.mjs` | actual public asynchronous fxData44/44. native 키39·FIXED/type/count·sampler·selector·raw VAT2. 원본GPU 실행 아님 |
+| `node --test web/games/splatoon3/tests/fx_render_port.test.mjs` / `fx_loading.test.mjs` / `fx_depth.test.mjs` | consumer11/11, 느린 로드/실패3/3, depth3/3. known8program emitter17, 나머지22 fallback |
+| `node analysis/port_priority_r4/browser_verify.mjs` | actual Edge/SwiftShader·actual pointerlock/input/app callback. dx1400→−42°×5, 피치 중단 후 travel0. firing40/impact80/fade45 + all39 생성, known17/VAT2 enabled·missing0·페이지/HTTP/GLSL/GPU 오류0 |
+| `.venv/Scripts/python.exe -X utf8 web/tools/asset_fx_port.py --output analysis/port_priority_r4/fx_data/rebuild` | 원본39개 자료 재현, JSON 전체bytes/SHA256·catalog전체값 일치, JSON413072B/effect677638B. GLB2·VATbin2 불변 |
+| `.venv/Scripts/python.exe -X utf8 web/tools/decomp_index.py 0x710082c0a0 --no-build` | 기존 vfx_lib_02.c 재사용. UV.z=_u1.x 결합 판독과 기존GLB188vertex/238triangle row/topology 대조. 신규 decomp/원본CPU/GPU0 |
+
+실패도 보존했다. 기본 sandbox는 split writable roots 제한으로 실행이 거부되어 당시 scoped escalation으로 재시도했다. 자동 검토는 data.ts2회와 asset/tool1회, impl/camera 기록을 이전 제한 때문에 거부했다. loader/asset/tool은 제안 결과를 준비해 사용자 승인 뒤 적용했다. VAT _u0.z 유실 가설은 실제 native UV 결합으로 정정했다. 첫 재현은 CRLF 바이트 크기 누락과 st_size() 오호출, 새 로딩 회귀 첫 view fixture는 EventQueue 누락으로2/3 실패하여 고친 뒤 성공했다. data URL stack으로 큰 출력이 생겨 실제 bundled runtime을 analysis에 저장해 짧은 stack으로 바꿨다. 소유 에이전트2명은 마지막 문서·로딩 follow-up에서 사용량 한도로 종료되어 parent가 잔여 수정·검증을 마쳤다. 없는 apply_actual.py 검색은 exit1로 기록하고 실제 파일·스냅샷으로 확인했다.
+
+허용 게임 파일12개 변경·11개 추가(총 보호 snapshot645), scripts/impl/package 변경0, original 키 제외1파일 목록/크기/mtime차이0(원본 콘텐츠 SHA는 아님), 기존 FX GLB/VAT4파일 SHA변경0. 임시 impl/assets §0.1은 analysis에 보존한 뒤 그 삽입만 제거하여 작업 시작 SHA와 정확 일치시켰다. 새 기록은 허용 docs에 통합했다. SHARED/FUNCS 각1줄 append, commit/push와 원본/키 변경0.
+
+원본556/986=56.39%, camera78/106=73.58%, FX·효과음60/140=42.86%, port13/62=20.97% 유지. 확인된 자료·부분 셰이더를 전체 질문 완료로 승격하지 않았다. Custom1/dynamic색·linked alpha·VAT 시간률·native FX BRDF/env6·전체CPU운동·pass순서·같은Lby 원본GPU pixel은 미확정이다. 웹 scene depth·lighting/default는 명명한 웹 adapter/근사다. 바닥 ColPaint·캐릭터/잠영·HDR/LUT 전체 반영은 별도 작업이다.
+
+## 6번 공통 조명·그림자·최종색 웹 반영 — 2026-10-03
+
+parallel shadow/post담당과root lighting/통합으로진행했다. 추가light에이전트spawn·기존에이전트followup은threadlimit에거부돼root가환경광을처리했다. [통합결과](port/common_render_r5.md)·[환경광](graphics/common_lighting_web_port.md)·[그림자](graphics/common_shadow_web_port.md)·[최종색](graphics/common_post_web_port.md)에현재source와실패/잔여를기록했다.
+
+`SHARED/FUNCS/decomp_index --no-build103289c` 중복검사·func_lookup 뒤QuickDecomp1함수. sh없음→GhidraBAT직접readOnly,최초user.home디렉터리미존재오류→analysis내생성후exit0. 신규원본128회/3584bit/스텁0,불일치0. typecheck최초MAX_DRAW_BUFFERS타입오류와plaini Shaderunroll오류는WebGL2/UNROLLED_LOOP_INDEX로교정했다. postfixtureMSAAresolve/premultipliedclear실패2회는재현harness를교정하고원본GPU성공으로세지않았다.
+
+전체252/252·typecheck/build PASS. 실제Lbyidle/firing/impact/fade4단계의shadow→FXdepth→HDR 순서·SHcapture2/projection7MRT/98304points·shadow1024²2개·LUT8³·GL/페이지/HTTP오류0. shadow13/13GPU,post36/36GPU0byte오차는웹검사다. constantcube6축SH최대차.004759193도기록했다. screenshot직접확인. 원본wholeframe/cube/12layer/SPP/fade/nativefilter/rounding/liveflags/Bloom/DOF/targetshadow는남는다.
+
+실제명령/보호검사는analysis/port_common_r5/commands.md·final_verification.json. 원본556/986·port13/62와GR0/10/일부7/10고정상태유지. SHARED/FUNCS각1줄append·impl/scripts/package/assets변경0·original키제외metadata차이0(원본내용SHA검사는아님)·commit/push0.
+
+
+## 6번 공통 경로 r6 웹 반영·원본 근거 — 2026-10-03
+
+post/shadow 병렬과 root sky/환경맵/통합으로 수행했다. [통합 기록](port/common_render_r6.md)과 상세11절 문서3개, analysis/port_common_r6의 commands·JSON에 남겼다. mSky cube27 채도.4·원본PCF1/4/9/16·strict20·SPP·Defaultfade40~60·DefaultDay Bloom old_calc=false 및 HDR×2+Bloom 소비를 실제 연결했다. ctor값과 실제설정 자료가 달라진 정정과 DOF FarCancel 오명명 정정을 보존한다.
+
+원본 writer1,024건/스텁0·selector블록24건, Bloom블록/파서/state775건 불일치0. Sky21/Shadow25/Bloom18은 웹GPU검사이며 nativeNVN검사아니다. 전체266/266·typecheck/build exit0; 실제Lby idle/firing/impact/fade4단계 shadow→FXdepth→HDRCompose→Bloom, shadow2draw/Bloom16draw·오류0, screenshot확인.
+
+새 material parser 내부36BBEA0를 함수 시작으로 넣은 partial decomp 오류를 보존하고 실제36BB5A4 whole로 재수행했다. originalbinder3588FCC는 기존 paintgpu 판독을 재사용했다. 최초 시스템Python zstandard부재·잘못된임시경로·shadow RAFqueue준비timeout·초기ctor Bloom .75분기 등은 성공으로 세지 않고 commands에 기록했다. C:/dev/splatoon3의git status는Git루트가아니라exit1이었다. git변경없음.
+
+source4개수정/3개추가, impl/scripts/package/assets SHA불변 및 original키제외목록·size·mtime불변을 final_verification.json에서 확인한다. 원본내용전체SHA검사는아니다. 원본556/986·port13/62·GR0/10·일부7/10유지. 다음은 ColPaint표면·캐릭터/잠영과native Illuminate/12layer/liveSPP·HDRalpha다.
+
+
+### 2026-10-03 잉크 표면 r7 웹 반영·검증
+
+[실제 포트 요약](port/ink_surface_r7.md), [시각 모델 좌표/geometry](graphics/ink_visual_geometry_r7.md), [원본 판독식 소비 shader](graphics/ink_surface_web_r7.md). collision overlay를 actual visual draw로 옮기고 InkBright/rim/normal/thickness/F0/roughness·베이크/SH/그림자/HDR를 연결했다. 원본 writer277/panel256/transform명령블록128입력 재검증·WebGLslice↔실제포트431건·전체285테스트·타입/빌드·actualLby4단계 오류0를 구분한다.
+
+고정 원본986/확정556=56.39%, 그래픽102/204=50.00%, 도색52/100=52.00% 유지. web PNT06 차이→일부, 고정13/62=20.97%, 일부37/차이9/원본미확정3. native wholeatlas/seam·live W/emission·BRDF/cube/최종NVN은 미확정이며 adapter/부분결과를 전체확정으로 올리지 않는다. 실패와 실제명령은 analysis/port_ink_r7/commands.md 및각상세§10에 보존한다.
+
+
+## 캐릭터 웹 반영 r8 — 2026-10-03
+
+[현재 MD](port/character_graphics_r8.md), [명령/실패](../../analysis/port_character_r8/commands.md), [최종 보호/검증](../../analysis/port_character_r8/final_verification.json). 원본 RGBA 블록2048, 표시 producer2048/SM384/holder384, zero512/기하384/반경10/연결288프레임, WebGL식512, 전체304/304·typecheck/build·actualLby12단계. 입력/스텁/전체GPU 경계는 본문과 각 상세MD에 명시. original/keys/impl/assets/scripts/package/commit/push 보호.
+
+
+## 재질·눈 패턴·총구 그래픽 r9 — 2026-10-03
+
+[현재 반영·검증·다음 지시](port/graphics_priority_r9.md): 탱크/하네스/병의 native 재질·owner texture, raw type11 눈 채널, [Maya0/rotation0 UV6lane](graphics/character_texsrt_r9.md), [실제 Muzzle 시각 행렬 및 내적 정정](effect_sound/muzzle_attachment_r9.md)을 웹과 MD에 반영했다. FMAA 원본1,212/피부 홀더67/SRT313/내적 격리블록2,048, 선택 GLSL↔웹GPU448건은 각각 범위가 다른 검증이며 원본 NVN/전체프레임 일치가 아니다.
+
+고정 원본556/986=56.39%·그래픽102/204=50.00%, port13/62=20.97%(일부37/차이9/원본미확정3)·GR0/10/일부7/10 유지. 신규 부분 근거를 기존 복합 질문 전체 확정으로 승격하지 않았다. 몸CP/skin idx·weighted type11/type18·다른 SRT mode/rotation·cube/BRDF/SPP·잠영 파문/Custom1/VAT·native 최종픽셀은 남는다. 최종 테스트·브라우저·보호 SHA와 실패는 r9 요약의 실행 기록을 따른다.

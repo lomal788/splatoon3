@@ -23,7 +23,10 @@ export interface MatchSeeds {
   sum: number;
 }
 
+/** 관리자 원천 객체 없음의 값. 정상 Lobby 시작값과 구분한다. */
 export const DEFAULT_SEEDS: MatchSeeds = { a: 1, b: 2, c: 3, d: 4, sum: 10 };
+/** 부팅 후 대전 없이 Lobby 진입. shooter_bullet §5.3 r6 [실행+데이터]. */
+export const LOBBY_SEEDS: MatchSeeds = { a: 1, b: 0, c: 0, d: 0, sum: 13 };
 
 export function seedsFrom(a: number, b: number, c: number, d: number): MatchSeeds {
   return { a: a >>> 0, b: b >>> 0, c: c >>> 0, d: d >>> 0, sum: (Math.imul(13, a) + Math.imul(59, b) + Math.imul(71, c) + Math.imul(97, d)) >>> 0 };

@@ -1,5 +1,7 @@
 # [physics] 플레이어 이동·충돌 구현 기록
 
+2026-10-03 탄·총 통합 정정: player는 mainInput 우선 게이트와 6a8/6ac/6b0 세 회복 카운터를 연결했다. 음수 진행/이전 max 판단을 구현했으나 fastStealth 공급은 swimming 근사, 실제 B7a0/상위 회복 게이트는 미연결이다. collision에 초기 overlapSphere를 추가했으며 player body solver나 camera sweep은 변경하지 않았다. 근거·153개 테스트 결과는 [weapon.md](weapon.md) §4~10. 아래는 이전 구현 기록을 보존한다.
+
 담당 폴더: `games/splatoon3/core/collision/`, `games/splatoon3/core/player/`. 목표: 시험 사격장(대전 로비 `Lby_Lobby00`) 1인 연습에서 원본과 같은 이동.
 근거 문서: `docs/player/movement_physics.md`, `player_state.md`, `gear_skills.md`, `docs/physics/phive_controller.md`, `docs/gimmick/collision_mesh.md`, `docs/combat/player_life.md`(리스폰만), `docs/paint/paint_and_score.md`(발밑 잉크).
 

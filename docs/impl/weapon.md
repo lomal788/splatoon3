@@ -1,3 +1,85 @@
+# 스플래시슈터 탄·총 반영 기록 — 2026-10-03
+
+## 1. 기능 개요와 사용자에게 보이는 동작
+
+현재 사격장에서 입력 우선순위·6프레임 연사·탄과 분열 탄 생성 수명·잉크 소비/회복·표적 HP/휨을 연결했다. 사용자 지시로 코드를 반영했으며 전체 원본 물리/렌더 동등성 완료를 뜻하지 않는다. 이전 구현 기록은 이 문서 뒤에 보존한다.
+
+## 2. 분석 대상 원본·버전·자료 위치
+
+Splatoon 3 v0 / Lby_Lobby00 / 1인 / Shooter_Normal_00. 기존 [shooter_bullet](../weapon/shooter_bullet.md) §3.3.5~3.3.6·§3.5.1·§5.3~5.5, [aim_swerve](../camera/aim_swerve.md), [damage_hit](../combat/damage_hit.md) §6.4, [shooting_range](../range/shooting_range.md) §6.3 및 SHARED/FUNCS/decomp_index의 r5~r8 근거를 재사용했다. **새 원본 분석으로 중복 계상하지 않는다.**
+
+## 3. 진입점과 전체 호출 흐름
+
+player.readInput→mainInput(B4d0)→weapon 사격 게이트. 프레임 시작 활성 탄/방울 목록을 복사→기존 탄 pre→body physics→접촉→플레이어 사격(slot19 group3)→기존 탄 post19/21(group4)→방울 post→정리. 중간에 생성한 메인/분열 탄·벽 방울은 생성 프레임 갱신에 들어가지 않는다. 전체 actor scheduler의 이식은 SYS02에 남는다.
+
+## 4. 구조체·필드·상수·열거형 표
+
+| 원본 | 웹 producer/consumer | 이번 반영과 범위 |
+|---|---|---|
+| B4d0 / InputSender+54 | player.readInput / weapon/input.ts→actors.ts | raw Fire&&!Squid 대신 우선 입력·잠금·경계 게이트·s32 카운터 |
+| Babc/Bab4 | shooter.tick | max(s32,1)-1, 사격 판단 이전 감소. Badc의 전체 writer는 미확정 |
+| B698 | weapon consume / player recover | 기존 소비 허용 오차 유지 |
+| B6a8/6ac/6b0 | stopInk/lackInk / recoverInk | 인간20·부족30·오징어 정지 독립 카운터, 음수 진행 |
+| B6b4/6b8/6bc | stopInk/consumedInk / recoverInk | 소비 hold·잠영 frames/blend, 소비 시 후자 둘 초기화 |
+| G match seed | runtime.matchSeeds / swerve | fresh Lobby (1,0,0,0), 가중합13. 원천 객체 부재 fallback10과 구분 |
+| BulletShooter 예약32 | runtime.fire | 소비/RNG 후 빈 슬롯 없으면 생성/Fire 없음. 분열/방울 풀은 미연결 |
+| DamageInfo.value | weapon→range receiver | raw 데미지 전달, 배율은 receiver에서 한 번 |
+| BulletContactInfo | weapon physics contact→range | body center와 stepVelSec 전달, y=0·BulletImpulsScaler 적용 |
+
+## 5. 상태 전이와 전체 수명
+
+탄 age=-1 생성→다음 프레임 pre에서0→이동/접촉→post. age0 명중 시 첫 데미지360. 바닥 보관 도색은 같은 프레임 post19에서 실행하며, 벽 탄은 원본 hold4를 유지한다. 사격 시 인간 정지20 설정, 잉크 부족은 별도 정지30 설정. 회복 여부는 감소 **이전** 세 카운터 max<1로 결정한다.
+
+2026-10-03 정정: 이전 기록의 사격을 모든 post 뒤에 두는 순서, 새 탄 첫 갱신 미확정, 기본 seed10, 회복 카운터 하나, 벽 방울 레이2개, 송신자 선배율 및 휨 vel 누락은 최신 원본 근거와 실제 코드로 교체했다. 이전 결론은 아래 보존 기록으로만 읽는다.
+
+## 6. 계산식·조건·상세 의사코드
+
+- input 게이트: 0x710249f494의 24a0ce0..24a0ec8 블록. 차단 시 frames=0/래치 해제; 허용 시 native main priority에 따라 s32 증가 또는0.
+- countdown: 249fcb0..249fdc0의 max(s32,1)-1.
+- recovery: previousMax=max(human,noInk,squid); 세 값을 s32로1씩 감소; previousMax≥1이면 회복 없음. 기본률 f32(1/f32(600)) / fast-stealth f32(1/f32(180)), gap과 min한 후 f32 가산.
+- consumer state는 native 0x82..0x90/0xaa..0xac/0xed/0xee/0x10c. B7a0가 없으면 swimming으로 fast-stealth를 근사하므로 전체 회복 경로 완료가 아니다.
+- 지형/대상 초기 sphere overlap을 이동 sweep보다 먼저 확인하여 t=0 접촉을 처리한다. WallDrop radius=.2 sphere overlap으로 벽/바닥을 판정하며 칠 불가 재질을 먼저 거른다. 실제 Havok 후보 순서/TOI 전체는 근사로 남는다.
+- receiver 배율 예: raw360·rate.344 →123을 한 번만 기록, target HP1000→877. damage 수신과 물리 휨 접촉은 분리하여 Through 접촉도 별도 callback을 받는다.
+
+## 7. 애니메이션·이펙트·소리·카메라·에셋 연결
+
+카메라 shared 기저/이전 프레임 조준 축을 유지한다. Fire/BulletSpawn/BulletHit/NoInk 기존 이벤트를 유지하며 BulletHit.age를 추가했다. 이번 총 포트로 ball VAT·분열 탄 전용 emitter·바닥 ink shading이 구현된 것은 아니다. 해당 시각 차이는 후속 [잉크 그래픽 분석](../port/ink_visuals.md)에서 다룬다.
+
+## 8. 다른 기능과의 상호작용
+
+core/types에 optional overlapSphere/BulletContactInfo/onBulletContact 계약을 추가했다. 기존 camera sweep이나 플레이어 body solver는 변경하지 않았다. range는 raw receiver와 물리 휨을 분리했다. 레거시 단위 vel 입력은 기존 테스트 호환 경로이며 실제 gun은 stepVelSec를 쓴다.
+
+## 9. 웹 포팅 구조와 구현 순서
+
+신규 core/weapon/input.ts·ink.ts → player 공급 → shooter/runtime 수명 → collision.overlapSphere → range 수신/접촉 순으로 반영했다. 고정 포트 ID BUL01·HIT01·TGT03를 반영 확인으로 이동했다. BUL03/04/06은 남은 producer/query가 있으므로 일부 반영을 유지한다. 상세 요약은 [port/weapon](../port/weapon.md).
+
+## 10. 검증 코드·실행 결과·기대값
+
+| 실제 명령/검사 | 결과 | 한계 |
+|---|---|---|
+| PY web/tools/weapon_port_fixture.py | 원본 함수 1,926건: input768/countdown262/consume384/rate128/stop128/timer256 | normal gate 경계 bool/InputSender 주입, offline/no gear40/no partial6d8, PLT ret0. whole frame 아님 |
+| npm --prefix web test | 153/153 통과, 신규 native fixture 비트 일치 | 기존 재구현 fixture도 포함 |
+| npm --prefix web run typecheck | 통과 | — |
+| npm --prefix web run build | 통과 | — |
+| node analysis/port_weapon/smoke.mjs | 실제 Lby 30발, 간격 모두6, Floor 명중·team paint4140 texels, 부족 타이머30/회복 경계, main 우선 입력, finite 값 | 수동 고정60Hz·Edge SwiftShader, 원본 화면 실행 아님 |
+| console/page error·HTTP≥400 | 0 / 0 | GPU 화질 동등성은 별도 |
+
+첫 실행의 native rate ABI 인자 오류로 UC_ERR_READ_UNMAPPED 발생→기존 weapon_ink_emu ABI(X1=pp,X4=B+a5d8)를 재사용하여 해결. decomp_index 기본 rebuild는 INDEX 쓰기 PermissionError→--no-build 성공. 초기 테스트의 z=2.2/정규화 길이 기대는 native sead 보간과 fresh Lobby seed로 바뀐 방향을 잘못 가정했으므로 body의 각 축 f32 적분식으로 검증했다. 카운터 하나 기대/없는 snapshot.bendWeight도 실제 계약으로 정정했다. 실패를 native 성공으로 세지 않았다.
+
+보고 자료: analysis/port_weapon/before.json·weapon fixture·smoke.json·smoke.png. smoke의 inkAfter31 필드 저장에는 이전 잔량을 쓰는 보고 오류가 있어 그 값은 근거에서 제외한다. 회복 경계 자체의 assertion은 실제 31번째 값으로 통과했다.
+
+## 11. 미확정 사항과 추가 분석에 필요한 근거
+
+- B7a0 지연 writer·회복 상위 게이트 연결: player_state §6.1.4. swimming 근사와 gear 조건 때문에 BUL06은 일부.
+- 발사원점 B58·a90/4d4·일부 reset/Badc·GameFrame 시작값: shooter_bullet §3.5~5.5. fresh Lobby seed만 확정이며 매치 후 계승은 별도.
+- native typed contact filter·두 형상 바디 TOI/후보 순서·천장/paint flag: PHY05/COL04/BUL04.
+- Splash/WallDrop 예약 admission·실제 manager budget의 연결: 메인32만 적용.
+- graphics ball VAT/color·floor shader·squid hide/thickness·최종 GPU: 시각 분석/포팅 항목으로 남는다.
+
+---
+
+# 이전 구현 기록 보존 — 2026-10-03 위 §5·§10 정정 우선
+
 # [weapon] 메인 무기(스플래시슈터)·탄 구현 기록
 
 담당 폴더: `games/splatoon3/core/weapon/`, 테스트 `games/splatoon3/tests/weapon_*.test.mjs`(+ 기대값 `weapon_fixture_*.json`).

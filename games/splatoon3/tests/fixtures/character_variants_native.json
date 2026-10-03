@@ -1,0 +1,5594 @@
+{
+  "source": "actual shipped GLB FRES plus native exact static key match; native GPU not executed",
+  "rows": [
+    {
+      "label": "bottle",
+      "owner": "web\\games\\splatoon3\\assets\\weapons\\Shooter_Normal_00\\model.glb",
+      "material": "M_Bottle",
+      "fres": {
+        "name": "M_Bottle",
+        "visible": true,
+        "shader": {
+          "archive": "Hoian_UBER",
+          "model": "hoian_uber",
+          "revision": 0,
+          "attribAssign": {
+            "_p0": "_p0",
+            "_n0": "_n0",
+            "_t0": "_t0",
+            "_i0": "_i0",
+            "_u0": "_u0"
+          },
+          "samplerAssign": {
+            "_a0": "<Default Value>",
+            "_n0": "_n0",
+            "_r0": "_r0",
+            "_m0": "<Default Value>",
+            "_t0": "<Default Value>",
+            "_ao0": "<Default Value>"
+          },
+          "options": {
+            "enable_roughness_map": "True",
+            "enable_metalness_map": "<Default Value>",
+            "enable_emission_map": "<Default Value>",
+            "enable_taransmission": "True",
+            "enable_transmission_map": "<Default Value>",
+            "enable_ao": "<Default Value>",
+            "enable_edge_light": "<Default Value>",
+            "enable_albedo_tex": "False",
+            "enable_transfilm": "True",
+            "enable_calc_color0": "True",
+            "transmission_multi_color": "2",
+            "team_color_map_type": "3",
+            "blitz_calc_color0_calc_type": "1",
+            "blitz_calc_color0_B": "50"
+          }
+        },
+        "renderInfo": {
+          "dynamic_alpha_fadeout": [
+            "off"
+          ],
+          "gsys_render_state_display_face": [
+            "front"
+          ],
+          "my_team_color_hue_offset": [
+            0.5
+          ],
+          "my_team_color_bright_offset": [
+            0
+          ],
+          "substitute_color_hue_offset": [
+            0
+          ],
+          "substitute_color_bright_offset": [
+            0
+          ],
+          "substitute_color_saturate_offset": [
+            0
+          ],
+          "gsys_static_depth_shadow": [
+            "0"
+          ],
+          "gsys_static_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_dynamic_depth_shadow": [
+            "1"
+          ],
+          "gsys_dynamic_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_bake_group": [
+            "group1"
+          ],
+          "gsys_bake_texel_param": [
+            100
+          ],
+          "gsys_bake_uv_unite": [
+            "none"
+          ],
+          "gsys_bake_option": [
+            "none"
+          ],
+          "bake_cast_shadow": [
+            "true"
+          ],
+          "gsys_bake_normal_map": [
+            "default"
+          ],
+          "gsys_bake_emission_map": [
+            "default"
+          ],
+          "paint_prior_face": [
+            "none"
+          ],
+          "paint_build_option": [
+            "none"
+          ],
+          "enable_miiverse_filter": [
+            "off"
+          ],
+          "enable_miiverse_auto_replace": [
+            "off"
+          ],
+          "miiverse_filter_type": [
+            "0"
+          ],
+          "memo_texture_num": [
+            1
+          ],
+          "miiverse_priority": [
+            0
+          ],
+          "force_disable_view_frustum_culling": [
+            "off"
+          ],
+          "spl_model_type": [
+            "5"
+          ],
+          "gsys_env_obj_set": [
+            "TPS"
+          ],
+          "gsys_pass": [
+            "no_setting"
+          ],
+          "gsys_priority_hint": [
+            "effect"
+          ],
+          "gsys_priority": [
+            0
+          ],
+          "gsys_cube_map": [
+            "0"
+          ],
+          "gsys_cube_map_only": [
+            "0"
+          ],
+          "gsys_multi_filter": [
+            "0"
+          ],
+          "gsys_dynamic_reflection": [
+            "1"
+          ],
+          "blitz_silhouette_obj": [
+            "0"
+          ],
+          "gsys_override_shader": [
+            "0"
+          ],
+          "gsys_render_state_mode": [
+            "opaque"
+          ],
+          "gsys_depth_test_enable": [
+            "true"
+          ],
+          "gsys_depth_test_func": [
+            "lequal"
+          ],
+          "gsys_depth_test_write": [
+            "true"
+          ],
+          "gsys_alpha_test_enable": [
+            "false"
+          ],
+          "gsys_alpha_test_func": [
+            "gequal"
+          ],
+          "gsys_alpha_test_value": [
+            0.5
+          ],
+          "gsys_render_state_blend_mode": [
+            "none"
+          ],
+          "gsys_color_blend_rgb_op": [
+            "add"
+          ],
+          "gsys_color_blend_rgb_src_func": [
+            "src_alpha"
+          ],
+          "gsys_color_blend_rgb_dst_func": [
+            "one_minus_src_alpha"
+          ],
+          "gsys_color_blend_const_color": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "gsys_color_blend_alpha_op": [
+            "add"
+          ],
+          "gsys_color_blend_alpha_src_func": [
+            "one"
+          ],
+          "gsys_color_blend_alpha_dst_func": [
+            "one"
+          ]
+        },
+        "params": {
+          "two_comp_paint_team": {
+            "type": "Int",
+            "value": 0
+          },
+          "is_use_graffiti_bake_paint_uv": {
+            "type": "Int",
+            "value": 0
+          },
+          "height_draw_mode": {
+            "type": "Int",
+            "value": 0
+          },
+          "display_team_type": {
+            "type": "Int",
+            "value": 0
+          },
+          "opacity": {
+            "type": "Float",
+            "value": 1
+          },
+          "gsys_xlu_zprepass_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "refract_depth_fog_start": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_depth_fog_end": {
+            "type": "Float",
+            "value": 5
+          },
+          "holo_model_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "refract_opa_start": {
+            "type": "Float",
+            "value": 100
+          },
+          "refract_opa_end": {
+            "type": "Float",
+            "value": 300
+          },
+          "refract_caustics_pow": {
+            "type": "Float",
+            "value": 20
+          },
+          "refract_caustics_intens": {
+            "type": "Float",
+            "value": 10
+          },
+          "holo_model_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "refract_caustics_uv_scale": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "refract_caustics_uv_height_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "glass_thickness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_tex_coord_offset": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_opacity_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "model_dither_normal_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "model_dither_time_shift_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_model_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "team_color_blend": {
+            "type": "Float",
+            "value": 0
+          },
+          "team_color_blend_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "multi_normal_weight": {
+            "type": "Float",
+            "value": 0
+          },
+          "roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "metalness": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_tone_param": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_peak_offset": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "fabric_peak_stop": {
+            "type": "Float",
+            "value": 100
+          },
+          "fabric_peak_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_noise_intens": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fabric_noise_decay": {
+            "type": "Float",
+            "value": 0
+          },
+          "envmap_mip_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_model_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "emission_normalize_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "night_emission_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value0": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_intens_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_intens_not_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "saturation_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "inner_light_diffusivity": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "inner_light_min_clamp": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value1": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_rate": {
+            "type": "Float",
+            "value": 0.05
+          },
+          "scattering_rate": {
+            "type": "Float",
+            "value": 0.72
+          },
+          "edge_transmission_power": {
+            "type": "Float",
+            "value": 1.5
+          },
+          "const_value2": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_attenu_pos": {
+            "type": "Float",
+            "value": 50
+          },
+          "transmission_attenu_range": {
+            "type": "Float",
+            "value": 100
+          },
+          "transmission_attenu_min": {
+            "type": "Float",
+            "value": 0
+          },
+          "light_occlude_check_len": {
+            "type": "Float",
+            "value": 10
+          },
+          "gsys_alpha_test_ref_value": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "model_y_fog_up_start": {
+            "type": "Float",
+            "value": 40
+          },
+          "model_y_fog_up_end": {
+            "type": "Float",
+            "value": 400
+          },
+          "model_y_fog_down_start": {
+            "type": "Float",
+            "value": -40
+          },
+          "model_y_fog_down_end": {
+            "type": "Float",
+            "value": -400
+          },
+          "two_color_complement_paint_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_bravo": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_charlie": {
+            "type": "Float",
+            "value": 0
+          },
+          "comp_paint_texcoord_offset": {
+            "type": "Float",
+            "value": 0.005
+          },
+          "comp_paint_norm_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "comp_paint_lame_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "rainbow_ink_hue_range": {
+            "type": "Float",
+            "value": 0
+          },
+          "rainbow_ink_hue_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness_ratio": {
+            "type": "Float",
+            "value": 1
+          },
+          "ink_sheet_edge_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_scroll_anim": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_density": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "dynamic_vert_alpha_coeff": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_marble_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_fur_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_mask_vertex_fin_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "fade_dither_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_core_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_dist": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_noise": {
+            "type": "Float",
+            "value": 5
+          },
+          "camera_xlu_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_darken_dist_offset": {
+            "type": "Float",
+            "value": -3
+          },
+          "kebaink_darken_dist_noise": {
+            "type": "Float",
+            "value": 10
+          },
+          "kebaink_wave_mask_dist_offset": {
+            "type": "Float",
+            "value": 5
+          },
+          "kebaink_wave_mask_gradation": {
+            "type": "Float",
+            "value": 0.3
+          },
+          "kebaink_wave_intens": {
+            "type": "Float",
+            "value": 2
+          },
+          "kebaink_wave_freq": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_wave_phase": {
+            "type": "Float",
+            "value": 5
+          },
+          "scatter_distance": {
+            "type": "Float",
+            "value": 0
+          },
+          "flake_rare_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "map_min_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_facing_gain": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_facing_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "manual_fresnel": {
+            "type": "Float",
+            "value": 1
+          },
+          "map_max_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "film_transmission_power": {
+            "type": "Float",
+            "value": 2.6
+          },
+          "film_transmission_rate": {
+            "type": "Float",
+            "value": 0.62
+          },
+          "shell_fur_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "edge_light_intens": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "edge_light_power": {
+            "type": "Float",
+            "value": 1.5
+          },
+          "actor_instance_id": {
+            "type": "Float",
+            "value": 0
+          },
+          "indirect_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "spec_glaze_intens": {
+            "type": "Float",
+            "value": 3
+          },
+          "specular_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "specular_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_spec_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_normal_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "reflector_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_scroll": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_uniform_norm_coef": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_roughness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "big_lame_appearance": {
+            "type": "Float",
+            "value": 3
+          },
+          "big_lame_epsilon": {
+            "type": "Float",
+            "value": 0.05
+          },
+          "micro_flakes_diffuse_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "micro_flakes_specular_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_appearance": {
+            "type": "Float",
+            "value": 10
+          },
+          "fur_dilate_edge_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "flake_rare_shadow_intes": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_eq_channel_a": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_b": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_c": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_d": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_e": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_fader_channel_a": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_b": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_c": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_d": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_e": {
+            "type": "Float",
+            "value": 1
+          },
+          "mirror_material_eff": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_pararell_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_perpendicular_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_specular_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_normal_mask": {
+            "type": "Float",
+            "value": 0
+          },
+          "decal_depth_range": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "decal_depth_alpha_coef": {
+            "type": "Float",
+            "value": 10
+          },
+          "polygonal_light_mask": {
+            "type": "Float",
+            "value": 1
+          },
+          "phantom_edge_offset_in_material": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_height_darken_trans": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occlusion_ray_clamp": {
+            "type": "Float",
+            "value": 4
+          },
+          "parallax_occlusion_map_uv_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occulusion_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_shadow": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_fur_dilate": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_occlusion_fur_fin_height_scale": {
+            "type": "Float",
+            "value": 6
+          },
+          "parallax_occlusion_fur_fin_height_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_fur_occlusion_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_fur_fin_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_fin_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_fin_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_cull_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "fur_fin_depth_write": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_shell_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_thickness": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_sharp_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_depth": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_x_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_y_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_uv_aspect": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_night_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_shadow_gradation_coef": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "interior_map_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_night_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_mask_depth": {
+            "type": "Float",
+            "value": 0
+          },
+          "vat_anim_pos": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_normal_rate": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_back_color_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_hue": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_graffiti_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "holo_graffiti_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "holo_graffiti_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "holo_graffiti_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "holo_model_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "col_paint_uv_offset": {
+            "type": "Float2",
+            "value": [
+              0,
+              0
+            ]
+          },
+          "interior_map_uv_scale": {
+            "type": "Float2",
+            "value": [
+              1,
+              1
+            ]
+          },
+          "kebaink_core_pos": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "inner_light_pos_offset": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "team_flag": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "model_y_fog_up_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "model_y_fog_down_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "const_vector0": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "transmission_color_backlight": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "gsys_bake_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "gsys_bake_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "kebaink_multi_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "kebaink_darken_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "fabric_blend_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "manual_fresnel_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "under_film_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "edge_light_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "holo_graffiti_base_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "my_alpha_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_bravo_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_charlie_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "player_skin_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "refract_depth_fog_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "scattering_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "graffiti_back_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "model_y_fog_up_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "refract_caustics_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "albedo_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "const_color0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              1
+            ]
+          },
+          "model_y_fog_down_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color2": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "interior_mask_night_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "fade_player_pos": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "mantaking_shadow_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "fur_shell_root_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "map_min_gradation_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "map_max_gradation_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "night_emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "mantaking_parameter0": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              1,
+              0
+            ]
+          },
+          "flake_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "depth_silhouette_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "specular_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_complement": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "tex_mtx2": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx0": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 2
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx1": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          }
+        },
+        "userData": {
+          "SealPolygon": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "VertexAlpha": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "Paintable": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          }
+        },
+        "samplers": [
+          {
+            "sampler": "_n0",
+            "texture": "M_Bottle_Nrm",
+            "png": "M_Bottle_Nrm.png",
+            "slots": [
+              "_n0"
+            ]
+          },
+          {
+            "sampler": "_r0",
+            "texture": "M_Bottle_Rgh",
+            "png": "M_Bottle_Rgh.png",
+            "slots": [
+              "_r0"
+            ]
+          }
+        ],
+        "gltfUsed": {
+          "roughness": "M_Bottle_Rgh",
+          "metallic": null,
+          "normal": "M_Bottle_Nrm"
+        },
+        "teamColor": {
+          "maskTcl": null,
+          "map2cl": null,
+          "team_color_map_type": "3",
+          "my_team_color_type": null,
+          "my_team_color_hue_offset": "0.5",
+          "my_team_color_bright_offset": "0",
+          "enable_calc_color0": "True",
+          "blitz_calc_color0_calc_type": "1"
+        }
+      },
+      "nativeCandidates": [
+        320
+      ],
+      "normalizedOptions": {
+        "enable_roughness_map": "1",
+        "enable_taransmission": "1",
+        "enable_albedo_tex": "0",
+        "enable_transfilm": "1",
+        "enable_calc_color0": "1",
+        "transmission_multi_color": "2",
+        "team_color_map_type": "3",
+        "blitz_calc_color0_calc_type": "1",
+        "blitz_calc_color0_B": "50",
+        "gsys_assign_type": "gsys_assign_material",
+        "gsys_alpha_test_enable": "0",
+        "gsys_renderstate": "0",
+        "gsys_display_face_type": "1",
+        "blitz_rendering_mode": "0",
+        "enable_opacity_tex": "0",
+        "camera_xlu_type": "0",
+        "gsys_enable_color_buffer": "0",
+        "blitz_refract_type": "0",
+        "enable_refract_depth_fog": "0",
+        "enable_refract_distance_opa": "0",
+        "enable_refract_caustics": "0",
+        "enable_thick_glass": "0",
+        "enable_model_dither_normal": "0",
+        "enable_model_dither_overlap": "0",
+        "model_dither_overlap_mode": "0",
+        "blitz_inv_norm_backface": "0",
+        "vertex_color": "0",
+        "texcoord_select_teamcolormap": "0",
+        "my_team_color_type": "0",
+        "enable_normal_map": "1",
+        "gsys_normalmap_BC1": "0",
+        "texcoord_select_normal": "0",
+        "enable_multi_normal_map": "0",
+        "enable_shading": "1",
+        "texcoord_select_rghmap": "0",
+        "roughness_reverse": "0",
+        "enable_metalness_map": "0",
+        "texcoord_select_mtlmap": "0",
+        "enable_fabric_noise_map": "0",
+        "linear_roughness": "0",
+        "use_bias_mip_envmap": "0",
+        "enable_emission": "0",
+        "emission_color_type": "0",
+        "enable_emission_map": "0",
+        "texcoord_select_emmmap": "0",
+        "normalize_emission": "0",
+        "enable_night_emission": "0",
+        "enable_envmap_emission": "0",
+        "disable_emission_in_envmap": "0",
+        "enable_correction_in_envmap": "0",
+        "enable_inner_light": "0",
+        "transmission_mask": "3",
+        "enable_edge_transmission": "0",
+        "enable_transmission_map": "0",
+        "texcoord_select_trsmap": "0",
+        "enable_thickness_map": "0",
+        "restex_id_thickness_map": "0",
+        "enable_transmission_attenu": "0",
+        "enable_light_occlude_check": "0",
+        "enable_graffiti_blend": "0",
+        "enable_shadow_shadow_pre_pass": "1",
+        "enable_static_depth_shadow": "1",
+        "enable_dynamic_depth_shadow": "1",
+        "enable_projection_shadow": "1",
+        "enable_depth_shadow_4_pcf": "0",
+        "shadow_all_by_vertex_color_r": "0",
+        "enable_ao": "0",
+        "texcoord_select_ao": "0",
+        "enable_bake_shadow": "0",
+        "bake_shadow_type": "-1",
+        "bake_light_type": "-1",
+        "blitz_paint_type": "0",
+        "enable_visible_ink_opa": "0",
+        "enable_overlay_paint_on_emission": "0",
+        "blitz_obj_paint_type": "0",
+        "comp_paint_type": "2",
+        "texcoord_select_comppaint": "0",
+        "enable_private_paint_thickness": "0",
+        "enable_ink_sheet": "0",
+        "enable_paint_dynamic_display": "0",
+        "blitz_map_paint": "0",
+        "enable_kebaink_marble": "0",
+        "kebaink_noise_pos_type": "0",
+        "restex_id_kebaink_marble": "0",
+        "marble_normal_type": "0",
+        "kebaink_decay_type": "0",
+        "kebaink_wave_type": "0",
+        "enable_sfxmask": "0",
+        "texcoord_select_sfxmask": "0",
+        "enable_cheap_sss": "0",
+        "enable_fabric_shading": "0",
+        "fabric_facing_type": "0",
+        "inv_fabric_facing": "1",
+        "enable_manual_fresnel": "0",
+        "fresnel_multi_color": "0",
+        "enable_manual_fresnel_map": "0",
+        "transfilm_type": "0",
+        "under_film_multicolor": "0",
+        "enable_edge_light": "0",
+        "edge_light_base_color_type": "0",
+        "enable_edge_irradiance_map": "1",
+        "enable_tex_indirect": "0",
+        "indirect_tex": "0",
+        "enable_specular_glaze": "0",
+        "enable_gambit_compati": "0",
+        "enable_specular_mask": "0",
+        "enable_planer_reflection": "0",
+        "enable_reflector": "0",
+        "reflector_type": "0",
+        "enable_metal_flakes": "0",
+        "restex_id_flakes_map": "0",
+        "metal_flakes_type": "0",
+        "enable_metal_flakes_rare": "0",
+        "enable_emission_mixer": "0",
+        "enable_mixer_albedo_attenuation": "0",
+        "enable_mirroring": "0",
+        "enable_aniso_specular": "0",
+        "enable_decal_depth": "0",
+        "enable_vtx_deform": "0",
+        "enable_polygonal_light_mask": "0",
+        "enable_phantom_filter": "0",
+        "blitz_enable_parallax_map": "0",
+        "restex_id_parallax_height_map": "2",
+        "parallax_target": "1",
+        "blitz_debug_disable_parallax_teamcolor": "0",
+        "blitz_enable_parallax_height_darken": "0",
+        "blitz_enable_parallax_height_darken_trans": "0",
+        "blitz_enable_parallax_occlusion_map": "0",
+        "restex_id_parallax_occlusion_height_map": "0",
+        "blitz_parallax_occlusion_target": "2",
+        "blitz_enable_parallax_occlusion_height_darken": "0",
+        "blitz_parallax_occlusion_sample_num": "16",
+        "blitz_enable_parallax_fur": "0",
+        "blitz_enable_fur_dilate_type": "0",
+        "enable_discard_1st_pass": "0",
+        "enable_edge_fur_dilate": "0",
+        "blitz_enable_parallax_fur_fin": "0",
+        "blitz_parallax_fur_fin_type": "2",
+        "blitz_enable_parallax_fur_lod": "0",
+        "enable_fur_fin": "0",
+        "fur_fin_cull": "0",
+        "fur_fin_normalize_density": "0",
+        "fur_fin_integer_density": "0",
+        "fur_fin_length_mask_vertex_color": "0",
+        "enable_fur_shell": "0",
+        "fur_shell_cull": "0",
+        "fur_shell_num": "5",
+        "fur_shell_is_smooth_sharp": "0",
+        "blitz_enable_interior_map": "0",
+        "restex_id_interior_map": "0",
+        "restex_id_interior_mask": "2",
+        "blitz_interior_map_variation": "1",
+        "blitz_interior_mask_variation": "1",
+        "blitz_interior_front_variation": "1",
+        "blitz_debug_interior_map_variation_idx": "-1",
+        "blitz_debug_interior_mask_variation_idx": "-1",
+        "enable_vat": "0",
+        "vat_type": "0",
+        "enable_vat_decode_normal_old": "0",
+        "enable_vat_bone_anim_offset": "0",
+        "enable_delete_fragment": "0",
+        "blitz_map_height": "0",
+        "is_graffiti": "0",
+        "graffiti_type": "0",
+        "is_enable_mantaking_shadow": "0",
+        "mantaking_shadow_tex_index": "0",
+        "is_mantaking_child": "0",
+        "is_enable_model_hologram": "0",
+        "is_use_camera_xlu_xlu_zprepass": "0",
+        "pixel_expression0": "0",
+        "vertex_expression0": "0",
+        "blitz_calc_color0_replace_color": "0",
+        "blitz_calc_color0_clamp01": "0",
+        "blitz_calc_color0_A": "0",
+        "blitz_calc_color0_A_channel": "0",
+        "blitz_calc_color0_B_channel": "0",
+        "blitz_calc_color0_C": "0",
+        "blitz_calc_color0_C_channel": "0",
+        "blitz_calc_color0_D": "0",
+        "blitz_calc_color0_D_channel": "0",
+        "enable_calc_color1": "0",
+        "blitz_calc_color1_replace_color": "0",
+        "blitz_calc_color1_calc_type": "0",
+        "blitz_calc_color1_clamp01": "0",
+        "blitz_calc_color1_A": "0",
+        "blitz_calc_color1_A_channel": "0",
+        "blitz_calc_color1_B": "0",
+        "blitz_calc_color1_B_channel": "0",
+        "blitz_calc_color1_C": "0",
+        "blitz_calc_color1_C_channel": "0",
+        "blitz_calc_color1_D": "0",
+        "blitz_calc_color1_D_channel": "0",
+        "enable_calc_color2": "0",
+        "blitz_calc_color2_replace_color": "0",
+        "blitz_calc_color2_calc_type": "0",
+        "blitz_calc_color2_clamp01": "0",
+        "blitz_calc_color2_A": "0",
+        "blitz_calc_color2_A_channel": "0",
+        "blitz_calc_color2_B": "0",
+        "blitz_calc_color2_B_channel": "0",
+        "blitz_calc_color2_C": "0",
+        "blitz_calc_color2_C_channel": "0",
+        "blitz_calc_color2_D": "0",
+        "blitz_calc_color2_D_channel": "0",
+        "enable_calc_color3": "0",
+        "blitz_calc_color3_replace_color": "0",
+        "blitz_calc_color3_calc_type": "0",
+        "blitz_calc_color3_clamp01": "0",
+        "blitz_calc_color3_A": "0",
+        "blitz_calc_color3_A_channel": "0",
+        "blitz_calc_color3_B": "0",
+        "blitz_calc_color3_B_channel": "0",
+        "blitz_calc_color3_C": "0",
+        "blitz_calc_color3_C_channel": "0",
+        "blitz_calc_color3_D": "0",
+        "blitz_calc_color3_D_channel": "0",
+        "texcoord_select_res0": "0",
+        "texcoord_select_res1": "0",
+        "texcoord_select_res2": "0",
+        "texcoord_calc_texcoord0": "0",
+        "texcoord_calc_texcoord2": "0",
+        "texcoord_calc_texcoord3": "0",
+        "texcoord_aspect_mod_texcoord0": "0",
+        "texcoord_aspect_mod_texcoord2": "0",
+        "texcoord_aspect_mod_texcoord3": "0",
+        "enable_udim": "0",
+        "udim_calc_mode": "1",
+        "enable_fog_z": "1",
+        "enable_fog_y": "1",
+        "enable_model_y_fog": "0",
+        "enable_model_y_fog_up": "0",
+        "enable_model_y_fog_down": "0",
+        "enable_vert_alpha": "0",
+        "enable_dynamic_vert_alpha": "0",
+        "gsys_geometry_culling": "0",
+        "gsys_geometry_depth_culling": "0",
+        "enable_diffuse": "1",
+        "enable_irradiance_map": "1",
+        "enable_specular": "1",
+        "enable_specular_direct": "1",
+        "debug_disable_lightmap": "1",
+        "debug_use_cube_array": "1",
+        "enable_bake_depth_shadow": "1",
+        "enable_bake_ao": "1",
+        "debug_output_alpha": "0",
+        "enable_light_pre_pass": "1",
+        "enable_ink_gi": "1",
+        "use_heightmap_height": "0",
+        "enable_dynamic_light": "1",
+        "enable_polygonal_light": "1",
+        "enable_transmission": "0",
+        "gsys_alpha_test_func": "6",
+        "blitz_xlu_type": "0"
+      }
+    },
+    {
+      "label": "tank",
+      "owner": "web\\games\\splatoon3\\assets\\characters\\Player00\\parts\\Tnk_Simple.glb",
+      "material": "M_Body",
+      "fres": {
+        "name": "M_Body",
+        "visible": true,
+        "shader": {
+          "archive": "Hoian_UBER",
+          "model": "hoian_uber",
+          "revision": 0,
+          "attribAssign": {
+            "_p0": "_p0",
+            "_n0": "_n0",
+            "_t0": "_t0",
+            "_w0": "_w0",
+            "_i0": "_i0",
+            "_u0": "_u0",
+            "_u2": "_u0",
+            "_u1": "<Default Value>"
+          },
+          "samplerAssign": {
+            "_a0": "_a0",
+            "_n0": "_n0",
+            "_r0": "_r0",
+            "_m0": "_m0",
+            "_e0": "_e0",
+            "_t0": "_t0",
+            "_ao0": "sampler1",
+            "_fm0": "_fm0",
+            "_re0": "sampler0",
+            "_re1": "sampler2",
+            "_op0": "<Default Value>"
+          },
+          "options": {
+            "enable_roughness_map": "True",
+            "enable_metalness_map": "True",
+            "enable_emission": "True",
+            "enable_emission_map": "True",
+            "enable_taransmission": "True",
+            "enable_transmission_map": "True",
+            "enable_ao": "True",
+            "enable_sfxmask": "True",
+            "enable_transfilm": "True",
+            "enable_calc_color0": "True",
+            "blitz_calc_color0_clamp01": "True",
+            "enable_opacity_tex": "<Default Value>",
+            "enable_albedo_tex": "<Default Value>",
+            "enable_multi_normal_map": "<Default Value>",
+            "enable_shadow_shadow_pre_pass": "<Default Value>",
+            "enable_edge_light": "<Default Value>",
+            "enable_edge_irradiance_map": "<Default Value>",
+            "enable_dynamic_depth_shadow": "<Default Value>",
+            "enable_projection_shadow": "<Default Value>",
+            "transmission_mask": "2",
+            "blitz_calc_color0_replace_color": "2",
+            "blitz_calc_color0_calc_type": "22",
+            "blitz_calc_color0_A": "3",
+            "blitz_calc_color0_B": "110",
+            "blitz_calc_color0_C": "10",
+            "blitz_calc_color0_D": "9",
+            "blitz_calc_color0_D_channel": "2",
+            "texcoord_select_res0": "2",
+            "blitz_rendering_mode": "<Default Value>",
+            "texcoord_select_emmmap": "<Default Value>",
+            "fresnel_multi_color": "<Default Value>",
+            "team_color_map_type": "<Default Value>",
+            "emission_color_type": "<Default Value>",
+            "under_film_multicolor": "<Default Value>"
+          }
+        },
+        "renderInfo": {
+          "dynamic_alpha_fadeout": [
+            "off"
+          ],
+          "gsys_render_state_display_face": [
+            "front"
+          ],
+          "my_team_color_hue_offset": [
+            0.5
+          ],
+          "my_team_color_bright_offset": [
+            0
+          ],
+          "substitute_color_hue_offset": [
+            0
+          ],
+          "substitute_color_bright_offset": [
+            0
+          ],
+          "substitute_color_saturate_offset": [
+            0
+          ],
+          "gsys_static_depth_shadow": [
+            "0"
+          ],
+          "gsys_static_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_dynamic_depth_shadow": [
+            "1"
+          ],
+          "gsys_dynamic_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_bake_group": [
+            "group1"
+          ],
+          "gsys_bake_texel_param": [
+            100
+          ],
+          "gsys_bake_uv_unite": [
+            "none"
+          ],
+          "gsys_bake_option": [
+            "none"
+          ],
+          "bake_cast_shadow": [
+            "true"
+          ],
+          "gsys_bake_normal_map": [
+            "default"
+          ],
+          "gsys_bake_emission_map": [
+            "default"
+          ],
+          "paint_prior_face": [
+            "none"
+          ],
+          "paint_build_option": [
+            "none"
+          ],
+          "enable_miiverse_filter": [
+            "off"
+          ],
+          "enable_miiverse_auto_replace": [
+            "off"
+          ],
+          "miiverse_filter_type": [
+            "0"
+          ],
+          "memo_texture_num": [
+            1
+          ],
+          "miiverse_priority": [
+            0
+          ],
+          "force_disable_view_frustum_culling": [
+            "off"
+          ],
+          "spl_model_type": [
+            "5"
+          ],
+          "gsys_env_obj_set": [
+            "TPS"
+          ],
+          "gsys_pass": [
+            "no_setting"
+          ],
+          "gsys_priority_hint": [
+            "effect"
+          ],
+          "gsys_priority": [
+            0
+          ],
+          "gsys_cube_map": [
+            "0"
+          ],
+          "gsys_cube_map_only": [
+            "0"
+          ],
+          "gsys_multi_filter": [
+            "0"
+          ],
+          "gsys_dynamic_reflection": [
+            "1"
+          ],
+          "blitz_silhouette_obj": [
+            "0"
+          ],
+          "gsys_override_shader": [
+            "0"
+          ],
+          "gsys_render_state_mode": [
+            "opaque"
+          ],
+          "gsys_depth_test_enable": [
+            "true"
+          ],
+          "gsys_depth_test_func": [
+            "lequal"
+          ],
+          "gsys_depth_test_write": [
+            "true"
+          ],
+          "gsys_alpha_test_enable": [
+            "false"
+          ],
+          "gsys_alpha_test_func": [
+            "gequal"
+          ],
+          "gsys_alpha_test_value": [
+            0.5
+          ],
+          "gsys_render_state_blend_mode": [
+            "none"
+          ],
+          "gsys_color_blend_rgb_op": [
+            "add"
+          ],
+          "gsys_color_blend_rgb_src_func": [
+            "src_alpha"
+          ],
+          "gsys_color_blend_rgb_dst_func": [
+            "one_minus_src_alpha"
+          ],
+          "gsys_color_blend_const_color": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "gsys_color_blend_alpha_op": [
+            "add"
+          ],
+          "gsys_color_blend_alpha_src_func": [
+            "one"
+          ],
+          "gsys_color_blend_alpha_dst_func": [
+            "one"
+          ]
+        },
+        "params": {
+          "two_comp_paint_team": {
+            "type": "Int",
+            "value": 0
+          },
+          "is_use_graffiti_bake_paint_uv": {
+            "type": "Int",
+            "value": 0
+          },
+          "height_draw_mode": {
+            "type": "Int",
+            "value": 0
+          },
+          "display_team_type": {
+            "type": "Int",
+            "value": 0
+          },
+          "opacity": {
+            "type": "Float",
+            "value": 1
+          },
+          "gsys_xlu_zprepass_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "refract_depth_fog_start": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_depth_fog_end": {
+            "type": "Float",
+            "value": 5
+          },
+          "holo_model_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "refract_opa_start": {
+            "type": "Float",
+            "value": 100
+          },
+          "refract_opa_end": {
+            "type": "Float",
+            "value": 300
+          },
+          "refract_caustics_pow": {
+            "type": "Float",
+            "value": 20
+          },
+          "refract_caustics_intens": {
+            "type": "Float",
+            "value": 10
+          },
+          "holo_model_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "refract_caustics_uv_scale": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "refract_caustics_uv_height_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "glass_thickness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_tex_coord_offset": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_opacity_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "model_dither_normal_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "model_dither_time_shift_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_model_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "team_color_blend": {
+            "type": "Float",
+            "value": 0
+          },
+          "team_color_blend_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "multi_normal_weight": {
+            "type": "Float",
+            "value": 0
+          },
+          "roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "metalness": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_tone_param": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_peak_offset": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "fabric_peak_stop": {
+            "type": "Float",
+            "value": 100
+          },
+          "fabric_peak_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_noise_intens": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fabric_noise_decay": {
+            "type": "Float",
+            "value": 0
+          },
+          "envmap_mip_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_intensity": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "holo_model_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "emission_normalize_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "night_emission_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value0": {
+            "type": "Float",
+            "value": 0.33
+          },
+          "emission_intens_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_intens_not_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "saturation_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "inner_light_diffusivity": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "inner_light_min_clamp": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value1": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_rate": {
+            "type": "Float",
+            "value": 0.543
+          },
+          "scattering_rate": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "edge_transmission_power": {
+            "type": "Float",
+            "value": 3.7
+          },
+          "const_value2": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_attenu_pos": {
+            "type": "Float",
+            "value": 50
+          },
+          "transmission_attenu_range": {
+            "type": "Float",
+            "value": 100
+          },
+          "transmission_attenu_min": {
+            "type": "Float",
+            "value": 0
+          },
+          "light_occlude_check_len": {
+            "type": "Float",
+            "value": 10
+          },
+          "gsys_alpha_test_ref_value": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "model_y_fog_up_start": {
+            "type": "Float",
+            "value": 40
+          },
+          "model_y_fog_up_end": {
+            "type": "Float",
+            "value": 400
+          },
+          "model_y_fog_down_start": {
+            "type": "Float",
+            "value": -40
+          },
+          "model_y_fog_down_end": {
+            "type": "Float",
+            "value": -400
+          },
+          "two_color_complement_paint_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_bravo": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_charlie": {
+            "type": "Float",
+            "value": 0
+          },
+          "comp_paint_texcoord_offset": {
+            "type": "Float",
+            "value": 0.005
+          },
+          "comp_paint_norm_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "comp_paint_lame_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "rainbow_ink_hue_range": {
+            "type": "Float",
+            "value": 0
+          },
+          "rainbow_ink_hue_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness_ratio": {
+            "type": "Float",
+            "value": 1
+          },
+          "ink_sheet_edge_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_scroll_anim": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_density": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "dynamic_vert_alpha_coeff": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_marble_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_fur_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_mask_vertex_fin_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "fade_dither_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_core_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_dist": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_noise": {
+            "type": "Float",
+            "value": 5
+          },
+          "camera_xlu_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_darken_dist_offset": {
+            "type": "Float",
+            "value": -3
+          },
+          "kebaink_darken_dist_noise": {
+            "type": "Float",
+            "value": 10
+          },
+          "kebaink_wave_mask_dist_offset": {
+            "type": "Float",
+            "value": 5
+          },
+          "kebaink_wave_mask_gradation": {
+            "type": "Float",
+            "value": 0.3
+          },
+          "kebaink_wave_intens": {
+            "type": "Float",
+            "value": 2
+          },
+          "kebaink_wave_freq": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_wave_phase": {
+            "type": "Float",
+            "value": 5
+          },
+          "scatter_distance": {
+            "type": "Float",
+            "value": 0
+          },
+          "flake_rare_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "map_min_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_facing_gain": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_facing_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "manual_fresnel": {
+            "type": "Float",
+            "value": 1
+          },
+          "map_max_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "film_transmission_power": {
+            "type": "Float",
+            "value": 0.7
+          },
+          "film_transmission_rate": {
+            "type": "Float",
+            "value": 0.88
+          },
+          "shell_fur_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "edge_light_intens": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "edge_light_power": {
+            "type": "Float",
+            "value": 1.5
+          },
+          "actor_instance_id": {
+            "type": "Float",
+            "value": 0
+          },
+          "indirect_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "spec_glaze_intens": {
+            "type": "Float",
+            "value": 3
+          },
+          "specular_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "specular_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_spec_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_normal_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "reflector_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_scroll": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_uniform_norm_coef": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_roughness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "big_lame_appearance": {
+            "type": "Float",
+            "value": 3
+          },
+          "big_lame_epsilon": {
+            "type": "Float",
+            "value": 0.05
+          },
+          "micro_flakes_diffuse_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "micro_flakes_specular_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_appearance": {
+            "type": "Float",
+            "value": 10
+          },
+          "fur_dilate_edge_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "flake_rare_shadow_intes": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_eq_channel_a": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_b": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_c": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_d": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_e": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_fader_channel_a": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_b": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_c": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_d": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_e": {
+            "type": "Float",
+            "value": 1
+          },
+          "mirror_material_eff": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_pararell_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_perpendicular_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_specular_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_normal_mask": {
+            "type": "Float",
+            "value": 0
+          },
+          "decal_depth_range": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "decal_depth_alpha_coef": {
+            "type": "Float",
+            "value": 10
+          },
+          "polygonal_light_mask": {
+            "type": "Float",
+            "value": 1
+          },
+          "phantom_edge_offset_in_material": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_height_darken_trans": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occlusion_ray_clamp": {
+            "type": "Float",
+            "value": 4
+          },
+          "parallax_occlusion_map_uv_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occulusion_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_shadow": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_fur_dilate": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_occlusion_fur_fin_height_scale": {
+            "type": "Float",
+            "value": 6
+          },
+          "parallax_occlusion_fur_fin_height_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_fur_occlusion_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_fur_fin_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_fin_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_fin_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_cull_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "fur_fin_depth_write": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_shell_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_thickness": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_sharp_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_depth": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_x_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_y_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_uv_aspect": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_night_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_shadow_gradation_coef": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "interior_map_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_night_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_mask_depth": {
+            "type": "Float",
+            "value": 0
+          },
+          "vat_anim_pos": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_normal_rate": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_back_color_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_hue": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_graffiti_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "holo_graffiti_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "holo_graffiti_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "holo_graffiti_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "holo_model_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "col_paint_uv_offset": {
+            "type": "Float2",
+            "value": [
+              0,
+              0
+            ]
+          },
+          "interior_map_uv_scale": {
+            "type": "Float2",
+            "value": [
+              1,
+              1
+            ]
+          },
+          "kebaink_core_pos": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "inner_light_pos_offset": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "team_flag": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "model_y_fog_up_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "model_y_fog_down_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "const_vector0": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "transmission_color_backlight": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "gsys_bake_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "gsys_bake_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "kebaink_multi_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "kebaink_darken_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "fabric_blend_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "manual_fresnel_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "under_film_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "edge_light_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "holo_graffiti_base_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "my_alpha_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_bravo_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_charlie_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "player_skin_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "refract_depth_fog_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "scattering_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "graffiti_back_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "model_y_fog_up_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "refract_caustics_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "albedo_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "model_y_fog_down_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color2": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "interior_mask_night_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "fade_player_pos": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "mantaking_shadow_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "fur_shell_root_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "map_min_gradation_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "map_max_gradation_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "night_emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "mantaking_parameter0": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              1,
+              0
+            ]
+          },
+          "flake_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "depth_silhouette_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "specular_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_complement": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "tex_mtx2": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx0": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx1": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": -0.6
+              }
+            }
+          }
+        },
+        "userData": {
+          "SealPolygon": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "VertexAlpha": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "Paintable": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          }
+        },
+        "samplers": [
+          {
+            "sampler": "sampler0",
+            "texture": "M_Body_MAi",
+            "png": "M_Body_MAi.png",
+            "slots": [
+              "_re0"
+            ]
+          },
+          {
+            "sampler": "sampler2",
+            "texture": "M_Body_MBi",
+            "png": "M_Body_MBi.png",
+            "slots": [
+              "_re1"
+            ]
+          },
+          {
+            "sampler": "_a0",
+            "texture": "M_Body_Alb",
+            "png": "M_Body_Alb.png",
+            "slots": [
+              "_a0"
+            ]
+          },
+          {
+            "sampler": "_e0",
+            "texture": "M_Body_Emi",
+            "png": "M_Body_Emi.png",
+            "slots": [
+              "_e0"
+            ]
+          },
+          {
+            "sampler": "_n0",
+            "texture": "M_Body_Nrm",
+            "png": "M_Body_Nrm.png",
+            "slots": [
+              "_n0"
+            ]
+          },
+          {
+            "sampler": "_r0",
+            "texture": "M_Body_Rgh",
+            "png": "M_Body_Rgh.png",
+            "slots": [
+              "_r0"
+            ]
+          },
+          {
+            "sampler": "_m0",
+            "texture": "M_Body_Mtl",
+            "png": "M_Body_Mtl.png",
+            "slots": [
+              "_m0"
+            ]
+          },
+          {
+            "sampler": "_t0",
+            "texture": "M_Body_Trm",
+            "png": "M_Body_Trm.png",
+            "slots": [
+              "_t0"
+            ]
+          },
+          {
+            "sampler": "_fm0",
+            "texture": "M_Body_Fxm",
+            "png": "M_Body_Fxm.png",
+            "slots": [
+              "_fm0"
+            ]
+          },
+          {
+            "sampler": "sampler1",
+            "texture": "M_Body_Ao",
+            "png": "M_Body_Ao.png",
+            "slots": [
+              "_ao0"
+            ]
+          }
+        ],
+        "gltfUsed": {
+          "baseColor": "M_Body_Alb",
+          "roughness": "M_Body_Rgh",
+          "metallic": "M_Body_Mtl",
+          "normal": "M_Body_Nrm",
+          "occlusion": "M_Body_Ao",
+          "emissive": "M_Body_Emi"
+        },
+        "teamColor": {
+          "maskTcl": null,
+          "map2cl": null,
+          "team_color_map_type": "<Default Value>",
+          "my_team_color_type": null,
+          "my_team_color_hue_offset": "0.5",
+          "my_team_color_bright_offset": "0",
+          "enable_calc_color0": "True",
+          "blitz_calc_color0_calc_type": "22"
+        }
+      },
+      "nativeCandidates": [
+        2419,
+        2423
+      ],
+      "normalizedOptions": {
+        "enable_roughness_map": "1",
+        "enable_metalness_map": "1",
+        "enable_emission": "1",
+        "enable_emission_map": "1",
+        "enable_taransmission": "1",
+        "enable_transmission_map": "1",
+        "enable_ao": "1",
+        "enable_sfxmask": "1",
+        "enable_transfilm": "1",
+        "enable_calc_color0": "1",
+        "blitz_calc_color0_clamp01": "1",
+        "transmission_mask": "2",
+        "blitz_calc_color0_replace_color": "2",
+        "blitz_calc_color0_calc_type": "22",
+        "blitz_calc_color0_A": "3",
+        "blitz_calc_color0_B": "110",
+        "blitz_calc_color0_C": "10",
+        "blitz_calc_color0_D": "9",
+        "blitz_calc_color0_D_channel": "2",
+        "texcoord_select_res0": "2",
+        "gsys_assign_type": "gsys_assign_material",
+        "gsys_alpha_test_enable": "0",
+        "gsys_renderstate": "0",
+        "gsys_display_face_type": "1",
+        "blitz_rendering_mode": "0",
+        "enable_opacity_tex": "0",
+        "camera_xlu_type": "0",
+        "gsys_enable_color_buffer": "0",
+        "blitz_refract_type": "0",
+        "enable_refract_depth_fog": "0",
+        "enable_refract_distance_opa": "0",
+        "enable_refract_caustics": "0",
+        "enable_thick_glass": "0",
+        "enable_model_dither_normal": "0",
+        "enable_model_dither_overlap": "0",
+        "model_dither_overlap_mode": "0",
+        "blitz_inv_norm_backface": "0",
+        "enable_albedo_tex": "1",
+        "vertex_color": "0",
+        "team_color_map_type": "0",
+        "texcoord_select_teamcolormap": "0",
+        "my_team_color_type": "0",
+        "enable_normal_map": "1",
+        "gsys_normalmap_BC1": "0",
+        "texcoord_select_normal": "0",
+        "enable_multi_normal_map": "0",
+        "enable_shading": "1",
+        "texcoord_select_rghmap": "0",
+        "roughness_reverse": "0",
+        "texcoord_select_mtlmap": "0",
+        "enable_fabric_noise_map": "0",
+        "linear_roughness": "0",
+        "use_bias_mip_envmap": "0",
+        "emission_color_type": "0",
+        "texcoord_select_emmmap": "0",
+        "normalize_emission": "0",
+        "enable_night_emission": "0",
+        "enable_envmap_emission": "0",
+        "disable_emission_in_envmap": "0",
+        "enable_correction_in_envmap": "0",
+        "enable_inner_light": "0",
+        "enable_edge_transmission": "0",
+        "transmission_multi_color": "0",
+        "texcoord_select_trsmap": "0",
+        "enable_thickness_map": "0",
+        "restex_id_thickness_map": "0",
+        "enable_transmission_attenu": "0",
+        "enable_light_occlude_check": "0",
+        "enable_graffiti_blend": "0",
+        "enable_shadow_shadow_pre_pass": "1",
+        "enable_static_depth_shadow": "1",
+        "enable_dynamic_depth_shadow": "1",
+        "enable_projection_shadow": "1",
+        "enable_depth_shadow_4_pcf": "0",
+        "shadow_all_by_vertex_color_r": "0",
+        "texcoord_select_ao": "0",
+        "enable_bake_shadow": "0",
+        "bake_shadow_type": "-1",
+        "bake_light_type": "-1",
+        "blitz_paint_type": "0",
+        "enable_visible_ink_opa": "0",
+        "enable_overlay_paint_on_emission": "0",
+        "blitz_obj_paint_type": "0",
+        "comp_paint_type": "2",
+        "texcoord_select_comppaint": "0",
+        "enable_private_paint_thickness": "0",
+        "enable_ink_sheet": "0",
+        "enable_paint_dynamic_display": "0",
+        "blitz_map_paint": "0",
+        "enable_kebaink_marble": "0",
+        "kebaink_noise_pos_type": "0",
+        "restex_id_kebaink_marble": "0",
+        "marble_normal_type": "0",
+        "kebaink_decay_type": "0",
+        "kebaink_wave_type": "0",
+        "texcoord_select_sfxmask": "0",
+        "enable_cheap_sss": "0",
+        "enable_fabric_shading": "0",
+        "fabric_facing_type": "0",
+        "inv_fabric_facing": "1",
+        "enable_manual_fresnel": "0",
+        "fresnel_multi_color": "0",
+        "enable_manual_fresnel_map": "0",
+        "transfilm_type": "0",
+        "under_film_multicolor": "0",
+        "enable_edge_light": "0",
+        "edge_light_base_color_type": "0",
+        "enable_edge_irradiance_map": "1",
+        "enable_tex_indirect": "0",
+        "indirect_tex": "0",
+        "enable_specular_glaze": "0",
+        "enable_gambit_compati": "0",
+        "enable_specular_mask": "0",
+        "enable_planer_reflection": "0",
+        "enable_reflector": "0",
+        "reflector_type": "0",
+        "enable_metal_flakes": "0",
+        "restex_id_flakes_map": "0",
+        "metal_flakes_type": "0",
+        "enable_metal_flakes_rare": "0",
+        "enable_emission_mixer": "0",
+        "enable_mixer_albedo_attenuation": "0",
+        "enable_mirroring": "0",
+        "enable_aniso_specular": "0",
+        "enable_decal_depth": "0",
+        "enable_vtx_deform": "0",
+        "enable_polygonal_light_mask": "0",
+        "enable_phantom_filter": "0",
+        "blitz_enable_parallax_map": "0",
+        "restex_id_parallax_height_map": "2",
+        "parallax_target": "1",
+        "blitz_debug_disable_parallax_teamcolor": "0",
+        "blitz_enable_parallax_height_darken": "0",
+        "blitz_enable_parallax_height_darken_trans": "0",
+        "blitz_enable_parallax_occlusion_map": "0",
+        "restex_id_parallax_occlusion_height_map": "0",
+        "blitz_parallax_occlusion_target": "2",
+        "blitz_enable_parallax_occlusion_height_darken": "0",
+        "blitz_parallax_occlusion_sample_num": "16",
+        "blitz_enable_parallax_fur": "0",
+        "blitz_enable_fur_dilate_type": "0",
+        "enable_discard_1st_pass": "0",
+        "enable_edge_fur_dilate": "0",
+        "blitz_enable_parallax_fur_fin": "0",
+        "blitz_parallax_fur_fin_type": "2",
+        "blitz_enable_parallax_fur_lod": "0",
+        "enable_fur_fin": "0",
+        "fur_fin_cull": "0",
+        "fur_fin_normalize_density": "0",
+        "fur_fin_integer_density": "0",
+        "fur_fin_length_mask_vertex_color": "0",
+        "enable_fur_shell": "0",
+        "fur_shell_cull": "0",
+        "fur_shell_num": "5",
+        "fur_shell_is_smooth_sharp": "0",
+        "blitz_enable_interior_map": "0",
+        "restex_id_interior_map": "0",
+        "restex_id_interior_mask": "2",
+        "blitz_interior_map_variation": "1",
+        "blitz_interior_mask_variation": "1",
+        "blitz_interior_front_variation": "1",
+        "blitz_debug_interior_map_variation_idx": "-1",
+        "blitz_debug_interior_mask_variation_idx": "-1",
+        "enable_vat": "0",
+        "vat_type": "0",
+        "enable_vat_decode_normal_old": "0",
+        "enable_vat_bone_anim_offset": "0",
+        "enable_delete_fragment": "0",
+        "blitz_map_height": "0",
+        "is_graffiti": "0",
+        "graffiti_type": "0",
+        "is_enable_mantaking_shadow": "0",
+        "mantaking_shadow_tex_index": "0",
+        "is_mantaking_child": "0",
+        "is_enable_model_hologram": "0",
+        "is_use_camera_xlu_xlu_zprepass": "0",
+        "pixel_expression0": "0",
+        "vertex_expression0": "0",
+        "blitz_calc_color0_A_channel": "0",
+        "blitz_calc_color0_B_channel": "0",
+        "blitz_calc_color0_C_channel": "0",
+        "enable_calc_color1": "0",
+        "blitz_calc_color1_replace_color": "0",
+        "blitz_calc_color1_calc_type": "0",
+        "blitz_calc_color1_clamp01": "0",
+        "blitz_calc_color1_A": "0",
+        "blitz_calc_color1_A_channel": "0",
+        "blitz_calc_color1_B": "0",
+        "blitz_calc_color1_B_channel": "0",
+        "blitz_calc_color1_C": "0",
+        "blitz_calc_color1_C_channel": "0",
+        "blitz_calc_color1_D": "0",
+        "blitz_calc_color1_D_channel": "0",
+        "enable_calc_color2": "0",
+        "blitz_calc_color2_replace_color": "0",
+        "blitz_calc_color2_calc_type": "0",
+        "blitz_calc_color2_clamp01": "0",
+        "blitz_calc_color2_A": "0",
+        "blitz_calc_color2_A_channel": "0",
+        "blitz_calc_color2_B": "0",
+        "blitz_calc_color2_B_channel": "0",
+        "blitz_calc_color2_C": "0",
+        "blitz_calc_color2_C_channel": "0",
+        "blitz_calc_color2_D": "0",
+        "blitz_calc_color2_D_channel": "0",
+        "enable_calc_color3": "0",
+        "blitz_calc_color3_replace_color": "0",
+        "blitz_calc_color3_calc_type": "0",
+        "blitz_calc_color3_clamp01": "0",
+        "blitz_calc_color3_A": "0",
+        "blitz_calc_color3_A_channel": "0",
+        "blitz_calc_color3_B": "0",
+        "blitz_calc_color3_B_channel": "0",
+        "blitz_calc_color3_C": "0",
+        "blitz_calc_color3_C_channel": "0",
+        "blitz_calc_color3_D": "0",
+        "blitz_calc_color3_D_channel": "0",
+        "texcoord_select_res1": "0",
+        "texcoord_select_res2": "0",
+        "texcoord_calc_texcoord0": "0",
+        "texcoord_calc_texcoord2": "0",
+        "texcoord_calc_texcoord3": "0",
+        "texcoord_aspect_mod_texcoord0": "0",
+        "texcoord_aspect_mod_texcoord2": "0",
+        "texcoord_aspect_mod_texcoord3": "0",
+        "enable_udim": "0",
+        "udim_calc_mode": "1",
+        "enable_fog_z": "1",
+        "enable_fog_y": "1",
+        "enable_model_y_fog": "0",
+        "enable_model_y_fog_up": "0",
+        "enable_model_y_fog_down": "0",
+        "enable_vert_alpha": "0",
+        "enable_dynamic_vert_alpha": "0",
+        "gsys_geometry_culling": "0",
+        "gsys_geometry_depth_culling": "0",
+        "enable_diffuse": "1",
+        "enable_irradiance_map": "1",
+        "enable_specular": "1",
+        "enable_specular_direct": "1",
+        "debug_disable_lightmap": "1",
+        "debug_use_cube_array": "1",
+        "enable_bake_depth_shadow": "1",
+        "enable_bake_ao": "1",
+        "debug_output_alpha": "0",
+        "enable_light_pre_pass": "1",
+        "enable_ink_gi": "1",
+        "use_heightmap_height": "0",
+        "enable_dynamic_light": "1",
+        "enable_polygonal_light": "1",
+        "enable_transmission": "0",
+        "gsys_alpha_test_func": "6",
+        "blitz_xlu_type": "0"
+      }
+    },
+    {
+      "label": "harness",
+      "owner": "web\\games\\splatoon3\\assets\\characters\\Player00\\parts\\Tnk_Simple.glb",
+      "material": "M_Harness",
+      "fres": {
+        "name": "M_Harness",
+        "visible": true,
+        "shader": {
+          "archive": "Hoian_UBER",
+          "model": "hoian_uber",
+          "revision": 0,
+          "attribAssign": {
+            "_p0": "_p0",
+            "_n0": "_n0",
+            "_t0": "_t0",
+            "_w0": "_w0",
+            "_i0": "_i0",
+            "_u0": "_u0",
+            "_u2": "_u2",
+            "_u1": "_u1"
+          },
+          "samplerAssign": {
+            "_a0": "_a0",
+            "_n0": "_n0",
+            "_r0": "_r0",
+            "_m0": "_m0",
+            "_e0": "<Default Value>",
+            "_t0": "sampler1",
+            "_ao0": "_ao0",
+            "_fm0": "_fm0",
+            "_re0": "_fm0",
+            "_re1": "<Default Value>",
+            "_op0": "_op0"
+          },
+          "options": {
+            "enable_roughness_map": "True",
+            "enable_metalness_map": "True",
+            "enable_emission": "<Default Value>",
+            "enable_emission_map": "True",
+            "enable_taransmission": "True",
+            "enable_transmission_map": "True",
+            "enable_ao": "True",
+            "enable_sfxmask": "True",
+            "enable_transfilm": "True",
+            "enable_calc_color0": "True",
+            "blitz_calc_color0_clamp01": "<Default Value>",
+            "enable_opacity_tex": "True",
+            "enable_albedo_tex": "<Default Value>",
+            "enable_multi_normal_map": "<Default Value>",
+            "enable_shadow_shadow_pre_pass": "<Default Value>",
+            "enable_edge_light": "<Default Value>",
+            "enable_edge_irradiance_map": "<Default Value>",
+            "enable_dynamic_depth_shadow": "<Default Value>",
+            "enable_projection_shadow": "<Default Value>",
+            "transmission_mask": "2",
+            "blitz_calc_color0_replace_color": "<Default Value>",
+            "blitz_calc_color0_calc_type": "8",
+            "blitz_calc_color0_A": "9",
+            "blitz_calc_color0_B": "100",
+            "blitz_calc_color0_C": "<Default Value>",
+            "blitz_calc_color0_D": "<Default Value>",
+            "blitz_calc_color0_D_channel": "<Default Value>",
+            "texcoord_select_res0": "<Default Value>",
+            "blitz_rendering_mode": "<Default Value>",
+            "texcoord_select_emmmap": "<Default Value>",
+            "fresnel_multi_color": "<Default Value>",
+            "team_color_map_type": "<Default Value>",
+            "emission_color_type": "<Default Value>",
+            "under_film_multicolor": "<Default Value>"
+          }
+        },
+        "renderInfo": {
+          "dynamic_alpha_fadeout": [
+            "off"
+          ],
+          "gsys_render_state_display_face": [
+            "both"
+          ],
+          "my_team_color_hue_offset": [
+            0.5
+          ],
+          "my_team_color_bright_offset": [
+            0
+          ],
+          "substitute_color_hue_offset": [
+            0
+          ],
+          "substitute_color_bright_offset": [
+            0
+          ],
+          "substitute_color_saturate_offset": [
+            0
+          ],
+          "gsys_static_depth_shadow": [
+            "0"
+          ],
+          "gsys_static_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_dynamic_depth_shadow": [
+            "1"
+          ],
+          "gsys_dynamic_depth_shadow_only": [
+            "0"
+          ],
+          "gsys_bake_group": [
+            "group1"
+          ],
+          "gsys_bake_texel_param": [
+            100
+          ],
+          "gsys_bake_uv_unite": [
+            "none"
+          ],
+          "gsys_bake_option": [
+            "none"
+          ],
+          "bake_cast_shadow": [
+            "true"
+          ],
+          "gsys_bake_normal_map": [
+            "default"
+          ],
+          "gsys_bake_emission_map": [
+            "default"
+          ],
+          "paint_prior_face": [
+            "none"
+          ],
+          "paint_build_option": [
+            "none"
+          ],
+          "enable_miiverse_filter": [
+            "off"
+          ],
+          "enable_miiverse_auto_replace": [
+            "off"
+          ],
+          "miiverse_filter_type": [
+            "0"
+          ],
+          "memo_texture_num": [
+            1
+          ],
+          "miiverse_priority": [
+            0
+          ],
+          "force_disable_view_frustum_culling": [
+            "off"
+          ],
+          "spl_model_type": [
+            "5"
+          ],
+          "gsys_env_obj_set": [
+            "TPS"
+          ],
+          "gsys_pass": [
+            "no_setting"
+          ],
+          "gsys_priority_hint": [
+            "effect"
+          ],
+          "gsys_priority": [
+            0
+          ],
+          "gsys_cube_map": [
+            "0"
+          ],
+          "gsys_cube_map_only": [
+            "0"
+          ],
+          "gsys_multi_filter": [
+            "0"
+          ],
+          "gsys_dynamic_reflection": [
+            "1"
+          ],
+          "blitz_silhouette_obj": [
+            "0"
+          ],
+          "gsys_override_shader": [
+            "0"
+          ],
+          "gsys_render_state_mode": [
+            "mask"
+          ],
+          "gsys_depth_test_enable": [
+            "true"
+          ],
+          "gsys_depth_test_func": [
+            "lequal"
+          ],
+          "gsys_depth_test_write": [
+            "true"
+          ],
+          "gsys_alpha_test_enable": [
+            "true"
+          ],
+          "gsys_alpha_test_func": [
+            "gequal"
+          ],
+          "gsys_alpha_test_value": [
+            0.5
+          ],
+          "gsys_render_state_blend_mode": [
+            "none"
+          ],
+          "gsys_color_blend_rgb_op": [
+            "add"
+          ],
+          "gsys_color_blend_rgb_src_func": [
+            "src_alpha"
+          ],
+          "gsys_color_blend_rgb_dst_func": [
+            "one_minus_src_alpha"
+          ],
+          "gsys_color_blend_const_color": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "gsys_color_blend_alpha_op": [
+            "add"
+          ],
+          "gsys_color_blend_alpha_src_func": [
+            "one"
+          ],
+          "gsys_color_blend_alpha_dst_func": [
+            "one"
+          ]
+        },
+        "params": {
+          "two_comp_paint_team": {
+            "type": "Int",
+            "value": 0
+          },
+          "is_use_graffiti_bake_paint_uv": {
+            "type": "Int",
+            "value": 0
+          },
+          "height_draw_mode": {
+            "type": "Int",
+            "value": 0
+          },
+          "display_team_type": {
+            "type": "Int",
+            "value": 0
+          },
+          "opacity": {
+            "type": "Float",
+            "value": 1
+          },
+          "gsys_xlu_zprepass_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "refract_depth_fog_start": {
+            "type": "Float",
+            "value": 1
+          },
+          "refract_depth_fog_end": {
+            "type": "Float",
+            "value": 5
+          },
+          "holo_model_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "refract_opa_start": {
+            "type": "Float",
+            "value": 100
+          },
+          "refract_opa_end": {
+            "type": "Float",
+            "value": 300
+          },
+          "refract_caustics_pow": {
+            "type": "Float",
+            "value": 20
+          },
+          "refract_caustics_intens": {
+            "type": "Float",
+            "value": 10
+          },
+          "holo_model_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "refract_caustics_uv_scale": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "refract_caustics_uv_height_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "glass_thickness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_tex_coord_offset": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "thick_glass_opacity_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "model_dither_normal_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "model_dither_time_shift_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_model_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "team_color_blend": {
+            "type": "Float",
+            "value": 1
+          },
+          "team_color_blend_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "multi_normal_weight": {
+            "type": "Float",
+            "value": 0
+          },
+          "roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "metalness": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_tone_param": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_peak_offset": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "fabric_peak_stop": {
+            "type": "Float",
+            "value": 100
+          },
+          "fabric_peak_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_noise_intens": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fabric_noise_decay": {
+            "type": "Float",
+            "value": 0
+          },
+          "envmap_mip_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_model_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "emission_normalize_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "night_emission_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value0": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_intens_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_intens_not_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "saturation_in_envmap": {
+            "type": "Float",
+            "value": 1
+          },
+          "inner_light_diffusivity": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "inner_light_min_clamp": {
+            "type": "Float",
+            "value": 0
+          },
+          "const_value1": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_rate": {
+            "type": "Float",
+            "value": 0.543
+          },
+          "scattering_rate": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "edge_transmission_power": {
+            "type": "Float",
+            "value": 3.7
+          },
+          "const_value2": {
+            "type": "Float",
+            "value": 0
+          },
+          "transmission_attenu_pos": {
+            "type": "Float",
+            "value": 50
+          },
+          "transmission_attenu_range": {
+            "type": "Float",
+            "value": 100
+          },
+          "transmission_attenu_min": {
+            "type": "Float",
+            "value": 0
+          },
+          "light_occlude_check_len": {
+            "type": "Float",
+            "value": 10
+          },
+          "gsys_alpha_test_ref_value": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "model_y_fog_up_start": {
+            "type": "Float",
+            "value": 40
+          },
+          "model_y_fog_up_end": {
+            "type": "Float",
+            "value": 400
+          },
+          "model_y_fog_down_start": {
+            "type": "Float",
+            "value": -40
+          },
+          "model_y_fog_down_end": {
+            "type": "Float",
+            "value": -400
+          },
+          "two_color_complement_paint_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_alpha": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_bravo": {
+            "type": "Float",
+            "value": 0
+          },
+          "thr_comp_paint_intens_charlie": {
+            "type": "Float",
+            "value": 0
+          },
+          "comp_paint_texcoord_offset": {
+            "type": "Float",
+            "value": 0.005
+          },
+          "comp_paint_norm_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "comp_paint_lame_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "rainbow_ink_hue_range": {
+            "type": "Float",
+            "value": 0
+          },
+          "rainbow_ink_hue_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness": {
+            "type": "Float",
+            "value": 0
+          },
+          "private_paint_thickness_ratio": {
+            "type": "Float",
+            "value": 1
+          },
+          "ink_sheet_edge_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_scroll_anim": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_marble_noise_density": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "dynamic_vert_alpha_coeff": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_marble_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_fur_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_vertex_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_mask_vertex_fin_threshold": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_density": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "kebaink_mask_noise_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "fade_dither_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_core_radius": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_dist": {
+            "type": "Float",
+            "value": 0
+          },
+          "kebaink_mask_from_core_noise": {
+            "type": "Float",
+            "value": 5
+          },
+          "camera_xlu_alpha": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_darken_dist_offset": {
+            "type": "Float",
+            "value": -3
+          },
+          "kebaink_darken_dist_noise": {
+            "type": "Float",
+            "value": 10
+          },
+          "kebaink_wave_mask_dist_offset": {
+            "type": "Float",
+            "value": 5
+          },
+          "kebaink_wave_mask_gradation": {
+            "type": "Float",
+            "value": 0.3
+          },
+          "kebaink_wave_intens": {
+            "type": "Float",
+            "value": 2
+          },
+          "kebaink_wave_freq": {
+            "type": "Float",
+            "value": 1
+          },
+          "kebaink_wave_phase": {
+            "type": "Float",
+            "value": 5
+          },
+          "scatter_distance": {
+            "type": "Float",
+            "value": 0
+          },
+          "flake_rare_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "map_min_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "fabric_facing_gain": {
+            "type": "Float",
+            "value": 1
+          },
+          "fabric_facing_bias": {
+            "type": "Float",
+            "value": 0
+          },
+          "manual_fresnel": {
+            "type": "Float",
+            "value": 1
+          },
+          "map_max_height": {
+            "type": "Float",
+            "value": 0
+          },
+          "film_transmission_power": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "film_transmission_rate": {
+            "type": "Float",
+            "value": 0.82
+          },
+          "shell_fur_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "edge_light_intens": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "edge_light_power": {
+            "type": "Float",
+            "value": 1.5
+          },
+          "actor_instance_id": {
+            "type": "Float",
+            "value": 0
+          },
+          "indirect_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "spec_glaze_intens": {
+            "type": "Float",
+            "value": 3
+          },
+          "specular_intensity": {
+            "type": "Float",
+            "value": 0
+          },
+          "specular_roughness": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_spec_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "planer_ref_normal_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "reflector_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_scroll": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_power": {
+            "type": "Float",
+            "value": 1
+          },
+          "reflector_uniform_norm_coef": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_roughness": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "big_lame_appearance": {
+            "type": "Float",
+            "value": 3
+          },
+          "big_lame_epsilon": {
+            "type": "Float",
+            "value": 0.05
+          },
+          "micro_flakes_diffuse_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "micro_flakes_specular_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_intens": {
+            "type": "Float",
+            "value": 1
+          },
+          "flake_rare_appearance": {
+            "type": "Float",
+            "value": 10
+          },
+          "fur_dilate_edge_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "flake_rare_shadow_intes": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_eq_channel_a": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_b": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_c": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_d": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_eq_channel_e": {
+            "type": "Float",
+            "value": 0
+          },
+          "emission_fader_channel_a": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_b": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_c": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_d": {
+            "type": "Float",
+            "value": 1
+          },
+          "emission_fader_channel_e": {
+            "type": "Float",
+            "value": 1
+          },
+          "mirror_material_eff": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_pararell_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_perpendicular_speculality": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_specular_bokeh": {
+            "type": "Float",
+            "value": 1
+          },
+          "aniso_normal_mask": {
+            "type": "Float",
+            "value": 0
+          },
+          "decal_depth_range": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "decal_depth_alpha_coef": {
+            "type": "Float",
+            "value": 10
+          },
+          "polygonal_light_mask": {
+            "type": "Float",
+            "value": 1
+          },
+          "phantom_edge_offset_in_material": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_height_darken_trans": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_height": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occlusion_ray_clamp": {
+            "type": "Float",
+            "value": 4
+          },
+          "parallax_occlusion_map_uv_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_occulusion_height_darken": {
+            "type": "Float",
+            "value": 0.5
+          },
+          "parallax_occlusion_shadow": {
+            "type": "Float",
+            "value": 1
+          },
+          "parallax_fur_dilate": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_occlusion_fur_fin_height_scale": {
+            "type": "Float",
+            "value": 6
+          },
+          "parallax_occlusion_fur_fin_height_offset": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "parallax_fur_occlusion_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "parallax_fur_fin_off_dist_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_fin_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_fin_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_fin_cull_angle": {
+            "type": "Float",
+            "value": 0.4
+          },
+          "fur_fin_depth_write": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_length": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "fur_shell_density": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_thickness": {
+            "type": "Float",
+            "value": 1
+          },
+          "fur_shell_gravity": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "fur_shell_sharp_amount": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_depth": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_x_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_y_depth_offset": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_uv_aspect": {
+            "type": "Float",
+            "value": 1
+          },
+          "interior_map_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_night_shadow_scale": {
+            "type": "Float",
+            "value": 0.98
+          },
+          "interior_map_shadow_gradation_coef": {
+            "type": "Float",
+            "value": 0.2
+          },
+          "interior_map_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_map_night_emission_intens": {
+            "type": "Float",
+            "value": 0
+          },
+          "interior_mask_depth": {
+            "type": "Float",
+            "value": 0
+          },
+          "vat_anim_pos": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_normal_rate": {
+            "type": "Float",
+            "value": 0
+          },
+          "graffiti_back_color_rate": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "holo_graffiti_hue": {
+            "type": "Float",
+            "value": 0
+          },
+          "holo_graffiti_rainbow_scale": {
+            "type": "Float",
+            "value": 2
+          },
+          "holo_graffiti_color_intensity": {
+            "type": "Float",
+            "value": 0.34
+          },
+          "holo_graffiti_rainbow_width": {
+            "type": "Float",
+            "value": 0.1
+          },
+          "holo_graffiti_rainbow_blur_width": {
+            "type": "Float",
+            "value": 0.12
+          },
+          "holo_model_normal_scale": {
+            "type": "Float",
+            "value": 1
+          },
+          "col_paint_uv_offset": {
+            "type": "Float2",
+            "value": [
+              0,
+              0
+            ]
+          },
+          "interior_map_uv_scale": {
+            "type": "Float2",
+            "value": [
+              1,
+              1
+            ]
+          },
+          "kebaink_core_pos": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "inner_light_pos_offset": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "team_flag": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "model_y_fog_up_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "model_y_fog_down_dir": {
+            "type": "Float3",
+            "value": [
+              0,
+              1,
+              0
+            ]
+          },
+          "const_vector0": {
+            "type": "Float3",
+            "value": [
+              0,
+              0,
+              0
+            ]
+          },
+          "transmission_color_backlight": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "gsys_bake_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "gsys_bake_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st0": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "bake_tex_st1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              0,
+              0
+            ]
+          },
+          "kebaink_multi_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "kebaink_darken_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "fabric_blend_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "manual_fresnel_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "under_film_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "edge_light_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_bright_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_dark_half": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "holo_graffiti_base_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "my_alpha_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_bravo_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_charlie_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "player_skin_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "refract_depth_fog_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "scattering_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "graffiti_back_color": {
+            "type": "Float4",
+            "value": [
+              0.5,
+              0.5,
+              0.5,
+              1
+            ]
+          },
+          "model_y_fog_up_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "refract_caustics_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "albedo_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color0": {
+            "type": "Float4",
+            "value": [
+              0.04,
+              0.04,
+              0.13,
+              1
+            ]
+          },
+          "model_y_fog_down_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color1": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "const_color2": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "interior_mask_night_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "fade_player_pos": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "mantaking_shadow_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "fur_shell_root_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "map_min_gradation_color": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "map_max_gradation_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "night_emission_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "mantaking_parameter0": {
+            "type": "Float4",
+            "value": [
+              0,
+              0,
+              1,
+              0
+            ]
+          },
+          "flake_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "depth_silhouette_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "specular_color": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "my_team_color_hue_complement": {
+            "type": "Float4",
+            "value": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "tex_mtx2": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx0": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          },
+          "tex_mtx1": {
+            "type": "TexSrt",
+            "value": {
+              "Mode": "ModeMaya",
+              "Scaling": {
+                "X": 1,
+                "Y": 1
+              },
+              "Rotation": 0,
+              "Translation": {
+                "X": 0,
+                "Y": 0
+              }
+            }
+          }
+        },
+        "userData": {
+          "SealPolygon": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "VertexAlpha": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          },
+          "Paintable": {
+            "type": "Int32",
+            "value": [
+              0
+            ]
+          }
+        },
+        "samplers": [
+          {
+            "sampler": "_a0",
+            "texture": "M_Harness_Alb",
+            "png": "M_Harness_Alb.png",
+            "slots": [
+              "_a0"
+            ]
+          },
+          {
+            "sampler": "_n0",
+            "texture": "M_Harness_Nrm",
+            "png": "M_Harness_Nrm.png",
+            "slots": [
+              "_n0"
+            ]
+          },
+          {
+            "sampler": "_r0",
+            "texture": "M_Harness_Rgh",
+            "png": "M_Harness_Rgh.png",
+            "slots": [
+              "_r0"
+            ]
+          },
+          {
+            "sampler": "_m0",
+            "texture": "M_Harness_Mtl",
+            "png": "M_Harness_Mtl.png",
+            "slots": [
+              "_m0"
+            ]
+          },
+          {
+            "sampler": "_op0",
+            "texture": "M_Harness_Opa",
+            "png": "M_Harness_Opa.png",
+            "slots": [
+              "_op0"
+            ]
+          },
+          {
+            "sampler": "_fm0",
+            "texture": "M_Harness_Fxm",
+            "png": "M_Harness_Fxm.png",
+            "slots": [
+              "_fm0",
+              "_re0"
+            ]
+          },
+          {
+            "sampler": "sampler1",
+            "texture": "M_Harness_Trm",
+            "png": "M_Harness_Trm.png",
+            "slots": [
+              "_t0"
+            ]
+          },
+          {
+            "sampler": "_ao0",
+            "texture": "M_Harness_Ao",
+            "png": "M_Harness_Ao.png",
+            "slots": [
+              "_ao0"
+            ]
+          }
+        ],
+        "gltfUsed": {
+          "opacity": "M_Harness_Opa",
+          "baseColor": "M_Harness_Alb",
+          "roughness": "M_Harness_Rgh",
+          "metallic": "M_Harness_Mtl",
+          "normal": "M_Harness_Nrm",
+          "occlusion": "M_Harness_Ao"
+        },
+        "teamColor": {
+          "maskTcl": null,
+          "map2cl": null,
+          "team_color_map_type": "<Default Value>",
+          "my_team_color_type": null,
+          "my_team_color_hue_offset": "0.5",
+          "my_team_color_bright_offset": "0",
+          "enable_calc_color0": "True",
+          "blitz_calc_color0_calc_type": "8"
+        }
+      },
+      "nativeCandidates": [
+        4526,
+        4530
+      ],
+      "normalizedOptions": {
+        "enable_roughness_map": "1",
+        "enable_metalness_map": "1",
+        "enable_emission_map": "1",
+        "enable_taransmission": "1",
+        "enable_transmission_map": "1",
+        "enable_ao": "1",
+        "enable_sfxmask": "1",
+        "enable_transfilm": "1",
+        "enable_calc_color0": "1",
+        "enable_opacity_tex": "1",
+        "transmission_mask": "2",
+        "blitz_calc_color0_calc_type": "8",
+        "blitz_calc_color0_A": "9",
+        "blitz_calc_color0_B": "100",
+        "gsys_assign_type": "gsys_assign_material",
+        "gsys_alpha_test_enable": "1",
+        "gsys_renderstate": "1",
+        "gsys_display_face_type": "0",
+        "blitz_rendering_mode": "0",
+        "camera_xlu_type": "0",
+        "gsys_enable_color_buffer": "0",
+        "blitz_refract_type": "0",
+        "enable_refract_depth_fog": "0",
+        "enable_refract_distance_opa": "0",
+        "enable_refract_caustics": "0",
+        "enable_thick_glass": "0",
+        "enable_model_dither_normal": "0",
+        "enable_model_dither_overlap": "0",
+        "model_dither_overlap_mode": "0",
+        "blitz_inv_norm_backface": "0",
+        "enable_albedo_tex": "1",
+        "vertex_color": "0",
+        "team_color_map_type": "0",
+        "texcoord_select_teamcolormap": "0",
+        "my_team_color_type": "0",
+        "enable_normal_map": "1",
+        "gsys_normalmap_BC1": "0",
+        "texcoord_select_normal": "0",
+        "enable_multi_normal_map": "0",
+        "enable_shading": "1",
+        "texcoord_select_rghmap": "0",
+        "roughness_reverse": "0",
+        "texcoord_select_mtlmap": "0",
+        "enable_fabric_noise_map": "0",
+        "linear_roughness": "0",
+        "use_bias_mip_envmap": "0",
+        "enable_emission": "0",
+        "emission_color_type": "0",
+        "texcoord_select_emmmap": "0",
+        "normalize_emission": "0",
+        "enable_night_emission": "0",
+        "enable_envmap_emission": "0",
+        "disable_emission_in_envmap": "0",
+        "enable_correction_in_envmap": "0",
+        "enable_inner_light": "0",
+        "enable_edge_transmission": "0",
+        "transmission_multi_color": "0",
+        "texcoord_select_trsmap": "0",
+        "enable_thickness_map": "0",
+        "restex_id_thickness_map": "0",
+        "enable_transmission_attenu": "0",
+        "enable_light_occlude_check": "0",
+        "enable_graffiti_blend": "0",
+        "enable_shadow_shadow_pre_pass": "1",
+        "enable_static_depth_shadow": "1",
+        "enable_dynamic_depth_shadow": "1",
+        "enable_projection_shadow": "1",
+        "enable_depth_shadow_4_pcf": "0",
+        "shadow_all_by_vertex_color_r": "0",
+        "texcoord_select_ao": "0",
+        "enable_bake_shadow": "0",
+        "bake_shadow_type": "-1",
+        "bake_light_type": "-1",
+        "blitz_paint_type": "0",
+        "enable_visible_ink_opa": "0",
+        "enable_overlay_paint_on_emission": "0",
+        "blitz_obj_paint_type": "0",
+        "comp_paint_type": "2",
+        "texcoord_select_comppaint": "0",
+        "enable_private_paint_thickness": "0",
+        "enable_ink_sheet": "0",
+        "enable_paint_dynamic_display": "0",
+        "blitz_map_paint": "0",
+        "enable_kebaink_marble": "0",
+        "kebaink_noise_pos_type": "0",
+        "restex_id_kebaink_marble": "0",
+        "marble_normal_type": "0",
+        "kebaink_decay_type": "0",
+        "kebaink_wave_type": "0",
+        "texcoord_select_sfxmask": "0",
+        "enable_cheap_sss": "0",
+        "enable_fabric_shading": "0",
+        "fabric_facing_type": "0",
+        "inv_fabric_facing": "1",
+        "enable_manual_fresnel": "0",
+        "fresnel_multi_color": "0",
+        "enable_manual_fresnel_map": "0",
+        "transfilm_type": "0",
+        "under_film_multicolor": "0",
+        "enable_edge_light": "0",
+        "edge_light_base_color_type": "0",
+        "enable_edge_irradiance_map": "1",
+        "enable_tex_indirect": "0",
+        "indirect_tex": "0",
+        "enable_specular_glaze": "0",
+        "enable_gambit_compati": "0",
+        "enable_specular_mask": "0",
+        "enable_planer_reflection": "0",
+        "enable_reflector": "0",
+        "reflector_type": "0",
+        "enable_metal_flakes": "0",
+        "restex_id_flakes_map": "0",
+        "metal_flakes_type": "0",
+        "enable_metal_flakes_rare": "0",
+        "enable_emission_mixer": "0",
+        "enable_mixer_albedo_attenuation": "0",
+        "enable_mirroring": "0",
+        "enable_aniso_specular": "0",
+        "enable_decal_depth": "0",
+        "enable_vtx_deform": "0",
+        "enable_polygonal_light_mask": "0",
+        "enable_phantom_filter": "0",
+        "blitz_enable_parallax_map": "0",
+        "restex_id_parallax_height_map": "2",
+        "parallax_target": "1",
+        "blitz_debug_disable_parallax_teamcolor": "0",
+        "blitz_enable_parallax_height_darken": "0",
+        "blitz_enable_parallax_height_darken_trans": "0",
+        "blitz_enable_parallax_occlusion_map": "0",
+        "restex_id_parallax_occlusion_height_map": "0",
+        "blitz_parallax_occlusion_target": "2",
+        "blitz_enable_parallax_occlusion_height_darken": "0",
+        "blitz_parallax_occlusion_sample_num": "16",
+        "blitz_enable_parallax_fur": "0",
+        "blitz_enable_fur_dilate_type": "0",
+        "enable_discard_1st_pass": "0",
+        "enable_edge_fur_dilate": "0",
+        "blitz_enable_parallax_fur_fin": "0",
+        "blitz_parallax_fur_fin_type": "2",
+        "blitz_enable_parallax_fur_lod": "0",
+        "enable_fur_fin": "0",
+        "fur_fin_cull": "0",
+        "fur_fin_normalize_density": "0",
+        "fur_fin_integer_density": "0",
+        "fur_fin_length_mask_vertex_color": "0",
+        "enable_fur_shell": "0",
+        "fur_shell_cull": "0",
+        "fur_shell_num": "5",
+        "fur_shell_is_smooth_sharp": "0",
+        "blitz_enable_interior_map": "0",
+        "restex_id_interior_map": "0",
+        "restex_id_interior_mask": "2",
+        "blitz_interior_map_variation": "1",
+        "blitz_interior_mask_variation": "1",
+        "blitz_interior_front_variation": "1",
+        "blitz_debug_interior_map_variation_idx": "-1",
+        "blitz_debug_interior_mask_variation_idx": "-1",
+        "enable_vat": "0",
+        "vat_type": "0",
+        "enable_vat_decode_normal_old": "0",
+        "enable_vat_bone_anim_offset": "0",
+        "enable_delete_fragment": "0",
+        "blitz_map_height": "0",
+        "is_graffiti": "0",
+        "graffiti_type": "0",
+        "is_enable_mantaking_shadow": "0",
+        "mantaking_shadow_tex_index": "0",
+        "is_mantaking_child": "0",
+        "is_enable_model_hologram": "0",
+        "is_use_camera_xlu_xlu_zprepass": "0",
+        "pixel_expression0": "0",
+        "vertex_expression0": "0",
+        "blitz_calc_color0_replace_color": "0",
+        "blitz_calc_color0_clamp01": "0",
+        "blitz_calc_color0_A_channel": "0",
+        "blitz_calc_color0_B_channel": "0",
+        "blitz_calc_color0_C": "0",
+        "blitz_calc_color0_C_channel": "0",
+        "blitz_calc_color0_D": "0",
+        "blitz_calc_color0_D_channel": "0",
+        "enable_calc_color1": "0",
+        "blitz_calc_color1_replace_color": "0",
+        "blitz_calc_color1_calc_type": "0",
+        "blitz_calc_color1_clamp01": "0",
+        "blitz_calc_color1_A": "0",
+        "blitz_calc_color1_A_channel": "0",
+        "blitz_calc_color1_B": "0",
+        "blitz_calc_color1_B_channel": "0",
+        "blitz_calc_color1_C": "0",
+        "blitz_calc_color1_C_channel": "0",
+        "blitz_calc_color1_D": "0",
+        "blitz_calc_color1_D_channel": "0",
+        "enable_calc_color2": "0",
+        "blitz_calc_color2_replace_color": "0",
+        "blitz_calc_color2_calc_type": "0",
+        "blitz_calc_color2_clamp01": "0",
+        "blitz_calc_color2_A": "0",
+        "blitz_calc_color2_A_channel": "0",
+        "blitz_calc_color2_B": "0",
+        "blitz_calc_color2_B_channel": "0",
+        "blitz_calc_color2_C": "0",
+        "blitz_calc_color2_C_channel": "0",
+        "blitz_calc_color2_D": "0",
+        "blitz_calc_color2_D_channel": "0",
+        "enable_calc_color3": "0",
+        "blitz_calc_color3_replace_color": "0",
+        "blitz_calc_color3_calc_type": "0",
+        "blitz_calc_color3_clamp01": "0",
+        "blitz_calc_color3_A": "0",
+        "blitz_calc_color3_A_channel": "0",
+        "blitz_calc_color3_B": "0",
+        "blitz_calc_color3_B_channel": "0",
+        "blitz_calc_color3_C": "0",
+        "blitz_calc_color3_C_channel": "0",
+        "blitz_calc_color3_D": "0",
+        "blitz_calc_color3_D_channel": "0",
+        "texcoord_select_res0": "0",
+        "texcoord_select_res1": "0",
+        "texcoord_select_res2": "0",
+        "texcoord_calc_texcoord0": "0",
+        "texcoord_calc_texcoord2": "0",
+        "texcoord_calc_texcoord3": "0",
+        "texcoord_aspect_mod_texcoord0": "0",
+        "texcoord_aspect_mod_texcoord2": "0",
+        "texcoord_aspect_mod_texcoord3": "0",
+        "enable_udim": "0",
+        "udim_calc_mode": "1",
+        "enable_fog_z": "1",
+        "enable_fog_y": "1",
+        "enable_model_y_fog": "0",
+        "enable_model_y_fog_up": "0",
+        "enable_model_y_fog_down": "0",
+        "enable_vert_alpha": "0",
+        "enable_dynamic_vert_alpha": "0",
+        "gsys_geometry_culling": "0",
+        "gsys_geometry_depth_culling": "0",
+        "enable_diffuse": "1",
+        "enable_irradiance_map": "1",
+        "enable_specular": "1",
+        "enable_specular_direct": "1",
+        "debug_disable_lightmap": "1",
+        "debug_use_cube_array": "1",
+        "enable_bake_depth_shadow": "1",
+        "enable_bake_ao": "1",
+        "debug_output_alpha": "0",
+        "enable_light_pre_pass": "1",
+        "enable_ink_gi": "1",
+        "use_heightmap_height": "0",
+        "enable_dynamic_light": "1",
+        "enable_polygonal_light": "1",
+        "enable_transmission": "0",
+        "gsys_alpha_test_func": "6",
+        "blitz_xlu_type": "0"
+      }
+    }
+  ]
+}

@@ -1,3 +1,121 @@
+# 그래픽 웹 반영 상태
+
+2026-10-03 · 사용자의 “그래픽 반영 작업” 지시로 코드·에셋·구현 문서를 갱신했다.
+현재 상태는 §1~§11이다. 이전 구현 설명은 §11에 보존한다. 원본 분석 inventory는 변경하지 않았다.
+
+## 1. 기능·범위
+
+Lby_Lobby00 1인 슈터 연습의 원본 베이크 자원, 정적 재질·광원, 하늘, 안개, HDR 합성과 캐릭터 재질을 실제 게임 렌더 루프에 연결한다. 카메라 포팅 경로를 유지한다. 실제 NVN 화면과 픽셀 동등성까지 확인한 작업은 아니다.
+
+## 2. 재사용한 원본 근거
+
+| 근거 문서 | 이번에 소비한 것 |
+|---|---|
+| [bake_material_binding §3~6](../graphics/bake_material_binding.md) [판독·실행] | Guid/모델명/원본 재질 수·번호, 타입3/4, sampler와 shader parameter, ST |
+| [stage_rendering §5.1·6.1~6.3](../graphics/stage_rendering.md) [판독·데이터] | BC5 AO/Shadow, BC6H RGB×alpha×32, 보정, 확산·GGX·SH·동적광·선형 안개 |
+| [renderparam_runtime §6](../graphics/renderparam_runtime.md) [판독·실행] | MainLight·ManualExposure·안개/베이크 설정 소비 |
+| [stage_rendering §5.4~5.7](../graphics/stage_rendering.md) [판독·데이터] | 원본 Sky_Daytime00·노출, SH 포장, 환경 캡처 경계 |
+| [dynamic_lighting §5~8](../graphics/dynamic_lighting.md), [light_rig_runtime §6](../graphics/light_rig_runtime.md) [판독·실행(부분)] | 모델/뼈 이름 연결, static rig, XZ20×20/선착4·최대30·packed 순서·cone |
+| [shaders §3.6~3.7](../graphics/shaders.md), [calc_thickness_runtime §3~6](../graphics/calc_thickness_runtime.md) [판독·데이터] | calc source/target와 alpha 채널, transmission backlight 입력, resource 슬롯 |
+| [shader_uv_selection §6](../graphics/shader_uv_selection.md) [판독] | UV0/2/3 선택과 대응 tex_mtx 번호. 이번 구현은 identity 변환 범위 |
+| [team_color §5~7](../graphics/team_color.md) [판독·실행(부분)·데이터] | f32 분리 산술, 재질별 renderInfo, HSV 특이 동작 |
+| [stage_rendering §2.2.1·3.1~3.4](../graphics/stage_rendering.md) [판독·실행(부분)] | Hermit2D·tone4·ManualEV. 전체 색보정 LUT는 미이식 |
+| [player_assembly §6](../graphics/player_assembly.md), [part_suffix_runtime §6](../graphics/part_suffix_runtime.md) [판독·실행(부분)·데이터] | 선택 리소스명·하네스 자료. 세이브 초기 장비 선택은 미확정 유지 |
+
+Unicorn 호출은 알려진 소비식의 웹 회귀 fixture를 만드는 용도다. 새로운 원본 분석 완료율로 더하지 않았다.
+
+## 3. 고정 점검표 상태
+
+[port GR01~GR10](../port/implementation_status.md) 기준 **반영 확인0/10=0.00%, 일부7/10=70.00%, 차이/미반영2/10=20.00%, 원본 미확정1/10=10.00%**.
+GR04는 미반영→일부 반영이다. 원본 잉크/정점 속성·그림자/SSS·필름·GPU 입력이 남은 넓은 행을 부분 구현만으로 완료로 올리지 않았다.
+현재 완료 점수0은 아래 새 연결이 없다는 의미가 아니라 고정 행 전체를 닫지 않았다는 의미다. 전체 점검표 분모62와 원본 inventory 분모986을 유지한다.
+
+## 4. 구현 파일·자원
+
+| 경로(client/render/ 기준) | 역할 |
+|---|---|
+| graphics_math.ts | 원본 f32 SH 투영/평가·Hermit2D, 8개 곡선 샘플 |
+| bake.ts | 원본 bkdat 검증과 mip 포함 RGBA16F atlas 바인딩 |
+| forward.ts | 판독된 unpainted forward 확산·GGX·SH·동적광·베이크·안개 |
+| dynamic_lights.ts / lighting.ts | rig 뼈 행렬→광원 격자, native SH 포장, web cube capture/PMREM 경계 |
+| sky.ts / post.ts | 원본 sky/sun 재질, half-float HDR RT→tone4→gamma |
+| hoian.ts / teamcolor.ts | resource/투과 입력·calc/UV·재질별 팀색·f32 산술 |
+| map.ts / player.ts / model.ts / index.ts | 실제 뷰 연결. 선택 part manifest, gear 하네스, bundle texture 조회 |
+| client/context.ts / app.ts | renderScene 콜백으로 HDR 화면 합성. core 순서나 입력/UI 변경 없음 |
+| web/tools/graphics_port_assets.py | 에셋 보강. original 읽기 전용, 중간 파일은 analysis/port_graphics 아래 |
+
+map visual에는 native bake UV1 primitive85개와 spot bone9개를 보존한다. runtime mesh158→107, 삼각형146,127 유지.
+베이크는 원본2장 전 mip(12/11 levels)을 RGBA16F로 보존한다. BC6H는 float decode 후 half 저장하여 HDR 값을 8bit로 자르지 않는다.
+캐릭터/무기11개 GLB의 재질24개에 원본 fres를 보강하고 resource 파일16개를 번들에 추가했다. 기존 mesh/스켈레탈 clip binary는 재생성하지 않았다.
+
+## 5. 실제 게임 연결 순서
+
+번들 로드→env/team set→베이크와 원본 재질 번호 확인→정적 rig 뼈 읽기→정적 mesh 병합→원본 하늘→캐릭터/무기 재질 연결→환경 캡처2회→매 프레임 linear HDR 장면→tone4/선택 gamma.
+캡처 중 stage/sky/light 외 root는 숨기고 이전 가시성을 복원한다. 셰이더는 텍스처 로드 완료 여부로 프로그램을 갱신한다.
+캡처 실패는 경고와 함께 원본 startup SH를 유지한다. 실제 native final cube를 얻었다고 표시하지 않는다.
+
+## 6. 반영 식·조건
+
+- 베이크: space0/type3→bake0+gsys_bake_st0, type4→bake1+gsys_bake_st1. Guid·ModelName·OriginalMaterialCount/Index·MaterialName·sampler·parameter·UV1·TextureIndex 검증 실패는 skip. BakeDummy 이름 치환이나 임의 atlas 선택 없음. ST=(ScaleX,ScaleY,OffsetX,OffsetY).
+- AO/Shadow는 .x/.y, 광량은 RGB×alpha×32. Lobby 보정 vec4=(1.875,−1.34765625,1.0625,−.1328125), AOMain=.03125.
+- 주광 세기는 원본 Intensity10×원본 linear Color. 기존 화면 맞춤 .25와 Hemisphere1을 제거했다. 초기 SH는 위 방향의 .1×Intensity×Color를 원본 포장으로 계산한다.
+- static spot rig는 ModelName/Fmdlnamematch와 BonePrefix startsWith. 로비5개 rig, occupied24셀. XZ20×20, 선착4, 전체30, shader LSB 순서. 가까운 광원 정렬 없음.
+- diffuse=(1−metal)×albedo, F0=mix(.04,albedo,metal), 판독된 GGX/SH/bakeLight/dynamic/AO 소비를 사용한다. Three stock PBR 누산은 이 경로에서 대체했다. 환경 반사는 web PMREM/EnvironmentBRDF, 그림자는 web PCF이므로 전체 원본 shading과 동등하지 않다.
+- HeightFog=clamp((worldY−15)/75)×alpha .6875, DepthFog=10..1000·ScatteringCoeff .3125와 raw linear color. 실제 radial scattering color 경로는 미이식.
+- mSky=원본 emission texture×emissionColor×(intensity×displayExposure)+albedoColor. displayEV2→4, capture80. mSun=albedo texture×(intensity+1), alpha=clamp(Mat.opacity). capture saturation .4 소비와 sky transform writer는 미확정/미이식 경계다.
+- HDR는 half-float RT, ManualEV1→2, tone4 판독식과 gamma branch를 별도 합성한다. black0/0는 웹에서 유한 black 극한0으로 처리하는 이식 차이다. gamma1은 웹 선택이며 실제 native live flag 확인을 대신하지 않는다.
+- calc source1=current roughness scalar, source4=transmission texture×backlight, 9/10=resource0/1, 50=팀색, 100..102=vec4 const, 110/111=scalar, 200+k=임시값. type1/2/6/8/9/11, target0/1/2/4/5/6/7/100을 계산한다. alpha40/역수41·opacity target6 output.w 보존. source가 없으면 식 전체를 건너뛴다. A×B×C의 C만 제거하지 않는다.
+- _re2/Thc는 번들/슬롯을 보존했지만 전체 SSS/film consumer가 빠져 있어 실제 1−R 산란을 완료로 표시하지 않는다.
+- UV0/2/3을 선택한다. UV2/3 없는 geometry나 알려지지 않은 selector1은 기록하고 skip. 현재 identity tex_mtx만 사용한다. native GPU FMA/샘플러/변환 정밀도 동등성은 미검증.
+- Player00 파츠는 data/character.json에 명시된 파일. 임의 같은종류 첫 파일을 고르지 않는다. 옷 하네스는 data/gear.json 실제 행. 그 행 자체를 최초 세이브 장비라고 확정하지 않는다.
+
+## 7. 자원·성능 경계
+
+decoded half atlas2장 합계62,908,120B, map 번들73,755,489B(17files), 캐릭터6,130,749B(91), 무기362,322B(9)다.
+다운로드·메모리 비용이 증가했다. 다음은 HDR 범위를 유지하는 전송 압축/지원 GPU 압축 포맷 선택. 밝기를 낮추거나 mip를 버리는 변경은 원본 검증 없이 적용하지 않는다.
+환경 캡처는 시작 시256² RGBA16F2회. Three SH 적분/PMREM은 원본 GPU projection/prefilter 식과 동일 구현이 아니다. capture camera .2/2000은 웹 선택. 원본 call arg4/1024를 near/far로 해석하지 않았다.
+
+## 8. 검증
+
+- 원본 SH투영128, SH평가128, Hermit2D424, HSV128 전부 비트 일치. SDK fmodf는 원본 SDK 실행. HSV만 singleton/config 공급·RTTI·reference release 합성 경계.
+- 점광원32시퀀스×8삽입의 최종 packed400셀/count 일치. cone256판정 일치. sinf/cosf는 별도 Unicorn 원본 SDK, algorithm stub 없음. reset의 확인된 초기 메모리 상태를 입력으로 주며 reset 함수를 실행했다고 하지 않는다.
+- 신규 그래픽11테스트, 전체143테스트 pass143/fail0. typecheck/build exit0.
+- 실제 Lby: bake75mesh AO75/light75/missing0, spot5/occupied24, native sky, Exposure2, capture2. 조준·이동/점프·사격·리셋 입력에서 camera finite, console/pageerror/404=0.
+- 오징어 버튼을 보낸 core 단계는 state0x56으로 남았다. 실제 오징어 전이 성공으로 계산하지 않는다.
+- HDR WebGL pixel18건은 CPU 식과 채널당2/255 이내, 제어된 state/표시 입력(y+2)에서 body24/hlf19/squid2mesh를 확인했다. 원본 전이 검증과 구별한다. 마지막 이미지·실행 결과는 [port graphics 요약](../port/graphics.md)과 명령 기록에 남긴다. 원본 NVN 화면 비교는 수행하지 않았다.
+
+## 9. 남은 차이·다음 지시
+
+| 우선·ID | 다음 구현 | 필요한 경계 |
+|---|---|---|
+| P0 GR04/GR03/PNT02~06 | ColPaint UV·vertex color·ink/hemiFix·물감 재질과 forward 합성 | 현재 도색 overlay는 다른 렌더 경로. 원본 칠 shading 완료 처리하지 않음 |
+| P0 GR03 | transmission/Thc/cheapSSS/film, calc5/22·추가 source | native UBO[36].w 등 live input·전체 ID를 임의값으로 채우지 않음 |
+| P0 GR06 | 원본2 cascade/SPP/fade·ProjShadow | single PCF1024/±6·bias는 기존 웹 근사 |
+| P0 GR07/GR10 | 전체8³ LUT·bloom/DOF/vignette·활성 gamma/CC | Hermit 곡선8개 샘플은 전체 LUT가 아님 |
+| P0 GR05/GR10 | native cube projection/12layer prefilter·capture saturation·actor provider | Three PMREM≠native12layer. 비Dynamic static actor light의 runtime 사용은 미확정 |
+| P0 GR01~02 | ASB typed/event/blackboard·SM+d4 writer·material/visibility leaf·tex_mtx | hypot/고정 WeaponDetail·JumpVarID·Mouth00 유지. _Hlf 상위 공급 별도 검증 |
+| P1 GR08 | native cloth link/damping/constraint·frame source | 새 cloth 근사 추가하지 않음 |
+| P2 GR09 | native viewZ/radius/bias/hysteresis와 asset LOD | 기존 LOD0 유지 |
+
+## 10. 재생성·명령·실패
+
+[commands.md](../../../analysis/port_graphics/commands.md)에 실제 명령·결과·실패를 기록한다.
+원본/키/물리·무기·도색 코어/scripts/package는 수정하지 않는다. commit/push 없음.
+일반 asset_build 재생성 뒤 graphics_port_assets.py 보강을 다시 적용해야 한다. 기존 asset_build를 이번 단계로 교체하지 않았다.
+
+## 11. 정정 이력·이전 설명
+
+2026-10-03: 종전 “베이크/안개/하늘/HDR 미구현, 전체 조명 PBR, 밝기 .25”를 현행 경로로 정정했다.
+원본 미확정 해소를 주장하는 것이 아니라 알려진 소비식을 웹에 적용했다는 뜻이다.
+오징어 대신 anim/squid.glb를 선택하던 오류는 anim/을 모델 후보에서 제외하고 실제 Squid2mesh를 읽어 수정했다. 실제 core 전이와 제어된 표시 검증은 구분한다.
+첫 bake 실패는 GLB material emission order를 OriginalMaterialIndex로 쓴 이유였다. BFRES ResDict 원래 순서/재질수로 수정했다.
+남은 SSS/film·LUT·cloth·LOD·native GPU 선택은 유지한다.
+
+아래는 변경 전 원문이다. 현재 상태 판정은 위 본문과 port 표를 따른다.
+
+<details>
+<summary>변경 전 구현 설명 보존</summary>
+
 # render — 화면(맵·캐릭터·무기·애니메이션·팀 컬러·조명)
 
 담당 폴더 `games/splatoon3/client/render/`. 근거 문서: `docs/graphics/{team_color,shaders,player_assembly,anim_state_machine}.md`, `docs/player/player_state.md`.
@@ -149,3 +267,5 @@ PBR 근사(three `MeshStandardMaterial`)로 대신한 것 — **원본과 다름
 5. **[assets] 옷 하네스 값**: GearInfoClothes 행(HarnessType/IsThinHarness/IsHideHarness)을 캐릭터 data 로 주면 내장값 대신 읽겠다.
 6. **[physics]** render 가 읽는 `PlayerState` 필드: `pos`, `facing`, `vel`, `state`, `transform`(SM+0xf0), `stateRate`, `team`. 추가로 있으면 쓰는 것: `sub`(보조 상태, 슬롯 1용), `animSpeed`(SM+0xd4, 없으면 수평 속력), `dead`. physics 의 전환 판정(`stateFrame/stateEnd`)은 `sm.ts` CLIP 표 길이를 쓰고 render 는 GLB `frames` 를 쓴다 — 두 값이 같아야 화면 클립 끝과 전환 프레임이 맞는다.
 7. **[조정] `client/app.ts`**: 없음(번들은 `ctx.assets.load` 캐시로 다시 받음). 렌더러 그림자맵은 render 가 `createRenderView` 에서 켠다(`renderer.shadowMap.enabled`, PCFSoft).
+
+</details>

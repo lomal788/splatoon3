@@ -17,6 +17,8 @@ export interface PadState {
   /** 이번 프레임의 조준 회전량(라디안). 마우스 이동이 원본 스틱/자이로를 대신한다. */
   lookYaw: number;
   lookPitch: number;
+  /** Web adapter policy. Absent retains the original controller pitch-follow path. */
+  lookMode?: "mouse";
   /** 누르고 있는 버튼 비트(Btn). */
   hold: number;
   /** 이번 프레임에 새로 눌린 버튼 비트. */

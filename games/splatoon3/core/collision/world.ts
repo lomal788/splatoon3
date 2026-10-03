@@ -129,6 +129,39 @@ export class MeshCollisionWorld implements CollisionWorld {
     return best;
   }
 
+  /** 웹 기하의 구 접촉. wall drop의 두 방향 ray 근사를 대체하며 native TOI 동등성은 별도. */
+  overlapSphere(center: Vec3, radius: number, mask: number): Hit[] {
+    const contacts: Penetration[] = [];
+    this.mesh.overlapSegment(center[0], center[1], center[2], center[0], center[1], center[2], radius, this.layerFilter(mask), contacts);
+    const hits = contacts.map((p) => this.triHit(p.tri, 0, p.px, p.py, p.pz, { ...p, t: 0 }));
+    for (const d of this.dyn.values()) {
+      if ((d.shape.layer & mask) === 0) continue;
+      const s = d.shape;
+      let cx: number, cy: number, cz: number, reach = radius;
+      if (s.kind === "sphere") { [cx, cy, cz] = s.center; reach += s.radius; }
+      else if (s.kind === "capsule") {
+        const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], dz = s.b[2] - s.a[2];
+        const len2 = dx * dx + dy * dy + dz * dz;
+        const t = len2 > 0 ? Math.max(0, Math.min(1, ((center[0] - s.a[0]) * dx + (center[1] - s.a[1]) * dy + (center[2] - s.a[2]) * dz) / len2)) : 0;
+        cx = s.a[0] + dx * t; cy = s.a[1] + dy * t; cz = s.a[2] + dz * t; reach += s.radius;
+      } else {
+        const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+        const dx = center[0] - s.center[0], dz = center[2] - s.center[2];
+        const x = Math.max(-s.half[0], Math.min(s.half[0], dx * c - dz * sn));
+        const z = Math.max(-s.half[2], Math.min(s.half[2], dx * sn + dz * c));
+        cx = s.center[0] + x * c + z * sn; cz = s.center[2] - x * sn + z * c;
+        cy = Math.max(s.center[1] - s.half[1], Math.min(s.center[1] + s.half[1], center[1]));
+      }
+      const dx = center[0] - cx, dy = center[1] - cy, dz = center[2] - cz, dist = Math.hypot(dx, dy, dz);
+      if (dist > reach) continue;
+      const n = dist > 0 ? v3(dx / dist, dy / dist, dz / dist) : shapeNormal(s, center, radius);
+      if (n[0] === 0 && n[1] === 0 && n[2] === 0) n[1] = 1;
+      const surface = s.kind === "box" ? 0 : s.radius;
+      hits.push({ t: 0, point: v3(cx + n[0] * surface, cy + n[1] * surface, cz + n[2] * surface), normal: n, layer: s.layer, material: -1, actor: d.actor });
+    }
+    return hits;
+  }
+
   /** 캐릭터 몸(세로 캡슐 = 선분 a→b, 반경 r)을 motion 만큼 쓸어 넘긴다. 지형만(동적 충돌체는 플레이어를 막지 않음 [추정]). */
   sweepBody(a: ArrayLike<number>, b: ArrayLike<number>, r: number, motion: ArrayLike<number>, filter: TriFilter): SweepResult | null {
     return this.mesh.sweepSegment(a[0], a[1], a[2], b[0], b[1], b[2], r, motion[0], motion[1], motion[2], filter, SR);

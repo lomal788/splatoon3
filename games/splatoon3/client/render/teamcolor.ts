@@ -1,7 +1,8 @@
 // 팀 컬러 계산. docs/graphics/team_color.md 의 TS 이식(참조 구현 web/tools/graphics_verify/teamcolor.mjs 와 같은 식).
 //   hsvOffset 0x7101188334, deriveTeamColor 0x7101174534, inkCorrection 0x7101174afc,
 //   buildTeamSet 0x71011743a0, buildTeamSets 0x7101176830, materialTeamParams 0x7101103490.
-// 원본은 f32. 여기서는 double 로 계산하고 마지막에 f32 로 자른다(team_color.md §7.2, FMA 여부 미확인).
+// r8 명령 판독: 분리된 f32 산술, FMA 없음. JS pow/fmod는 SDK libm 전체 비트 동등성을 주장하지 않는다.
+import { F, add, sub, mul, div } from "./graphics_math.ts";
 
 export type RGBA = [number, number, number, number];
 
@@ -41,20 +42,20 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
   }
   if (r < g) {
     [r, g] = [g, r];
-    K = -1 / 3 - K;
+    K = sub(div(-1, 3), K);
   }
-  const chroma = r - Math.min(g, b);
-  const h = Math.min(1, Math.abs(K + (g - b) / (chroma * 6 + 1e-20)));
-  const s = Math.min(1, Math.max(0, chroma / (r + 1e-20)));
+  const chroma = sub(r, Math.min(g, b));
+  const h = Math.min(1, Math.abs(add(K, div(sub(g, b), add(mul(chroma, 6), 1e-20)))));
+  const s = Math.min(1, Math.max(0, div(chroma, add(r, 1e-20))));
   return [h, s, r];
 }
 
 function hsvToRgb(h: number, s: number, v: number, a: number): RGBA {
   if (s === 0) return [v, v, v, 1]; // 원본 특이점: 알파 1, RGB 비클램프
-  const x = (h % 1) / (1 / 6); // fmodf: 부호 유지
+  const x = div(F(F(h) % 1), F(1 / 6)); // fmodf: 부호 유지
   const i = Math.trunc(x);
-  const f = x - i;
-  const p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+  const f = sub(x, i);
+  const p = mul(v, sub(1, s)), q = mul(v, sub(1, mul(s, f))), t = mul(v, sub(1, mul(s, sub(1, f))));
   let rgb: [number, number, number];
   switch (i < 0 || i > 4 ? 5 : i) {
     case 0: rgb = [v, t, p]; break;
@@ -71,13 +72,13 @@ function hsvToRgb(h: number, s: number, v: number, a: number): RGBA {
 export function hsvOffset(hueOff: number, satOff: number, brightOff: number, c: RGBA): RGBA {
   const [h, s, v] = rgbToHsv(c[0], c[1], c[2]);
   if (HUE_DIR_PEAK.bright < h && h < HUE_DIR_PEAK.dark) hueOff = -hueOff;
-  const s2 = Math.min(1, Math.max(0, satOff - Math.abs(brightOff) + s));
-  const v2 = v + brightOff <= 0 ? 0 : v + brightOff;
-  return hsvToRgb(h + hueOff, s2, v2, c[3]);
+  const s2 = Math.min(1, Math.max(0, add(sub(satOff, Math.abs(brightOff)), s)));
+  const v2 = add(v, brightOff) <= 0 ? 0 : add(v, brightOff);
+  return hsvToRgb(add(h, hueOff), s2, v2, c[3]);
 }
 
-const labF = (t: number): number => (t >= 0.008856452 ? Math.cbrt(t) : t * 7.7870374 + 0.13793103);
-const lStar = (r: number, g: number, b: number): number => labF(r * 0.2126 + g * 0.7152 + b * 0.0722) * 116 - 16;
+const labF = (t: number): number => (t >= F(0.008856452) ? F(Math.pow(t, F(1 / 3))) : add(mul(t, 7.7870374), 0.13793103));
+const lStar = (r: number, g: number, b: number): number => sub(mul(labF(add(add(mul(r, 0.2126), mul(g, 0.7152)), mul(b, 0.0722))), 116), 16);
 
 /** 활성 env 의 첫 DirectionalLight (DiffuseColor, Intensity) + 하늘 SH 위쪽 조도 (team_color.md §5.3) */
 export interface EnvLight {
@@ -90,16 +91,16 @@ function inkCorrection(c: RGBA, light: EnvLight | null, bright: boolean): RGBA {
   const [h, s, v] = rgbToHsv(c[0], c[1], c[2]);
   let t = 0;
   if (light) {
-    t = light.intensity * (lStar(light.color[0], light.color[1], light.color[2]) / 100);
-    if (light.skyUp) t += lStar(light.skyUp[0], light.skyUp[1], light.skyUp[2]) / 100;
+    t = mul(light.intensity, div(lStar(light.color[0], light.color[1], light.color[2]), 100));
+    if (light.skyUp) t = add(t, div(lStar(light.skyUp[0], light.skyUp[1], light.skyUp[2]), 100));
   }
-  const dark = lStar(c[0], c[1], c[2]) / -100 + 1;
-  const k = Math.min(1, Math.max(0, 1 - INK_MAIN.lumRate * dark));
-  let r = (INK_MAIN.rate1 * 6 - INK_MAIN.rate6) / 5 + ((INK_MAIN.rate6 - INK_MAIN.rate1) / 5) * t;
+  const dark = add(div(lStar(c[0], c[1], c[2]), -100), 1);
+  const k = Math.min(1, Math.max(0, sub(1, mul(INK_MAIN.lumRate, dark))));
+  let r = add(div(sub(mul(INK_MAIN.rate1, 6), INK_MAIN.rate6), 5), mul(div(sub(INK_MAIN.rate6, INK_MAIN.rate1), 5), t));
   r = r < 0 ? 0 : Math.min(r, INK_MAIN.rate6);
-  let d = Math.min(v, r * k);
-  if (bright) d = d - INK_SSS.brightnessOffset * (1 - INK_SSS.brightnessOffsetLuminance * dark);
-  const v2 = Math.max(INK_MAIN.minBright, Math.min(1, Math.max(0, v - d)));
+  let d = Math.min(v, mul(r, k));
+  if (bright) d = sub(d, mul(INK_SSS.brightnessOffset, sub(1, mul(INK_SSS.brightnessOffsetLuminance, dark))));
+  const v2 = Math.max(INK_MAIN.minBright, Math.min(1, Math.max(0, sub(v, d))));
   return hsvToRgb(h, Math.min(s, INK_MAIN.maxSat), v2, c[3]);
 }
 
@@ -110,7 +111,7 @@ function derive(lin: RGBA, i: number, hueExtra: number, env: EnvLight | null): R
   const o = OFFSETS[TYPE_NAMES[i]];
   if (!o) return null;
   let hue = o.h;
-  if (Math.abs(hue) > 1.1920929e-7) hue = hue > 0 ? hue + hueExtra : hue - hueExtra;
+  if (Math.abs(hue) > 1.1920929e-7) hue = hue > 0 ? add(hue, hueExtra) : sub(hue, hueExtra);
   return hsvOffset(hue, o.s, o.b, lin);
 }
 
@@ -123,7 +124,7 @@ export interface TeamSet {
 const fr = (c: RGBA | null): RGBA | null => (c ? (c.map(Math.fround) as RGBA) : null);
 
 export function buildTeamSet(raw: RGBA, hueExtra = 0, env: EnvLight | null = null): TeamSet {
-  const lin: RGBA = [Math.pow(raw[0], 2.2), Math.pow(raw[1], 2.2), Math.pow(raw[2], 2.2), raw[3]];
+  const lin: RGBA = [F(Math.pow(F(raw[0]), F(2.2))), F(Math.pow(F(raw[1]), F(2.2))), F(Math.pow(F(raw[2]), F(2.2))), F(raw[3])];
   return { raw, linear: lin, colors: TYPE_NAMES.map((_, i) => fr(derive(lin, i, hueExtra, env))) };
 }
 

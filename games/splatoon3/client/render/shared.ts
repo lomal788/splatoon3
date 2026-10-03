@@ -31,6 +31,7 @@ export interface PlayerLike {
   animSpeed?: number;
   /** 상태 요청 재생 속도(0x7102447bfc rate, PlayerState.stateRate) — 있으면 render 규칙 대신 사용 */
   stateRate?: number;
+  display?: { hidden: boolean };
 }
 
 export interface PlayerSnap {
@@ -45,6 +46,7 @@ export interface PlayerSnap {
   formCounter: number | null;
   animSpeed: number | null;
   animRate: number | null;
+  displayHidden: boolean | null;
 }
 
 function v3(v: V3 | undefined): [number, number, number] | null {
@@ -74,5 +76,6 @@ export function readPlayer(w: World): PlayerSnap | null {
     formCounter: num(p.transform),
     animSpeed: num(p.animSpeed),
     animRate: num(p.stateRate),
+    displayHidden: typeof p.display?.hidden === "boolean" ? p.display.hidden : null,
   };
 }

@@ -1,7 +1,38 @@
 # assets — 웹 에셋 변환
 
 시험 사격장(대전 로비 `Lby_Lobby00`, 맵 모델 `Fld_VSLobby`) 1인 연습용 에셋. 출력 `web/games/splatoon3/assets/`, 입구 `catalog.json`.
-**좌표·단위·축은 원본 그대로**(Y 위, 게임 단위). 스케일·축 변환 없음. 재생성은 §7 한 명령.
+**좌표·단위·축은 원본 그대로**(Y 위, 게임 단위). 스케일·축 변환 없음. 일반 재생성은 §7, 이번 그래픽 보강은 §0을 따른다.
+
+## 0. 그래픽 자원 보강 — 2026-10-03
+
+이 절이 현재 그래픽 자원 상태다. 아래 기존 변환 설명·크기 표는 이전 날짜의 기록이며 삭제하지 않았다.
+일반 asset_build 뒤 이번 보강을 다시 실행해야 한다. 코드·수식 범위는 [render.md §4~9](render.md).
+
+- 도구: web/tools/graphics_port_assets.py. work/raw/gl/backup은 analysis/port_graphics 안에 둔다. original·extracted는 읽기 전용이며 기존 대형 작업 파일을 지우지 않는다.
+- map/visual.glb: bake Guid=actorHash_modelSlot, 원본 ModelName·재질수·ResDict material index·gsys_bake_st0/1을 보존. GLB material emission 순서를 원본 index로 쓰지 않는다. gltfpack -kn -kv -vnf로 UV1 primitive85개·spot bone9개 보존. runtime binding75mesh/누락0.
+- bake/bindings.json: 원본 bkdat DataElements(type3/4,space0)·Guid/재질 선택·TexcoordScale/Offset/TextureIndex. bake/0_bktex0.rgba16f.bin(12mip),1_bktex0.rgba16f.bin(11mip): BC5 AO/Shadow와 BC6H RGB1을 전 mip RGBA16F로 저장. half/HDR 값 보존. BC5는 decode8bit UNORM→half 경계이며 원본 GPU BC5 보간의 비트 동등성은 주장하지 않는다.
+- sky/Sky_Daytime00.glb: 원본 mSky/mSun 2mesh·766삼각형. shader는 render/sky.ts에서 판독 소비식으로 대체. sky placement/capture saturation은 아직 원본 전체와 동등하지 않다.
+- 캐릭터10개/무기1개 GLB: 원본 fres shader options·params·samplers·renderInfo24materials를 보강. 기존 mesh/clip binary 보존. resource0/1/2·transmission16개 KTX2를 추가(UASTC, metadata linear/SRGB 구분). 텍스처 손실 압축 한계는 유지.
+- catalog는 해당 map/character/weapon 번들의 files/bytes만 보강. 다른 번들 변경 없음.
+- map73,755,489B/17files, character6,130,749B/91files, weapon362,322B/9files. atlas2장62,908,120B로 다운로드·메모리 증가. HDR 범위를 유지하는 전송 압축이 다음 최적화 대상이다.
+- _c0/_pu*의 gltfpack 미보존·원본 ColPaint, 다중 LOD, 클립 정수 프레임/노멀 양자화·material/visibility animation 소비 등은 여전히 차이다.
+- 원본 장비 시작 행은 미확정. 현재 manifest의 SquidF 선택과 gear 행을 사용하며 최소Id 선택을 실제 세이브 기본값으로 승격하지 않는다.
+
+실제 명령(프로젝트 루트):
+
+~~~powershell
+$env:TEMP='C:\dev\splatoon3\analysis\port_graphics'
+$env:TMP=$env:TEMP
+.venv/Scripts/python.exe -m pip install --no-deps --target analysis/port_graphics/python imagecodecs
+.venv/Scripts/python.exe web/tools/graphics_port_assets.py
+# 필요할 때 해당 보강만:
+.venv/Scripts/python.exe web/tools/graphics_port_assets.py --map-only
+.venv/Scripts/python.exe web/tools/graphics_port_assets.py --materials-only
+~~~
+
+imagecodecs2026.8.16은 분석 work의 decoder 보조 모듈이다. .venv 의존/package.json을 변경하지 않았다.
+첫 map material index 오류와 shader compile/404, 최종 검증은 [실행 기록](../../../analysis/port_graphics/commands.md)에 보존한다.
+
 
 ## 1. 구현한 것
 
@@ -150,7 +181,7 @@ json = { version:1, vertexCount, triangleCount,
 
 ## 4. 원본과 다른 점
 - **텍스처 손실 압축**: BC1/4/5 → PNG → BasisU(ETC1S q8 / UASTC). 해상도는 원본 그대로(축소 없음). 0x15 FLOAT VAT 는 무손실(half 그대로).
-- **셰이더 근사 정보만**: Hoian_UBER 를 glTF PBR 로 근사(formats_bfres_bntx.md §5.2). 베이크 라이트맵(`_b0/_b1` = Bake/Scene/LobbyVersus_Day.bkres)·환경맵·SkySphere(`Sky_Daytime00`)는 넣지 않음 — 로비가 원본보다 평평하게 보임.
+- **이전 변환 설명(§0에서 정정)**: Hoian_UBER 를 glTF PBR 로 근사(formats_bfres_bntx.md §5.2). 베이크 라이트맵(`_b0/_b1` = Bake/Scene/LobbyVersus_Day.bkres)·환경맵·SkySphere(`Sky_Daytime00`)는 넣지 않음 — 로비가 원본보다 평평하게 보임.
 - **정점 속성**: 사용자 속성 `_c0`(정점색)·`_pu*` 를 gltfpack 이 버림(맵·캐릭터. 이펙트 프리미티브는 `_c0` → COLOR_0 로 살림). 노멀 8비트 양자화.
 - 셰이프 LOD 0 만, 세그먼트 스케일 보정(Maya) 미표현(formats §7).
 - 클립: 정수 프레임 베이크(원본 커브 아님), 회전 12비트 양자화, 바인드와 같은 상수 트랙 제거.
@@ -162,10 +193,10 @@ json = { version:1, vertexCount, triangleCount,
 | 항목 | 상태·필요한 것 |
 |---|---|
 | 기본 장비 | v0 데이터에 초기 장비 표시가 없다. `FST`(first) 접두는 머리 `Hed_FST000` 만 모델·RSDB 행이 있고 옷 `Clt_FST001` 은 UI 아이콘만, 신발 FST 없음 → 슬롯별 최소 Id 행(Hed_FST000 Id1, Clt_TES001 Id1001, Shs_SLO000 Id1000), 커스텀 Id 0(Har_SQD000, Eyb_SQD000, Btm_000), 탱크 Tnk_000 [추정]. 세이브 초기값 코드(0x… 미탐색)를 보면 풀림 |
-| 액터 Rotate 순서 | Rz·Ry·Rx [추정](레일 판독 규약). 액터 행렬 생성 함수 판독 필요 |
+| 액터 Rotate 순서 | Rz·Ry·Rx [추정], 근거: 레일 판독 규약. 액터 행렬 생성 함수 판독 필요 |
 | Box OffsetRotation/Center 합성 순서 | [추정], 이 맵에는 영향 없음 |
 | paintable | 재질 기준 [추정]. ColPaintBuilder·재질 플래그 0x60 대응 |
-| 조명 | MainLight→DirectionalLight 대응 [추정](team_color.md §5.3) |
+| 조명 | 이전 대응 [추정]은 renderparam_runtime §6 [판독]으로 해소. 현재 자원/웹 소비는 §0·render.md 참조 |
 | VFX 프리미티브 매핑 | G3NT i ↔ BFRES 모델 i [추정: 개수 185 일치, ball→BulletShtr 등 이름도 맞음] |
 | 클립 대체 | `WalkBackHold_Shtr` 없음 — ASB 치환 결과가 없을 때 규칙 [미확정] |
 | 패턴 텍스처 | `Color_Eye` 21프레임 째 `M_Eye_Alb.21` 이 Player00 에 없음(Player01 등 다른 파일 [추정]) |

@@ -56,3 +56,8 @@ SHARED/FUNCS/decomp_index--no-build/func_lookup/bl_callers/disasm→새2함수fu
 ## 11. 미확정과 다음에 필요한 근거
 
 네caller의범위내값질문은해소했다. actualholder 선택predicate24C9824 전체상태, 모든caller의게임수명sideeffect, 이후BB→ASB다층pose→GPU전체프레임은별도미확정 inventory항목이다. 다른무기값은범위밖이다. 기존블랙보드공급복합행L277은MoveSpeedRt·전체갱신등남은질문을포함하므로이번한source검증으로승격하지않는다.
+
+
+### 2026-10-03 웹 반영 r8 후속 — 기존 결론 보존
+
+[현재 반영/검증](../port/character_graphics_r8.md), [재질 소비](character_material_r8.md), [표시 공급](character_display_r8.md)를 우선한다. 기존 '이번 작업은 분석만/구현하지 않음'은 해당 회차 기록이다. r8은 실제 네 캐릭터 재질, RGBA 강도, B7a0 지연 숨김/SM/holder, Shtr/Shtr를 웹에 연결했고 전체304/304·typecheck/build·Lby12단계를 검증했다. live 재질/전체 pose·원본 GPU/Phive 동등성을 완료로 승격하지 않는다.

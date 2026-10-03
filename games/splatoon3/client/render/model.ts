@@ -5,6 +5,11 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
 import type { FresMaterial, TexResolver } from "./hoian.ts";
 
+/** Animation libraries may share a model basename but contain no render meshes. */
+export function playerModelFile(files:string[],pattern:RegExp):string|undefined {
+  return files.find(n=>!n.startsWith("anim/")&&pattern.test(n.slice(n.lastIndexOf("/")+1).replace(/\.glb$/i,"")));
+}
+
 interface GltfJson {
   images?: { name?: string; uri?: string; mimeType?: string }[];
   textures?: { source?: number; name?: string; extensions?: Record<string, { source?: number }> }[];
@@ -17,15 +22,20 @@ interface Parser {
 const baseName = (s: string): string => s.slice(s.lastIndexOf("/") + 1).replace(/\.(png|ktx2|jpg)$/i, "");
 
 /**
- * 텍스처 이름 → THREE.Texture. 찾는 순서: ① glb 안 이미지(이름 또는 uri 끝 이름) ② 번들 파일 `.../<이름>.ktx2`.
+ * 텍스처 이름 → THREE.Texture. 소유 모델별 번들 경로가 있으면 우선하고,
+ * 없으면 glb 이미지, 번들 이름 순서로 찾는다.
  * 팀색 마스크(_su0 Tcl) 처럼 glTF PBR 슬롯이 아닌 텍스처를 쓰려고 둔다.
  */
-export function textureResolver(gltf: GLTF | null, bundle: Bundle | null): TexResolver {
+export function textureResolver(gltf: GLTF | null, bundle: Bundle | null, owner?: string): TexResolver {
   const cache = new Map<string, Promise<THREE.Texture | null>>();
   return (name) => {
     let p = cache.get(name);
     if (!p) {
       p = (async () => {
+        // FRES sampler names are local to each model. A shared name (M_Body_MAi)
+        // must not replace a selected Tnk_Simple resource with Player00's skin map.
+        const scoped = owner ? `tex/resources/${owner}/${name}.ktx2` : null;
+        if (scoped && bundle?.has(scoped)) return bundle.texture(scoped);
         const parser = gltf?.parser as unknown as Parser | undefined;
         const js = parser?.json;
         if (parser && js?.images) {
@@ -51,9 +61,9 @@ export function textureResolver(gltf: GLTF | null, bundle: Bundle | null): TexRe
           const f = bundle.names().find((n) => /\.(ktx2)$/i.test(n) && baseName(n) === name);
           if (f) return bundle.texture(f);
         }
-        // ③ glb 옆 tex/<이름>.png (graphics_bfres2gltf --texuri tex/ 배치)
+        // ③ Standalone analysis GLB only. Bundles are authoritative; missing slots return null.
         const dir = (gltf?.parser as unknown as { options?: { path?: string } } | undefined)?.options?.path;
-        if (dir) {
+        if (dir && !bundle) {
           try {
             const t = await new THREE.TextureLoader().loadAsync(`${dir}tex/${name}.png`);
             t.flipY = false;

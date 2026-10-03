@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 import type { World } from "../core/world.ts";
 import type { AssetLoader } from "./assets.ts";
+import type { MapView } from "./render/map.ts";
 
 export interface ClientContext {
   renderer: THREE.WebGLRenderer;
@@ -10,6 +11,14 @@ export interface ClientContext {
   world: World;
   overlay: HTMLElement;
   audio: AudioContext;
+  /** Graphics can provide the linear HDR -> final compose draw. */
+  renderScene?: () => void;
+  /** Shared existing lighting inputs for the known FX material consumers. */
+  fxLighting?: Record<string, THREE.IUniform>;
+  /** Web scene-depth supply for original soft-particle equations; native pass order remains unknown. */
+  fxDepth?: Record<string, THREE.IUniform>;
+  /** Visual stage and native lighting for the paint material branch; read by paint only. */
+  paintMap?: MapView;
 }
 
 export interface View {

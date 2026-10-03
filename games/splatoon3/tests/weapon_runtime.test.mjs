@@ -4,6 +4,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { World } from "../core/world.ts";
 import { ParamStore } from "../core/params.ts";
 import { Layer } from "../core/types.ts";
+import { WeaponRuntime } from "../core/weapon/runtime.ts";
+import { createRangeSystem } from "../core/range/index.ts";
 import { createWeaponSystem } from "../core/weapon/index.ts";
 import { spawnPosition, SHOT_DIR_DEFAULT, MUZZLE_OFFSET } from "../core/weapon/spawn.ts";
 import { Btn, emptyPad } from "../core/input.ts";
@@ -72,6 +74,14 @@ function fakeCollision({ floorY = -10, wallZ = Infinity, target = null } = {}) {
       }
       return best;
     },
+    overlapSphere(o, r, mask) {
+      const hits = [];
+      if (mask & Layer.Ground) {
+        if (Math.abs(o[1] - floorY) < r) hits.push({ t: 0, point: v(o[0], floorY, o[2]), normal: v(0, 1, 0), layer: Layer.Ground, material: 0, actor: -1 });
+        if (Math.abs(o[2] - wallZ) < r) hits.push({ t: 0, point: v(o[0], o[1], wallZ), normal: v(0, 0, -1), layer: Layer.Ground, material: 0, actor: -1 });
+      }
+      return hits;
+    },
     materialName: () => "",
     setDynamic() {},
   };
@@ -112,7 +122,7 @@ test("사격 게이트: 리스폰 직후 사람 프레임 9 까지 차단, 이�
   assert.ok(fires[0].events.some((x) => x.type === "FireImpact"));
 });
 
-test("탄 첫 갱신은 age 0(생성 속도 그대로), 수평 탄 z 이동 2.2/프레임", () => {
+test("탄 첫 갱신은 age 0(생성 속도 그대로), 발사 속도를 원본 바디 f32 식으로 적분", () => {
   const { w } = makeWorld();
   const log = run(w, 14, (i) => i >= 10 && i <= 11);
   const at = (f) => log.find((l) => l.frame === f);
@@ -121,7 +131,9 @@ test("탄 첫 갱신은 age 0(생성 속도 그대로), 수평 탄 z 이동 2.2/
   const b2 = at(13).bullets.find((b) => b.kind === "Shooter");
   assert.equal(b1.age, 0);
   assert.equal(b2.age, 1);
-  assert.equal(Math.fround(b2.pos[2] - b1.pos[2]).toFixed(4), "2.2000");
+  // sead 표의 선형 보간은 길이가 정확히 1이 아니다. z성분/속력을 임의 2.2로 고정하지 않는다.
+  const f = Math.fround;
+  for (let k = 0; k < 3; k++) assert.equal(b2.pos[k], f(b1.pos[k] + f(f(1 / 60) * f(b2.vel[k] * 60))));
 });
 
 test("표적 명중: age 기준 데미지 감쇠, 같은 프레임 BulletHit(Object), 다음 갱신에 소멸", () => {
@@ -203,6 +215,28 @@ test("잉크: 한 발 0.0092 소비, 108발 뒤 부족(잔량 0.006400978)·NoIn
   assert.equal(fires, 108);
   assert.equal(Math.fround(pl.ink), Math.fround(0.006400978));
   assert.ok(noInk > 0);
-  assert.equal(pl.inkRecoverStop, 30);
+  assert.equal(pl.inkRecoverStop, 20);
+  assert.equal(pl.inkRecoverStopNoInk, 30);
   assert.equal(pl.squidLock, 4);
+});
+
+
+test("신규 스플래시·벽 낙하의 생성 프레임은 age -1, post 제외", () => {
+ const {w}=makeWorld({wallZ:8});const log=run(w,60,i=>i>=10&&i<=11);
+ for(const kind of ["Splash","WallDrop"]){const row=log.find(l=>l.events.some(e=>e.type==="BulletSpawn"&&e.kind===kind));assert.ok(row,kind);const ids=row.events.filter(e=>e.type==="BulletSpawn"&&e.kind===kind).map(e=>e.id);for(const id of ids){const b=row.bullets.find(b=>b.id===id);assert.ok(b,kind+" creation frame retained");assert.equal(b.age,-1);}}
+});
+test("첫 이동 age0 명중: receiver는 비1 배율을 한 번, vt22는 별도 body/sec 전달", () => {
+ const {w}=makeWorld({target:{id:2,c:[-.24,1.1,2],r:.5}});w.newId();
+ w.data.placement={actors:[{name:"SighterTarget",hash:"123",pos:[-.24,0,2],rot:[0,0,0],scale:[1,1,1],team:"Neutral",params:{}}]};
+ w.data.tables.damage_rate_info={default:1,rows:{Shooter:{Default:.344}}};const range=createRangeSystem();range.init(w);w.systems.unshift(range);
+ const t=w.shared.get("range").targets[0],seen=[],h=w.hittables.get(t.id),cb=h.onBulletContact;h.onBulletContact=x=>{seen.push({pos:[...x.pos],velocity:[...x.velocity]});cb(x);};
+ const log=run(w,25,i=>i>=10&&i<=11);const row=log.find(l=>l.events.some(e=>e.type==="Damage"));assert.ok(row);const d=row.events.find(e=>e.type==="Damage");assert.equal(d.value,123);assert.equal(seen.length,1);assert.ok(seen[0].velocity[2]>130);assert.ok(seen[0].pos[2]<2);
+ assert.equal(row.events.find(e=>e.type==="BulletDie"&&e.kind==="Shooter").id,row.events.find(e=>e.type==="BulletHit"&&e.kind==="Shooter").id);
+ assert.ok(w.shared.get("range").targets.find(x=>x.id===t.id).bend.weight>0,"actual physics contact drives bend");
+ assert.equal(row.events.find(e=>e.type==="BulletHit"&&e.kind==="Shooter").age,0);
+});
+test("예약 메인 풀32 고갈: RNG/소비 진행, Fire/Spawn는 발생하지 않음", () => {
+ const {w}=makeWorld({floorY:-10000});const rt=new WeaponRuntime(w);rt.bullets=Array.from({length:32},()=>({kind:"Shooter"}));const pl=w.shared.get("player");pl.ink=1;
+ let fire=0;for(let i=0;i<9;i++){w.pad={...emptyPad(),hold:Btn.Fire};w.events.clear();rt.fire(w);fire+=w.events.list.filter(e=>e.type==="Fire").length;w.frame++;}
+ assert.equal(fire,0);assert.equal(rt.bullets.length,32);assert.equal(rt.action.shots,1);assert.equal(pl.ink,Math.fround(1-Math.fround(.0092)));assert.equal(pl.inkRecoverStop,20);
 });

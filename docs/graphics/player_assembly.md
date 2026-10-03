@@ -111,7 +111,7 @@ else: 상태표 플래그 bit17 → f0 = min(f0, 70), bit18 → min(f0, 83); f0 
 humanOn = SM.humanWrap.cmd(+8) != -1        // 래퍼 정지 0x710244ea40 이 +8 = -1
 squidOn = SM.squidWrap.cmd != -1
 if 잉크레일 탑승(본체+0xa668 핸들 유효 && 그 상태(+0x24) ∉ 7..11): body = hlf = squid = 0, rail = 1
-elif 본체+0x7a0(byte, 의미 [미확정]): 전부 0
+elif 본체+0x7a0(byte, 의미 [미확정]): 전부 0 // 2026-10-03 아래 정정 참조
 else:
   hlf   = humanOn && f0 >= 61 && modelType != Rival
   body  = humanOn && !hlf
@@ -135,6 +135,10 @@ else: 전부 0
 ```
 
 - **전환 프레임**: 같은 프레임 안 순서가 상태 갱신(0x710248c97c) → 래퍼 틱 → 표시 결정(0x710248dd94 → 0x710249648c → 0x710243e2dc → 0x71014595b0)이다. 0x84(오징어 ToSquid) 진입 프레임에는 사람 래퍼가 bit3 으로 유지되어 humanOn·squidOn 이 모두 참이지만, (c) 의 마지막 규칙이 한쪽만 남기므로 **두 모델이 한 프레임에 같이 보이는 일은 없다** — 사람 숨김·오징어 표시는 0x84/0x92 진입 프레임에 동시에 바뀐다 [판독]. 그리기 제출이 같은 프레임 뒤 단계라는 것은 [추정]. `cur == 0` 예외는 프레임이 진행되지 않을 때만 걸린다고 본다 [추정].
+- **2026-10-03 잠영 표시 정정/실행 보완:** 위 B7a0의 의미 미확정은 r8 [player_state §6.1.4](../player/player_state.md#614-b7a0-지연된-판정값의-producer--8차-판독)의 ordinary ally squid+특수 candidate 지연 writer로 해소되어 있다 [판독]. 표시 reader243e2dc의 ordinary/invalid-rail 진입 블록을 신규64경우 실행하여 B7a0 켜짐→body/hlf/squid/rail 모두0과 꺼짐의 Hlf threshold/type 조건을64/64 확인했다 [실행-부분]. producer/그 뒤 counter·NaN reset/holder/GPU는 이 실행 범위에 넣지 않았다. 웹 PlayerSnap/draw에는 B7a0 숨김 입력이 없다. 자세한 근거는 [ink_visual_path §6.3](ink_visual_path.md#63-숨김-gate--신규-원본-실행진입-블록).
+
+- **2026-10-03 r2 정밀화 [판독]+[실행]:** 위 의사코드의 “재질을 NaN으로 리셋”은 **바인더 캐시와 실제 setter 인자를 구분하지 않은 표현**이다. off 경로는 캐시 3칸에 `0x7fc00000`을 쓰지만 재질 setter의 S0에는 **0.0**을 전달한다. whole SM 2,048건에서 reset 11,136회·후속 stain 128회를 구분해 확인했다(재질 setter 4개는 capture/return fixture). ordinary 후보 생산 블록 10,800건·whole holder 4,096건·수동 연결 272프레임도 일치했다. `B+d60>0`은 오징어/레일만 끄고 몸/`_Hlf`의 이전 플래그를 보존한다. 앞선 entry64 결과는 유지하되 이 새 범위와 중복 계상하지 않는다. StepPaint/Phive 입력 공급·전체 슬롯19·실제 GPU 표시는 미확정이다. [상세 실행 경계와 정정](squid_ink_visibility_r2.md#6-계산식조건상세-의사코드).
+
 - **`_Hlf` 표시 구간**: ToHuman(0x92) 진입 때 f0 = 90 → 매 프레임 −1 → 89..61 의 **29프레임 동안 `_Hlf`**, 이후 몸(ToHuman 클립은 30프레임). 0x95 ToHuman_WallJump 는 bit17 상한 70 → 9프레임. 공격·이동 계열(bit17) 상태로 넘어가면 빨리 끝난다. ToSquid(0x82)는 f0 가 30 에서 +10 씩 올라 61 이상이 되는 4번째 프레임부터 `_Hlf` — 0x84 전환 프레임과의 ±1 관계는 [미확정]. Rival(타입 4)은 `_Hlf` 를 쓰지 않는다.
   - **확정(2026-10-03 r6) [판독]:** ToSquid 요청은 상태기계 0x710243e7d0 안 0x7102440e6c(0x82)·0x7102440ef0(0x82/0x83 `cinc`) 두 곳이고, 둘 다 0x7102440e70 으로 모여 0x7102447bfc 로 요청한 뒤 `f0 = (s32) max((f32) f0, 30.0)`(0x7102440e80~0x7102440eb0)를 쓴다. 그다음 0x7102440488 로 가서 같은 함수 끝의 과도기 갱신 블록(0x710244089c~0x7102440968: 상태 0x82..0x84 이면 `f0 += 10`)을 반드시 지난다. 제어 흐름 검사 `PY web/tools/r6_gfx_char_cfgpath.py 0x710243e7d0 10940 0x7102440e80 0x710244089c --write-off 0xf0` 결과, 0x7102440e80 에서 함수 끝까지 0x710244089c 를 지나지 않는 경로는 없고, 그 사이 SM+0xf0 쓰기는 max(30) 한 곳뿐이다. 그 사이에 부르는 0x7102442354 의 SM+0xf0 쓰기(0x7102442990/0x7102442bdc = 0x40)는 상태 0xbc~0xbe 요청 뒤에만 있다.
   - 따라서 요청이 그 프레임에 받아들여져 SM+0xc8 = 0x82 가 되면, 요청 프레임 S 의 f0 = max(f0, 30) + 10 = 40(직전 f0 ≤ 30 일 때)이다. 이어서 S+1 = 50, S+2 = 60, S+3 = 70 이다. 표시 결정(0x710243e2dc)은 같은 프레임의 상태 갱신 뒤에 돌므로 **`_Hlf` 는 S+3 한 프레임**이다. S+4 에 0x84(오징어 ToSquid, 클립 FrameCount 6 기준 §4.2 판정)로 넘어가면 (c) 규칙이 사람 쪽을 끄므로 오징어만 보인다. 0x7102447bfc 가 요청을 미루는 경우(SM+0x1d4 지연 요청)는 이 계산에 넣지 않았다.
@@ -359,3 +363,15 @@ if mirrorX: A = Scale(-1,1,1) · A   (attachBody 는 왼쪽 뼈 그대로, map �
 `web/tools/r8_gfx_binder_order_emu.py`는 원본 2656ac8/2656870/2657260을 실행하여 타입 5×파트 5의 **25 경로**에서 기본 파일·모델과 SDK 바인더 입력 배열을 기록했다. 몸 5개 배열은 판독식과 모두 일치했다. 결과 `analysis/completion/r8/graphics_binder_order.json`. 스텁은 모델 factory 2657a4c, 리소스 로더 37b2b28와 RTTI true, 경로 formatter 0f44d60, 배열을 기록하는 SDK 진입 366f140, 초기화 guard다. SDK 배열 저장 366f280은 `analysis/decomp/r8_graphics/char_suffix_binder.c`에서 별도로 판독했다. BFRES 파싱·포즈 바인딩·로드 실패·최종 렌더를 실행한 것은 아니다. 최초 실행은 초기화 guard 외부 호출 PC 3e99ec0에서 UC_ERR_FETCH_UNMAPPED로 실패했고 guard를 명시적 스텁으로 둔 뒤 25 경로 실행에 성공했다.
 
 하네스 이름 연결 근거는 기존 `analysis/decomp/graphics/model_teamcolor_1.c`의 13b7ab4 및 새 `analysis/decomp/r8_graphics/char_parts_loader.c`의 13b9a84, `char_body_params.c`의 26da26c다. 이름 연결을 새로 판독했으며 기존 뼈 가시성 실행 성과를 다시 계상하지 않았다. `_F/_M` 본문26fd010과 모델 타입 writer/caller 연결은 [접미사 전용 문서](part_suffix_runtime.md)에서 해소했다. Cloth·전체 포즈 합성은 계속 조사 중이다.
+
+
+### 2026-10-03 웹 반영 r8 후속 — 기존 결론 보존
+
+[현재 반영/검증](../port/character_graphics_r8.md), [재질 소비](character_material_r8.md), [표시 공급](character_display_r8.md)를 우선한다. 기존 '이번 작업은 분석만/구현하지 않음'은 해당 회차 기록이다. r8은 실제 네 캐릭터 재질, RGBA 강도, B7a0 지연 숨김/SM/holder, Shtr/Shtr를 웹에 연결했고 전체304/304·typecheck/build·Lby12단계를 검증했다. live 재질/전체 pose·원본 GPU/Phive 동등성을 완료로 승격하지 않는다.
+
+
+## 재질·눈 패턴·총구 그래픽 r9 — 2026-10-03
+
+[현재 반영·검증·다음 지시](../port/graphics_priority_r9.md): 탱크/하네스/병의 native 재질·owner texture, raw type11 눈 채널, [Maya0/rotation0 UV6lane](character_texsrt_r9.md), [실제 Muzzle 시각 행렬 및 내적 정정](../effect_sound/muzzle_attachment_r9.md)을 웹과 MD에 반영했다. FMAA 원본1,212/피부 홀더67/SRT313/내적 격리블록2,048, 선택 GLSL↔웹GPU448건은 각각 범위가 다른 검증이며 원본 NVN/전체프레임 일치가 아니다.
+
+고정 원본556/986=56.39%·그래픽102/204=50.00%, port13/62=20.97%(일부37/차이9/원본미확정3)·GR0/10/일부7/10 유지. 신규 부분 근거를 기존 복합 질문 전체 확정으로 승격하지 않았다. 몸CP/skin idx·weighted type11/type18·다른 SRT mode/rotation·cube/BRDF/SPP·잠영 파문/Custom1/VAT·native 최종픽셀은 남는다. 최종 테스트·브라우저·보호 SHA와 실패는 r9 요약의 실행 기록을 따른다.

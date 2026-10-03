@@ -2,6 +2,8 @@
 // 근거: docs/camera/aim_swerve.md §3·§6, 발사 위치 0x7102552170, 생성 정보 0x71025823b0, 초기 속도 0x71026beed0,
 // 잉크 0x7102580780/0x7102492120/0x7102353718/0x71025856c8, 발사 후 타이머 0x71024b28b0, 이펙트 액션 0x7102864104(effect_sound.md §3.2).
 import { f32 } from "../fmath.ts";
+import { inputCountdown } from "./input.ts";
+export { INK_RECOVER_STD } from "./ink.ts";
 import type { Team } from "../types.ts";
 import type { V3 } from "./move.ts";
 import type { AdditionParam, SplashSpawnParam, WeaponShooterParam } from "./params.ts";
@@ -18,7 +20,7 @@ const HELD_MIN = 2;
 const HUMAN_MIN = 6;
 
 export interface ShotInput {
-  /** ZR 누름(원본 B+0x4d0 > 0 — ZL 을 누르지 않은 ZR [추정]) */
+  /** 입력 writer의 B+4d0 > 0. 실제 플레이어는 Sender 우선순위/차단을 먼저 소비한다. */
   zr: boolean;
   /** 오징어 상태(사람 프레임 a90 = 0) */
   squid: boolean;
@@ -114,11 +116,11 @@ export class ShotGate {
     this.adc = Math.max(this.adc, n + 4);
   }
 
-  /** 프레임 끝 감소 [추정: 감소 위치 미판독] */
+  /** 입력 단계 포화 감소 [실행]. adc의 감소 생산자는 여전히 근사. */
   tick(): void {
-    if (this.abc > 0) this.abc--;
+    this.abc = inputCountdown(this.abc);
     if (this.adc > 0) this.adc--;
-    if (this.ab4 > 0) this.ab4--;
+    this.ab4 = inputCountdown(this.ab4);
   }
 }
 
@@ -167,6 +169,7 @@ export class ShooterAction {
    * actions 로 이번 프레임 InkAction 변경("FireImpact"/"FireOn"/"FireOff")을, noInk 로 "잉크 부족" 표시 요청을 알린다.
    */
   step(p: WeaponShooterParam, split: SplashSpawnParam, add: AdditionParam, inp: ShotInput, ink: InkPort, actions: string[]): ShotOut | null {
+    this.gate.tick(); // 249f494 입력 감소 → 슬롯19 사격 게이트
     if (inp.jumped) this.swerve.onJump(p);
     const pds = (p.PreDelayFrame_SquidShot | 0) - (p.SquidShotShorteningFrame | 0);
     const [trigger, blocked, locked] = this.gate.update(inp.zr, inp.squid, p.PreDelayFrame_HumanShot | 0, pds);
@@ -205,7 +208,6 @@ export class ShooterAction {
     }
     this.swerve.endFrame(p, this.timer.rem, trigger, inp.airFramesGe4);
     this.inkAction(fired, trigger && !blocked, inp.frame, actions);
-    this.gate.tick();
     return shot;
   }
 
@@ -257,5 +259,4 @@ export function canConsumeInk(r: number, cost: number): boolean {
   return r >= cost || (r < cost && d >= f32(-1e-5) && d <= f32(1e-5));
 }
 
-/** 0x7102491f88 기어 0 Std 회복량 = 1/600 (0x3ada740e) [실행(에뮬)] */
-export const INK_RECOVER_STD = f32(1 / 600);
+

@@ -4,10 +4,15 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
 import { PlayerAnimator } from "./anim/animator.ts";
 import type { LeafWeight } from "./anim/slot.ts";
-import { applyHoian, type HoianUniforms, setTeam } from "./hoian.ts";
-import { type AttachOpt, attach, bindWorld, fresOf, textureResolver } from "./model.ts";
+import { applyHoian, type HoianUniforms, setTeam, setHoianMaterialTexSrt } from "./hoian.ts";
+import { type AttachOpt, attach, bindWorld, fresOf, textureResolver, playerModelFile } from "./model.ts";
 import type { PlayerSnap } from "./shared.ts";
-import type { MaterialTeamParams } from "./teamcolor.ts";
+import { materialTeamParams, type MaterialTeamParams, type TeamSet } from "./teamcolor.ts";
+import type { LightingState } from "./lighting.ts";
+import { applyForward } from "./forward.ts";
+import { applyCharacterMaterial, type CharacterMaterialBinding } from "./character_material.ts";
+import { bindMaterialChannels, type MaterialChannelBinding, type MaterialChannelTarget, type MaterialParameterConsumer } from "./anim/material_binding.ts";
+import { materialClipInfo, patchTexSrt, type NativeTexSrt, type MaterialAnimationBank } from "./anim/material_channels.ts";
 
 /** 파츠 결합 표(§6.3). 키 = 모델 이름 접두 */
 const PART_RULES: Record<string, AttachOpt> = {
@@ -62,7 +67,7 @@ function applyLeaves(lib: ClipLib, leaves: LeafWeight[]): void {
     a.setEffectiveWeight(0);
   }
   for (const l of leaves) {
-    if (l.type !== 3) continue; // 재질(11)·가시성(18) 애니는 미구현
+    if (l.type !== 3) continue; // type11은 별도 원시 재질 채널 바인더가 소비. type18은 미구현.
     const clip = lib.clips.get(l.clip);
     if (!clip) continue;
     let a = lib.actions.get(l.clip);
@@ -81,6 +86,17 @@ function applyLeaves(lib: ClipLib, leaves: LeafWeight[]): void {
   lib.mixer.update(0);
 }
 
+/** Only the proven native Maya/zero-rotation SRT consumer is supplied here.
+ * Color_Skin selection and live CompPaint/body ink stay unbound until their writers are confirmed.
+ */
+const materialParameter: MaterialParameterConsumer = (target,name,offsets) => {
+  if (!/^tex_mtx[012]$/.test(name)) return false;
+  const raw = target.fres.params?.[name]?.value as NativeTexSrt | undefined;
+  if (!raw?.Scaling || !raw.Translation || typeof raw.Rotation !== "number") return false;
+  try { return setHoianMaterialTexSrt(target.material,name,patchTexSrt(raw,offsets)); }
+  catch { return false; }
+};
+
 export interface PlayerViewInfo {
   placeholder: boolean;
   parts: string[];
@@ -93,6 +109,7 @@ export class PlayerView {
   /** 사람 모델(몸 + 파츠 + _Hlf + 무기)이 같은 스켈레톤을 쓴다 */
   private human: THREE.Object3D | null = null;
   private squid: THREE.Object3D | null = null;
+  private muzzleBone: THREE.Object3D | null = null;
   private bodyMeshes: THREE.Object3D[] = [];
   private hlfMeshes: THREE.Object3D[] = [];
   private gearMeshes: THREE.Object3D[] = [];
@@ -101,6 +118,13 @@ export class PlayerView {
   private teamUniforms: HoianUniforms[] = [];
   animator: PlayerAnimator | null = null;
   readonly info: PlayerViewInfo = { placeholder: false, parts: [], missingClips: [], skipped: [] };
+  readonly characterMaterials: CharacterMaterialBinding[] = [];
+  readonly materialAnimations: MaterialChannelBinding[] = [];
+  private humanMaterials: MaterialChannelBinding | null = null;
+  private squidMaterials: MaterialChannelBinding | null = null;
+  get materialReady(): Promise<void> { return Promise.all([...this.characterMaterials,...this.materialAnimations].map(b => b.ready)).then(() => {}); }
+  private lighting: LightingState | undefined;
+  private teamSet: TeamSet | undefined;
   private prev: PlayerSnap | null = null;
   private cur: PlayerSnap | null = null;
 
@@ -109,9 +133,14 @@ export class PlayerView {
     scene.add(this.root);
   }
 
-  load(charB: Bundle | undefined, weaponB: Bundle | undefined, team: MaterialTeamParams, weaponAbbr: string, harness: Harness = DEFAULT_HARNESS): void {
+  load(charB: Bundle | undefined, weaponB: Bundle | undefined, team: MaterialTeamParams, weaponAbbr: string, harness: Harness = DEFAULT_HARNESS, lighting?: LightingState, teamSet?: TeamSet): void {
+    this.lighting = lighting; this.teamSet = teamSet;
+    if (charB?.has("data/gear.json")) {
+      const g = charB.json<{ parts?: { clothes?: { row?: { HarnessType?: Harness["type"]; IsThinHarness?: boolean; IsHideHarness?: boolean } } } }>("data/gear.json").parts?.clothes?.row;
+      if (g?.HarnessType) harness = { type: g.HarnessType, thin: !!g.IsThinHarness, hide: !!g.IsHideHarness };
+    }
     const glbs = charB ? charB.names().filter((n) => /\.glb$/i.test(n)) : [];
-    const find = (re: RegExp): string | undefined => glbs.find((n) => re.test(base(n)));
+    const find = (re: RegExp): string | undefined => playerModelFile(glbs,re);
     const bodyName = find(/^(body|Player0\d)$/i);
     const hlfName = find(/(^|_)hlf$/i);
     const squidName = find(/squid|octopus/i);
@@ -135,6 +164,11 @@ export class PlayerView {
     });
     this.hideMouthVariants(this.bodyMeshes);
     this.teamMaterials(this.bodyMeshes, textureResolver(body, charB), team);
+    const materialBank = charB.has("data/anim_material_native.json") ? charB.json<MaterialAnimationBank>("data/anim_material_native.json") : null;
+    if (materialBank?.groups.Player00) {
+      this.humanMaterials = bindMaterialChannels(this.materialTargets(this.bodyMeshes, textureResolver(body, charB)), materialBank.groups.Player00,materialParameter);
+      this.materialAnimations.push(this.humanMaterials);
+    }
 
     // _Hlf: 같은 뼈 이름을 몸에서 복사(0x7101459154) → 몸 스켈레톤에 바로 묶는다
     if (hlfName) {
@@ -142,16 +176,21 @@ export class PlayerView {
       this.hlfMeshes = attach(body.scene, bodyBind, h.scene, { attachPart: "Skl_Root" });
       this.teamMaterials(this.hlfMeshes, textureResolver(h, charB), team);
     }
-    // 파츠: 이름 접두 → 결합 규칙. 같은 종류가 여럿이면 첫 번째만
+    // The conversion manifest names the selected native resources. A bundle's
+    // alphabetical file order must not decide hair/clothes/shoes.
+    const selected = charB.has("data/character.json") ?
+      charB.json<{ parts?: Record<string, { bfres?: string }> }>("data/character.json").parts : undefined;
+    const partNames = selected ? Object.keys(selected).filter(k => PART_RULES[k.slice(0,3)]).map(k => "parts/"+k+".glb") : glbs;
     const used = new Set<string>();
-    for (const n of glbs) {
+    for (const n of partNames) {
+      if (!charB.has(n)) { this.info.skipped.push("selected part absent: "+n); continue; }
       const b = base(n);
       const kind = b.slice(0, 3);
       const rule = PART_RULES[kind];
       if (!rule || used.has(kind)) continue;
       used.add(kind);
       const g = charB.gltf(n);
-      const tex = textureResolver(g, charB);
+      const tex = textureResolver(g, charB, b);
       const ms = attach(body.scene, bodyBind, g.scene, rule);
       if (kind === "Shs") ms.push(...attach(body.scene, bodyBind, g.scene, SHOE_MIRROR));
       if (kind === "Tnk") this.selectHarness(ms, harness);
@@ -164,6 +203,11 @@ export class PlayerView {
     if (weaponB && wName) {
       const g = weaponB.gltf(wName);
       const ms = attach(body.scene, bodyBind, g.scene, WEAPON_RULE);
+      for (const m of ms) {
+        const sm = m as THREE.SkinnedMesh;
+        if (sm.isSkinnedMesh) this.muzzleBone ??= sm.skeleton.bones.find(b => b.name === "part:Muzzle" || b.name === "Muzzle") ?? null;
+      }
+      if (!this.muzzleBone) this.info.skipped.push("weapon Muzzle bone absent: visual FX uses explicit fallback");
       this.teamMaterials(ms, textureResolver(g, weaponB), team);
       this.gearMeshes.push(...ms);
       this.info.parts.push(base(wName));
@@ -191,6 +235,10 @@ export class PlayerView {
         }
       });
       this.teamMaterials(ms, textureResolver(s, charB), team);
+      if (materialBank?.groups.Player_Squid) {
+        this.squidMaterials = bindMaterialChannels(this.materialTargets(ms, textureResolver(s, charB)), materialBank.groups.Player_Squid,materialParameter);
+        this.materialAnimations.push(this.squidMaterials);
+      }
       this.squidLib = { clips: squidClips, mixer: new THREE.AnimationMixer(s.scene), actions: new Map() };
     } else this.squid = this.placeholderSquid(team);
     this.root.traverse((o) => {
@@ -198,8 +246,8 @@ export class PlayerView {
     });
     const empty = (): null => null;
     this.animator = new PlayerAnimator(
-      clipInfo(this.humanLib),
-      this.squidLib ? clipInfo(this.squidLib) : empty,
+      (name,type) => type === 11 ? materialClipInfo(materialBank?.groups.Player00,name) : clipInfo(this.humanLib!)(name),
+      (name,type) => type === 11 ? materialClipInfo(materialBank?.groups.Player_Squid,name) : this.squidLib ? clipInfo(this.squidLib)(name) : empty(),
       weaponAbbr,
     );
   }
@@ -230,14 +278,46 @@ export class PlayerView {
         mat.userData.__hoianDone = true;
         const f = fresOf(mat);
         if (!f || !(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) continue;
-        const u = applyHoian(mat as THREE.MeshStandardMaterial, f, team, tex, this.info.skipped);
+        const u = applyHoian(mat as THREE.MeshStandardMaterial, f, this.teamSet ? materialTeamParams(this.teamSet, f.renderInfo) : team, tex, this.info.skipped, mesh.geometry);
+        if (this.lighting) {
+          applyForward(mat as THREE.MeshStandardMaterial, f, this.lighting, null);
+          const b = applyCharacterMaterial(mat as THREE.MeshStandardMaterial, f, tex, this.info.skipped, mesh.geometry, this.lighting.uniforms.hLightAlpha);
+          if (b) this.characterMaterials.push(b);
+        }
         if (u) this.teamUniforms.push(u);
       }
     }
   }
 
+  private materialTargets(ms: THREE.Object3D[], tex: ReturnType<typeof textureResolver>): MaterialChannelTarget[] {
+    const targets: MaterialChannelTarget[] = [];
+    for (const o of ms) {
+      const mesh = o as THREE.Mesh;
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const fres = material && fresOf(material);
+        if (fres && (material as THREE.MeshStandardMaterial).isMeshStandardMaterial) targets.push({ material: material as THREE.MeshStandardMaterial, fres, tex });
+      }
+    }
+    return targets;
+  }
+
   setTeam(team: MaterialTeamParams): void {
     for (const u of this.teamUniforms) setTeam(u, team);
+  }
+
+  /** Animated visual bone matrix; bullet simulation keeps its independent native spawn path. */
+  muzzleMatrix(): number[] | null {
+    if (!this.muzzleBone) return null;
+    this.muzzleBone.updateWorldMatrix(true, false);
+    return this.muzzleBone.matrixWorld.elements.slice();
+  }
+
+  dispose(): void {
+    for (const binding of this.materialAnimations) binding.dispose();
+    this.materialAnimations.length = 0;
+    for (const binding of this.characterMaterials) binding.dispose();
+    this.characterMaterials.length = 0;
+    this.root.removeFromParent();
   }
 
   // ---- placeholder (에셋이 없을 때) ----------------------------------------
@@ -289,7 +369,7 @@ export class PlayerView {
     if (!a) return;
     const speed = snap.animSpeed ?? snap.speed ?? this.speedFromDelta();
     const state = snap.state ?? this.fallbackState(snap, speed);
-    a.step({ state, speed, dead: snap.dead, formCounter: snap.formCounter, animRate: snap.animRate });
+    a.step({ state, speed, dead: snap.dead, formCounter: snap.formCounter, animRate: snap.animRate, displayHidden: snap.displayHidden });
     const miss = new Set([...a.human.missing, ...a.squid.missing]);
     this.info.missingClips = [...miss];
   }
@@ -349,6 +429,9 @@ export class PlayerView {
     if (this.squid) this.squid.visible = squid;
     if (this.humanLib && (body || hlf)) applyLeaves(this.humanLib, a.humanLeaves(alpha));
     if (this.squidLib && squid) applyLeaves(this.squidLib, a.squidLeaves(alpha));
+    // Wrapper channels retain their own frame counts even while B7a0 hides the model.
+    this.humanMaterials?.apply(a.humanLeaves(alpha));
+    this.squidMaterials?.apply(a.squidLeaves(alpha));
   }
 }
 

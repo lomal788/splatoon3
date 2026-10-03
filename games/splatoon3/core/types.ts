@@ -37,6 +37,8 @@ export interface SphereQueryFilter {
 export interface CollisionWorld {
   raycast(origin: Vec3, dir: Vec3, maxDist: number, mask: number): Hit | null;
   sweepSphere(from: Vec3, to: Vec3, radius: number, mask: number, query?: SphereQueryFilter): Hit | null;
+  /** 현재 구에 닿는 면 목록. 실제 Havok 후보 순서/태그는 별도 미확정. */
+  overlapSphere?(center: Vec3, radius: number, mask: number): Hit[];
   materialName(material: number): string;
   /** 움직이는 충돌체(표적 등) 등록·갱신 */
   setDynamic(actor: number, shape: DynamicShape | null): void;
@@ -86,6 +88,15 @@ export interface DamageInfo {
   /** DamageRateInfo 행 이름(예: "Shooter") */
   rateRow: string;
   critical: boolean;
+  /** 이번 물리 스텝의 상대 탄 몸 속도(유닛/초), receiver 배율 전 값과 별도. */
+  contactVelocity?: Vec3;
+  /** 표적 Actor_Bullet 휨은 접촉점 대신 상대 몸 위치를 사용한다. */
+  bodyPos?: Vec3;
+}
+
+export interface BulletContactInfo {
+  pos: Vec3; // 상대 탄 몸 위치
+  velocity: Vec3; // body+dc 이번 스텝 속도(유닛/초)
 }
 
 export interface Hittable {
@@ -94,4 +105,6 @@ export interface Hittable {
   /** DamageRateInfo 열 이름(예: "Default", 표적 종류) */
   readonly rateCol: string;
   onDamage(info: DamageInfo): void;
+  /** native 표적 vt22 물리 접촉. Through/무적도 데미지 리시버와 별개. */
+  onBulletContact?(info: BulletContactInfo): void;
 }

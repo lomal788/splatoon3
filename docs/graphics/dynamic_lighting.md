@@ -72,3 +72,10 @@ impl/render.md/assets.md:두자료구조를구분해원본cell/radius판정,선�
 ## 11. 미확정·정정
 
 2026-10-03 CPUwriter/GPUlayout/격자원점범위의이전미확정을위새원본으로해소했다. DampParam/DistDamp/AngleDamp/Radius/Scale의rig/actor생성→provider전체명명대응,비Dynamic GfxPointLight/SpotLight 사용여부,member552이후칸의의미,전체scene/GPU화면일치는계속조사한다. 다음:rigreflection2B9D88C/2B9DEF0/2B9E934/2B9F124,actorcomponentreflection,1048C3C/1048D98 writer,shaderbind1187A88.
+
+
+### 2026-10-03 웹 반영 r8 후속 — 기존 결론 보존
+
+[현재 반영/검증](../port/character_graphics_r8.md), [재질 소비](character_material_r8.md), [표시 공급](character_display_r8.md)를 우선한다. 기존 '이번 작업은 분석만/구현하지 않음'은 해당 회차 기록이다. r8은 실제 네 캐릭터 재질, RGBA 강도, B7a0 지연 숨김/SM/holder, Shtr/Shtr를 웹에 연결했고 전체304/304·typecheck/build·Lby12단계를 검증했다. live 재질/전체 pose·원본 GPU/Phive 동등성을 완료로 승격하지 않는다.
+
+[실행-격리 블록] 1048cb8..1048ce8 RGBA 네 lane×Intensity, 2,048입력/8,192float bits 불일치0. mock light/SP 입력이며 전체 provider나 UBO/GPU 실행이 아니다. `analysis/port_character_r8/light_alpha_emu.py`·`light_alpha_native.json`과 fixture를 보존했다. 웹 point/spot alpha를 1로 고정하던 것을 실제 Color.A×Intensity로 바꿨다.

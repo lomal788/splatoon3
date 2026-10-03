@@ -74,6 +74,7 @@ export const GEAR = {
   OpMove: [0.024, 0.05568, 0.0768],
   OpMoveShot: [0.012, 0.033, 0.042],
   SomersaultKd: [0.85, 0.925, 1.0],
+  WallJumpChargeFrames: [45, 18, 5], // actual ActionSpecUp_Squid data overrides constructor 60/40/20
 } as const;
 
 /** spl::PlayerParam 이동 관련 캐시(+0xb0..+0x140). */
@@ -92,6 +93,8 @@ export interface PlayerParam {
   opMoveShot: number;
   /** +0x140 Somersault_MoveVelKd */
   somersaultKd: number;
+  /** +0x13c WallJumpChargeFrm, actual 45/18/5, same AP interpolation. */
+  wallJumpChargeFrames: number;
   /** MainWeaponSetting WeaponSpeedType(0/1/2), WeaponAccType(0/1/2) */
   speedType: number;
   accType: number;
@@ -125,6 +128,7 @@ export function makePlayerParam(ap: GearAP = {}, weapon: { speedType?: number; a
     opMove: L(GEAR.OpMove, po),
     opMoveShot: L(GEAR.OpMoveShot, po),
     somersaultKd: L(GEAR.SomersaultKd, pa),
+    wallJumpChargeFrames: L(GEAR.WallJumpChargeFrames, pa),
     speedType: weapon.speedType ?? 1,
     accType: weapon.accType ?? 1,
   };

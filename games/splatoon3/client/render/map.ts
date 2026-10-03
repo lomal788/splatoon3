@@ -5,7 +5,13 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
 import { applyHoian } from "./hoian.ts";
 import { fresOf, textureResolver } from "./model.ts";
-import type { EnvLight, MaterialTeamParams } from "./teamcolor.ts";
+import type { EnvLight, MaterialTeamParams, TeamSet } from "./teamcolor.ts";
+import { materialTeamParams } from "./teamcolor.ts";
+import { BakeBindings } from "./bake.ts";
+import { applyForward } from "./forward.ts";
+import { LightingState } from "./lighting.ts";
+import { SkyView } from "./sky.ts";
+import { NativeShadowState } from "./shadows.ts";
 
 /** 맵 루트 이름(다른 영역이 scene.getObjectByName 으로 찾는다 — paint 표시 등) */
 export const MAP_ROOT_NAME = "splatoon3.map";
@@ -51,10 +57,10 @@ const pick = (o: Json | undefined, ...keys: string[]): unknown => {
 
 /**
  * env.json(에셋 담당 형식, docs/impl/assets.md) → EnvInfo.
- *   주 방향광 색·세기: teamColorLight.lobbyMainLight(RenderingDay MainLight Color/Intens) — MainLight→DirectionalLight 대응은 [추정, team_color.md §5.3].
+ *   주 방향광 색·세기: RenderingDay MainLight → env writer [graphics/renderparam_runtime §6].
  *     없으면 teamColorLight.defaultDay(기본 env DirectionalLight DiffuseColor/Intensity).
  *   방향: 로비 MainLight Latitude/Longitude → lonLatToDir (없으면 defaultDay.Direction [데이터: 기본 env]).
- *   배경색: rendering.Fog.DepthFog.Color [근사: 하늘 구(SkySphere Sky_Daytime00) 미표시 대신 원거리 안개색].
+ *   sky/ground fields are placeholder colors only. Actual lobby uses the native Sky_Daytime00 and linear shader fog.
  */
 export function parseEnv(env: unknown): EnvInfo {
   if (!env || typeof env !== "object") return DEFAULT_ENV;
@@ -87,14 +93,14 @@ export function parseEnv(env: unknown): EnvInfo {
 /**
  * env 접근자 MainLightDirLongitudeLatitude set 0x710104dea8 [판독]: 입력 vec2 (u, v) 도 → DirectionalLight+0x1c0 (Direction)
  *   = (−sin(u)·cos(v), −sin(v), −cos(u)·cos(v)), 도→라디안 0.017453292, sinf/cosf 임포트.
- * u = Longitude, v = Latitude 순서는 [추정: 이름 순서 "LongitudeLatitude", v 가 고도일 때 빛이 아래로 향함].
- * RenderingDay.MainLight 값이 이 접근자로 들어가는 경로는 [추정](Intens/Color 와 같은 형식).
+ * Longitude/Latitude writer and typed RenderingDay consumer: graphics/renderparam_runtime §6.
+ * SDK sinf/cosf are approximated by f32-rounded JS libm; whole bit identity is not claimed.
  */
 export function lonLatToDir(lonDeg: number, latDeg: number): [number, number, number] {
   const k = Math.fround(0.017453292);
   const u = Math.fround(lonDeg * k), v = Math.fround(latDeg * k);
   const cv = -Math.cos(v);
-  return [Math.sin(u) * cv, -Math.sin(v), Math.cos(u) * cv];
+  return [Math.fround(Math.fround(Math.sin(u)) * Math.fround(cv)), Math.fround(-Math.sin(v)), Math.fround(Math.fround(Math.cos(u)) * Math.fround(cv))];
 }
 
 const srgbToLinear = (c: [number, number, number]): [number, number, number] => {
@@ -102,17 +108,20 @@ const srgbToLinear = (c: [number, number, number]): [number, number, number] => 
   return [t.r, t.g, t.b];
 };
 
-/** 원본 Intensity → three 광원 세기 배율. 원본 HDR 합성(Hoian_ProcHDRCompose)이 미해독이라 화면 밝기 맞춤용 근사 상수 [근사] */
-const LIGHT_SCALE = 0.25;
-/** 그림자 카메라 반폭(유닛) [웹 전용 값] */
-const SHADOW_HALF = 6;
-const HEMI_INTENSITY = 1.0;
+const HEMI_INTENSITY = 0.0; // Native startup SH replaces the arbitrary hemisphere colors.
 
 export class MapView {
   readonly root = new THREE.Group();
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   env: EnvInfo = DEFAULT_ENV;
+  readonly lighting = new LightingState();
+  readonly shadows = new NativeShadowState();
+  bakes: BakeBindings | null = null;
+  sky: SkyView | null = null;
+  /** Paint owns its atlas/hooks; restore its replacements before disposing the stage. */
+  disposePaint?: () => void;
+  environmentReady = false;
   readonly skipped: string[] = [];
   stats = { meshesIn: 0, meshesOut: 0, triangles: 0, placeholder: false };
 
@@ -120,15 +129,9 @@ export class MapView {
     this.root.name = MAP_ROOT_NAME;
     scene.add(this.root);
     this.sun = new THREE.DirectionalLight(0xffffff, 1);
-    // 동적 그림자 근사: 플레이어 주변만(원본 gsys_dynamic_depth_shadow 캐스케이드 설정은 미해독) [근사]
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024);
-    const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -SHADOW_HALF;
-    sc.right = sc.top = SHADOW_HALF;
-    sc.near = 1;
-    sc.far = 200;
-    this.sun.shadow.bias = -0.0005;
+    // Two depth targets are supplied by shadows.ts; the sun remains the direct light.
+    this.sun.castShadow = false;
+    this.lighting.shadows = this.shadows;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x444444, HEMI_INTENSITY);
     scene.add(this.sun, this.sun.target, this.hemi);
     this.applyEnv(scene);
@@ -145,37 +148,79 @@ export class MapView {
     const e = this.env;
     this.follow(new THREE.Vector3());
     this.sun.color.setRGB(e.light.color[0], e.light.color[1], e.light.color[2], THREE.LinearSRGBColorSpace);
-    this.sun.intensity = e.light.intensity * LIGHT_SCALE;
+    this.sun.intensity = e.light.intensity;
     this.hemi.color.setRGB(e.sky[0], e.sky[1], e.sky[2], THREE.LinearSRGBColorSpace);
     this.hemi.groundColor.setRGB(e.ground[0], e.ground[1], e.ground[2], THREE.LinearSRGBColorSpace);
     scene.background = new THREE.Color().setRGB(e.sky[0], e.sky[1], e.sky[2], THREE.LinearSRGBColorSpace);
   }
 
-  load(scene: THREE.Scene, bundle: Bundle | undefined, team: MaterialTeamParams): void {
+  load(scene: THREE.Scene, bundle: Bundle | undefined, team: MaterialTeamParams, set?: TeamSet): void {
     if (bundle?.has("env.json")) this.env = parseEnv(bundle.json("env.json"));
     this.applyEnv(scene);
+    const raw = bundle?.has("env.json") ? bundle.json("env.json") : null;
+    this.lighting.configure(raw, this.env.light.color, this.env.light.intensity, this.env.direction);
+    this.shadows.configure(raw);
+    if (bundle) this.bakes = new BakeBindings(bundle);
     const glbName = bundle?.names().find((n) => /(^|\/)visual\.glb$/i.test(n)) ?? bundle?.names().find((n) => /\.glb$/i.test(n));
     if (bundle && glbName) {
       const gltf = bundle.gltf(glbName);
-      this.addVisual(gltf, bundle, team);
+      this.addVisual(gltf, bundle, team, set);
     } else this.addPlaceholder();
+    if (bundle?.has("sky/Sky_Daytime00.glb")) {
+      this.sky = new SkyView(bundle.gltf("sky/Sky_Daytime00.glb"), raw);
+      scene.add(this.sky.root);
+      scene.background = null;
+    }
   }
 
-  private addVisual(gltf: GLTF, bundle: Bundle, team: MaterialTeamParams): void {
+  private addVisual(gltf: GLTF, bundle: Bundle, team: MaterialTeamParams, set?: TeamSet): void {
     const tex = textureResolver(gltf, bundle);
-    const seen = new Set<THREE.Material>();
     gltf.scene.updateMatrixWorld(true);
+    // Bone-bound rigs must be read before static geometry is merged.
+    this.lighting.bindRigs(gltf.scene);
+    const clones = new Map<string, THREE.Material>();
     gltf.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
-      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
-        if (seen.has(mat)) continue;
-        seen.add(mat);
-        const f = fresOf(mat);
-        if (f && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) applyHoian(mat as THREE.MeshStandardMaterial, f, team, tex, this.skipped);
-      }
+      const materials = Array.isArray(m.material) ? m.material : [m.material];
+      const updated = materials.map(original => {
+        const f = fresOf(original);
+        if (!f || !(original as THREE.MeshStandardMaterial).isMeshStandardMaterial) return original;
+        const bake = this.bakes?.resolve(m, original, f) ?? null;
+        const key = original.uuid + ":" + (bake?.ao?.st.toArray().join(",") ?? "") + ":" + (bake?.light?.st.toArray().join(",") ?? "");
+        let mat = clones.get(key);
+        if (!mat) {
+          mat = original.clone();
+          clones.set(key, mat);
+          applyHoian(mat as THREE.MeshStandardMaterial, f, set ? materialTeamParams(set, f.renderInfo) : team, tex, this.skipped, m.geometry);
+          applyForward(mat as THREE.MeshStandardMaterial, f, this.lighting, bake);
+        }
+        return mat;
+      });
+      m.material = Array.isArray(m.material) ? updated : updated[0];
     });
     this.root.add(mergeStatic(gltf.scene, this.stats));
+  }
+
+  async captureEnvironment(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Promise<void> {
+    this.environmentReady=false;
+    try {await this.lighting.capture(renderer, scene, this.root, this.sky?.root ?? null, capture => this.sky?.setCapture(capture));}
+    finally {this.environmentReady=true;}
+  }
+
+  dispose(scene: THREE.Scene): void {
+    this.disposePaint?.();this.disposePaint=undefined;
+    scene.remove(this.root);
+    if (this.sky) scene.remove(this.sky.root);
+    this.sky?.dispose(); this.lighting.dispose(); this.shadows.dispose(); this.bakes?.dispose();
+    const materials = new Set<THREE.Material>();
+    this.root.traverse(o => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      const m = o as THREE.Mesh;
+      m.geometry.dispose();
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) materials.add(mat);
+    });
+    for (const m of materials) m.dispose();
   }
 
   private addPlaceholder(): void {

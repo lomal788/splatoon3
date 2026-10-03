@@ -63,18 +63,22 @@ export async function boot(root: HTMLElement, spec: MatchSpec = PRACTICE): Promi
     last = now;
     click.style.display = input.locked ? "none" : "";
     if (input.locked && audio.state === "suspended") void audio.resume();
+    // Preserve the entire accumulated mouse motion across catch-up steps.
+    // Each sample receives the number of fixed steps still to run this frame.
+    let pendingSteps = Math.floor(acc / STEP);
     while (acc >= STEP) {
-      world.step(input.sample());
+      world.step(input.sample(pendingSteps--));
       acc -= STEP;
     }
     const alpha = acc / STEP;
     for (const v of views) v.update(world, alpha);
-    renderer.render(scene, camera);
+    if (ctx.renderScene) ctx.renderScene();
+    else renderer.render(scene, camera);
     if (debug) debug.textContent = debugText(world);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  if (DEV) (globalThis as Record<string, unknown>).__splatoon3 = { world, scene, camera, renderer, bundles };
+  if (DEV) (globalThis as Record<string, unknown>).__splatoon3 = { world, scene, camera, renderer, bundles, input, views };
 }
 
 /** 번들 → 코어 데이터. 규칙: 어느 번들이든 params/<표>.json 은 파라미터 표, data/<이름>.json 은 표·상수. */

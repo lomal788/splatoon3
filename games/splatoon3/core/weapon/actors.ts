@@ -29,6 +29,8 @@ export interface ShooterView {
   jumped: boolean;
   /** 잉크 탱크 잔량(본체+0x698, 0..1). 플레이어 쪽에 없으면 null */
   ink: number | null;
+  mainInputFrames: number | null;
+  clearMainLatches: boolean;
   raw: Record<string, unknown> | null;
 }
 
@@ -82,6 +84,8 @@ export function readShooter(w: World, index: number): ShooterView {
     airFrames: num(pick(pl, "airFrames")) ?? 0,
     jumped: w.events.list.some((e) => e.type === "Jump" && (e.owner === undefined || e.owner === pick(pl, "id"))),
     ink: num(pick(pl, "ink", "inkTank")),
+    mainInputFrames: num(pick(pl, "mainInputFrames")),
+    clearMainLatches: pick(pl, "clearMainLatches") === true,
     raw: pl,
   };
 }

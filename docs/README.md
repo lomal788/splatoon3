@@ -25,6 +25,7 @@
 - [camera/solo_completion.md](camera/solo_completion.md) — 카메라 기저·붐 구체·FOV 정정
 - [weapon/solo_shooter.md](weapon/solo_shooter.md) — 첫 발·잉크·탄 생성 허용 원본 근거
 - [physics/collision_runtime_completion.md](physics/collision_runtime_completion.md) — 양방향 필터·몸체 원점·월드 단계
+- [graphics/ink_visual_path.md](graphics/ink_visual_path.md) — 실제 잉크/발사/잠영/광원 시각 차이·p1385 신규판독·숨김 reader64건 실행 ([구현 지시 요약](port/ink_visuals.md))
 - [graphics/solo_graphics_audit.md](graphics/solo_graphics_audit.md) — 모자 행렬 원본 실행 및 HairArrange 후보 정정
 - [effect_sound/solo_fx_audit.md](effect_sound/solo_fx_audit.md) — FIXED4채널·VAT 법선·음성 제한기 비교
 - [player/solo_completion.md](player/solo_completion.md) — 오징어속도 k1088건, 이동애니속도2004건 원본 비트 대조
@@ -103,3 +104,63 @@ r7 종료 고정 inventory에서 신규147개를 원본 근거로 해소하여 �
 - 카메라 원본 붐/충돌 감쇠/상태/리셋: [r9_boom_query.md](camera/r9_boom_query.md), [r9_collision_spring.md](camera/r9_collision_spring.md), [r9_state_sources.md](camera/r9_state_sources.md), [r9_reset_contexts.md](camera/r9_reset_contexts.md)
 - 그래픽 원본 ASB/typed tag/cloth: [asb_header_runtime.md](graphics/asb_header_runtime.md), [asb_typed_tags.md](graphics/asb_typed_tags.md), [cloth_damping_runtime.md](graphics/cloth_damping_runtime.md), [cloth_link_runtime.md](graphics/cloth_link_runtime.md)
 - 이펙트/효과음 원본 생성·제한·필터: [one_emitter_runtime.md](effect_sound/one_emitter_runtime.md), [sound_limiter_runtime.md](effect_sound/sound_limiter_runtime.md), [sound_runtime_filters.md](effect_sound/sound_runtime_filters.md)
+
+### 잉크·발사·잠영·광원 추가 근거 r2 (2026-10-03)
+
+- [바닥 texel/neighbor 입력](graphics/floor_ink_inputs_r2.md) — init→texel→staging28건,wholeW/atlas는미확정.
+- [잠영 지연·표시 holder](graphics/squid_ink_visibility_r2.md) — B7a0 지연과표시/재질reset의실행경계.
+- [Flash/Ripple·raw VAT 입력](effect_sound/fx_shader_inputs_r2.md) — 새1202/1885조합식과Maxwellexport누락.
+- [색 보정/LUT 공급](graphics/ink_lighting_r2.md) — c1분기표누락보완·실제로비CPU연산순서.
+
+구현요약 [port/ink_visuals.md](port/ink_visuals.md). 이번은분석+MD+분석도구보완이며게임코드반영은없다. 넓은GPU/프레임질문을부분실행으로승격하지않았다.
+
+### 정지 상태 마우스 시점 분석 (2026-10-03)
+- [시점 급변·피치 후행 재현](camera/mouse_view_jumps.md), [입력 수명](camera/mouse_input_lifecycle.md), [원본 자동 제어 경계](camera/mouse_original_controls.md).
+- 구현 지시 요약: [port/mouse_camera.md](port/mouse_camera.md). 분석만 수행했으며 현재 코드 수정은 없다.
+
+### 첨부 원본 화면의 그래픽·이펙트 차이 분석 — 2026-10-03
+
+[사진/현재 웹/전체 경로](graphics/reference_graphics_gap.md), [잉크 표면](graphics/reference_ink_surface.md), [발사·탄·발밑·잠영 FX](effect_sound/reference_shooter_visuals.md), [캐릭터 산란·필름](graphics/reference_character_lighting.md), [HDR/LUT 저장·sampler](graphics/reference_hdr_output.md). 구현 지시용 [port/reference_graphics](port/reference_graphics.md). 웹 코드 변경0/고정 inventory·포트 항목 승격0이며 원본 GPU·동일 Lby 픽셀 비교는 미확정이다.
+
+
+## 마우스·슈터이펙트 후속 웹 반영 — 2026-10-03
+
+[마우스 실제 반영](camera/mouse_web_port.md), [슈터FX소비자](effect_sound/shooter_web_port.md), [실제 구현·검증 요약](port/priority_1_4.md). 원본분석승격과웹구현검증을구분한다.
+
+## 공통 조명·그림자·최종색 웹 반영 — 2026-10-03
+
+- [port/common_render_r5.md](port/common_render_r5.md) — 6번 실제반영·고정분모·명령/실패·전체252테스트/GPU검증·잔여
+- [graphics/common_lighting_web_port.md](graphics/common_lighting_web_port.md) — native sin 각도7MRTSH·CPU원본128회/3584bit·웹큐브근사경계
+- [graphics/common_shadow_web_port.md](graphics/common_shadow_web_port.md) — 2×1024depth·가산occlusion·Density0·13GPUfixture·caster/표적정책미확정
+- [graphics/common_post_web_port.md](graphics/common_post_web_port.md) — native곡선8³LUT·36WebGLreadback·Bloom/DOF/liveflags잔여
+
+이번 사용자 지시는 웹 구현이므로 렌더source를 수정했다. impl/scripts/package/original·에셋은 그대로이며 원본전체556/986와포트13/62는 유지한다.
+
+
+## 공통 조명·그림자·Bloom 후속 반영 r6 — 2026-10-03
+
+- [구현·검증·다음 지시](port/common_render_r6.md)
+- [하늘 cube27·Illuminate 잔여](graphics/common_lighting_r6.md)
+- [PCF/SPP·Default fade40~60](graphics/common_shadow_r6.md)
+- [Bloom 원본 생산·DefaultDay·DOF 정정](graphics/common_post_r6.md)
+
+전체266/266·typecheck/build 및 실제 사격장4단계 오류0. narrow 원본 근거와 웹 검증을 구분하고 whole 상태/분모는 유지한다.
+
+
+### 2026-10-03 잉크 표면 r7 웹 반영·검증
+
+[실제 포트 요약](port/ink_surface_r7.md), [시각 모델 좌표/geometry](graphics/ink_visual_geometry_r7.md), [원본 판독식 소비 shader](graphics/ink_surface_web_r7.md). collision overlay를 actual visual draw로 옮기고 InkBright/rim/normal/thickness/F0/roughness·베이크/SH/그림자/HDR를 연결했다. 원본 writer277/panel256/transform명령블록128입력 재검증·WebGLslice↔실제포트431건·전체285테스트·타입/빌드·actualLby4단계 오류0를 구분한다.
+
+고정 원본986/확정556=56.39%, 그래픽102/204=50.00%, 도색52/100=52.00% 유지. web PNT06 차이→일부, 고정13/62=20.97%, 일부37/차이9/원본미확정3. native wholeatlas/seam·live W/emission·BRDF/cube/최종NVN은 미확정이며 adapter/부분결과를 전체확정으로 올리지 않는다. 실패와 실제명령은 analysis/port_ink_r7/commands.md 및각상세§10에 보존한다.
+
+
+## 캐릭터 그래픽 r8 실제 웹 반영 — 2026-10-03
+
+[구현 요약](port/character_graphics_r8.md), [재질 11절](graphics/character_material_r8.md), [잠영 표시 11절](graphics/character_display_r8.md). 실제4재질 cheapSSS/film/RGBA, B7a0 지연 표시, Shtr/Shtr 공급. 전체304/304·typecheck/build·actual Lby12단계 오류0. 원본 GPU/전체 producer 미확정 유지, 고정 inventory556/986·port13/62 유지.
+
+
+## 재질·눈 패턴·총구 그래픽 r9 — 2026-10-03
+
+[현재 반영·검증·다음 지시](port/graphics_priority_r9.md): 탱크/하네스/병의 native 재질·owner texture, raw type11 눈 채널, [Maya0/rotation0 UV6lane](graphics/character_texsrt_r9.md), [실제 Muzzle 시각 행렬 및 내적 정정](effect_sound/muzzle_attachment_r9.md)을 웹과 MD에 반영했다. FMAA 원본1,212/피부 홀더67/SRT313/내적 격리블록2,048, 선택 GLSL↔웹GPU448건은 각각 범위가 다른 검증이며 원본 NVN/전체프레임 일치가 아니다.
+
+고정 원본556/986=56.39%·그래픽102/204=50.00%, port13/62=20.97%(일부37/차이9/원본미확정3)·GR0/10/일부7/10 유지. 신규 부분 근거를 기존 복합 질문 전체 확정으로 승격하지 않았다. 몸CP/skin idx·weighted type11/type18·다른 SRT mode/rotation·cube/BRDF/SPP·잠영 파문/Custom1/VAT·native 최종픽셀은 남는다. 최종 테스트·브라우저·보호 SHA와 실패는 r9 요약의 실행 기록을 따른다.

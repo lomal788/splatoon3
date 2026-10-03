@@ -1,13 +1,29 @@
 // fx·audio 가 함께 쓰는 자료 모음. effect/* · sfx/* 번들(및 common)에서 XLink 사용자, HitEffectConfig,
 // 감쇠 세트, 그룹, 소리 버퍼, 이미터 값, 텍스처를 찾는다. 형식은 docs/impl/fx.md "에셋 형식" 절.
 // 번들이 없거나 비어 있으면 빈 자료로 시작하고(이벤트 로그·placeholder 로 동작), 도착하면 채운다.
-import type * as THREE from "three";
+import * as THREE from "three";
 import { bundlesFor, type AssetLoader, type Bundle } from "../assets.ts";
 import type { World } from "../../core/world.ts";
 import { DEFAULT_ATTN_SETS, DEFAULT_GROUPS, type AttnSet, type GroupRule } from "./alto.ts";
 import { HitEffectTable, isHitEffectConfig } from "./hiteffect.ts";
 import type { XUser } from "./xlink.ts";
 import fallback from "../fx/fallback.json";
+
+export interface EmitterSampler {
+  slot: number | null;
+  name: string;
+  offset?: string;
+}
+
+export interface FxTextureInfo {
+  file: string;
+  kind: string;
+  width: number;
+  height: number;
+  format?: string;
+  colorSpace?: string;
+  [key: string]: unknown;
+}
 
 export interface FxData {
   slink: Map<string, XUser>;
@@ -21,6 +37,9 @@ export interface FxData {
   textures: Map<string, THREE.Texture>;
   /** "Eset/Emitter" → 샘플러 텍스처 이름(effect_vfxb46.py eset 순서) */
   emitterTex: Map<string, string[]>;
+  /** 원본 sysTextureSamplerN 슬롯. 배열 순서로 슬롯을 추측하지 않는다. */
+  emitterSamplers: Map<string, EmitterSampler[]>;
+  textureInfo: Map<string, FxTextureInfo>;
   /** "Eset/Emitter" → 프리미티브(G3PR) 파일, 파일 → 형상 */
   emitterPrim: Map<string, string>;
   prims: Map<string, THREE.BufferGeometry>;
@@ -41,6 +60,8 @@ function empty(): FxData {
     emitters: new Map(),
     textures: new Map(),
     emitterTex: new Map(),
+    emitterSamplers: new Map(),
+    textureInfo: new Map(),
     emitterPrim: new Map(),
     prims: new Map(),
     teamColors: null,
@@ -76,6 +97,31 @@ function collectUsers(j: unknown, kind: "slink" | "elink", d: FxData): void {
   }
 }
 
+/** JSON의 분리된 키를 native fields 소비 형식에 연결한다. 원본 count=0도 보존한다. */
+export function emitterDefinition(em: Record<string, unknown>): Record<string, unknown> {
+  const fields = em.fields;
+  const def = fields && typeof fields === "object" ? { ...(fields as Record<string, unknown>) } : { ...em };
+  const scale = em.scale as { keys?: number[][]; numKeys?: number } | undefined;
+  if (scale?.keys) def.scaleKeys = scale.keys;
+  if (typeof scale?.numKeys === "number") def.numScaleKeys = scale.numKeys;
+  const color = em.color as Record<string, { keys?: number[][]; numKeys?: number; type?: string | number }> | undefined;
+  const types: Record<string, number> = { FIXED: 0, RANDOM: 1, ANIM: 2 };
+  for (const channel of ["color0", "alpha0", "color1", "alpha1"]) {
+    const value = color?.[channel];
+    if (value?.keys) def[`${channel}Keys`] = value.keys;
+    const count = `num${channel[0].toUpperCase()}${channel.slice(1)}Keys`;
+    if (typeof value?.numKeys === "number") def[count] = value.numKeys;
+    else if (!(count in def) && value?.keys) def[count] = value.keys.length;
+    if (typeof value?.type === "number") def[`${channel}Type`] = value.type;
+    else if (value?.type && value.type in types) def[`${channel}Type`] = types[value.type];
+  }
+  // 렌더 설정과 shader 입력은 키와 별도로 소비한다. 미확정 runtime custom uniform은 넣지 않는다.
+  for (const key of ["nativeRender", "nearFade", "alphaThreshold", "softDistance", "vatNormalOffset", "shaderVariation", "keyInterpolation", "primitive"]) {
+    if (key in em) def[key] = em[key];
+  }
+  return def;
+}
+
 function collectEmitters(j: unknown, d: FxData): void {
   if (!j || typeof j !== "object") return;
   const root = j as Record<string, unknown>;
@@ -84,7 +130,10 @@ function collectEmitters(j: unknown, d: FxData): void {
     if (!v || typeof v !== "object" || !("life" in (v as object)) || !k.includes("/")) continue;
     d.emitters.set(k, v as Record<string, unknown>);
     const tex = (v as Record<string, unknown>).textures;
-    if (Array.isArray(tex)) d.emitterTex.set(k, tex.map(String));
+    if (Array.isArray(tex)) {
+      d.emitterTex.set(k, tex.map(String));
+      d.emitterSamplers.set(k, tex.map((name, slot) => ({ slot, name: String(name) })));
+    }
   }
   // assets 형식: emitterSets { 이미터셋: [{ name, fields, textures:[{slot,name}], primitive:{file} }] } (docs/impl/assets.md)
   const sets = root.emitterSets;
@@ -93,13 +142,24 @@ function collectEmitters(j: unknown, d: FxData): void {
       if (!Array.isArray(list)) continue;
       for (const em of list as Record<string, unknown>[]) {
         const key = `${eset}/${String(em.name)}`;
-        const f = em.fields as Record<string, unknown> | undefined;
-        if (f && typeof f === "object") d.emitters.set(key, f);
-        if (Array.isArray(em.textures)) d.emitterTex.set(key, (em.textures as { name: string }[]).map((t) => String(t.name)));
+        d.emitters.set(key, emitterDefinition(em));
+        if (Array.isArray(em.textures)) {
+          const samplers = (em.textures as EmitterSampler[]).map((t) => ({
+            slot: typeof t.slot === "number" ? t.slot : null, name: String(t.name), offset: t.offset,
+          }));
+          d.emitterSamplers.set(key, samplers);
+          d.emitterTex.set(key, samplers.map((t) => t.name));
+        }
         const pr = em.primitive as { file?: string } | undefined;
         if (pr?.file) d.emitterPrim.set(key, pr.file);
         else d.emitterPrim.delete(key);
       }
+    }
+  }
+  const textureInfo = root.textures;
+  if (textureInfo && typeof textureInfo === "object" && !Array.isArray(textureInfo)) {
+    for (const [name, value] of Object.entries(textureInfo as Record<string, FxTextureInfo>)) {
+      if (value && typeof value.file === "string") d.textureInfo.set(name, value);
     }
   }
   const et = root.emitterTextures;
@@ -155,6 +215,22 @@ function absorb(id: string, b: Bundle, d: FxData): void {
         // png 는 로더가 ArrayBuffer 로 준다 — 쓰지 않음
       }
     }
+  }
+  // .bin도 Bundle에 도착한 뒤 연결한다. JSON/file iteration 순서에 의존하지 않는다.
+  for (const [name, info] of d.textureInfo) {
+    if (info.kind !== "vat" || info.format !== "rgba16f" || !b.has(info.file)) continue;
+    const bytes = b.bytes(info.file);
+    const expected = info.width * info.height * 4;
+    if (bytes.byteLength !== expected * 2) throw new Error(`[fx] VAT ${name} byte length ${bytes.byteLength} != ${expected * 2}`);
+    const texture = new THREE.DataTexture(new Uint16Array(bytes), info.width, info.height, THREE.RGBAFormat, THREE.HalfFloatType);
+    texture.name = name;
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.flipY = false;
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    d.textures.set(name, texture);
   }
 }
 

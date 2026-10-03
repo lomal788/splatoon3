@@ -3,6 +3,7 @@
 // 이 파일은 표시만 결정한다. 상태 전이(ToSquid→0x84 등)는 core/player(physics)의 일이고, 여기서는 받은 상태 번호를 따른다.
 import { Blackboard, HUMAN_ASB, SQUID_ASB, stateRow } from "./asb.ts";
 import { type ClipInfo, type LeafWeight, Wrapper } from "./slot.ts";
+import { nativeSmDisplay, nativeHolderDisplay, type DisplayResetTarget } from "../../../core/player/display.ts";
 
 export interface AnimInput {
   state: number;
@@ -13,6 +14,8 @@ export interface AnimInput {
   formCounter: number | null;
   /** physics 가 요청 재생 속도를 주면 그 값 */
   animRate: number | null;
+  /** B7a0 supplied by the simulation. Absent is the legacy display adapter. */
+  displayHidden?: boolean | null;
 }
 
 export interface Display {
@@ -23,7 +26,6 @@ export interface Display {
 
 const BIT3 = 0x8, BIT17 = 0x20000, BIT18 = 0x40000;
 /** (c) 사람·오징어 둘 다 켜졌을 때 오징어를 끄는 상태 (player_assembly.md §5.4) */
-const HUMAN_PRIORITY = new Set([0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0xad, 0xae, 0xf1, 0xf2]);
 
 export class PlayerAnimator {
   readonly bb = new Blackboard();
@@ -37,6 +39,8 @@ export class PlayerAnimator {
   /** SM+0xe0 (MoveSpeedRt) */
   moveSpeedRt = 0;
   disp: Display = { body: true, hlf: false, squid: false };
+  /** Native binder reset targets; type11/live material setter is still unbound. Wrappers continue ticking. */
+  displayResets: DisplayResetTarget[] = [];
   /** 몸 튀어나옴 스프링 0x71014586a0: x, v */
   spring = { x: 0, v: 0 };
   readonly rival: boolean;
@@ -47,8 +51,10 @@ export class PlayerAnimator {
     this.squid = new Wrapper(SQUID_ASB, this.bb, squidClips, weaponAbbr);
     // 블랙보드 고정값 (anim_state_machine.md §4.6)
     this.bb.bool.set("EquipWeaponMain", true); // 메인 무기 있음 [추정: 슈터 = 참]
-    this.bb.str.set("WeaponCategory", weaponAbbr); // 호출자 값 [미확정] — 슈터는 어느 case 에도 안 걸려 その他
-    this.bb.str.set("WeaponDetail", "");
+    // Selected ordinary shooter supplies Shtr/Shtr to both wrappers and BB (native 2491758/249cb60/24bb240).
+    // This practice view keeps its selected weapon; holder-null/reset source lifetimes remain separate.
+    this.bb.str.set("WeaponCategory", weaponAbbr);
+    this.bb.str.set("WeaponDetail", weaponAbbr);
     this.bb.int.set("JumpVarID", 0); // 출처 [미확정]
     this.bb.float.set("StainFrm", 0); // 유일한 쓰기가 0.0
   }
@@ -115,18 +121,18 @@ export class PlayerAnimator {
   /** (b) 0x710243e2dc + (c) 홀더 0x71014595b0 */
   private displayFlags(inp: AnimInput): void {
     const before = this.disp;
-    const humanOn = this.human.cmd !== -1;
-    const squidOn = this.squid.cmd !== -1;
-    let hlf = humanOn && this.f0 >= 61 && !this.rival;
-    let body = humanOn && !hlf;
-    let squid = squidOn;
-    if (!body && !hlf && !inp.dead && inp.formCounter === null) this.f0 = this.state === 0x96 ? 140 : 90;
-    if (inp.dead) body = hlf = squid = false;
-    else if ((body || hlf) && squid) {
-      const cur = this.active?.progress()?.cur ?? 1;
-      if (HUMAN_PRIORITY.has(this.state) && !(cur === 0 && this.prevState >= 0x82 && this.prevState <= 0x84)) squid = false;
-      else body = hlf = false;
-    }
+    const old = { ...before, rail: false };
+    const sm = nativeSmDisplay({ hidden: inp.displayHidden ?? false, humanCommand: this.human.cmd !== -1,
+      squidCommand: this.squid.cmd !== -1, formCounter: this.f0, modelKind: this.rival ? 4 : 0,
+      dead: inp.dead, state: this.state, old });
+    this.f0 = sm.formCounter;
+    this.displayResets = sm.reset;
+    // Ordinary local practice holder adapter: life/timing/special producers are absent.
+    // Whole consumer is tested independently; these adapter inputs are not native runtime captures.
+    let { body, hlf, squid } = nativeHolderDisplay(sm.flags, { state: this.state, previousState: this.prevState,
+      cur: this.active?.progress()?.cur ?? 1, old, de0: 0, df0: 0, e04: 0, e0c: 0, e1c: 0, d60: 0, d5c: 0,
+      life30: false, life31: false, life35: !inp.dead, life38: 0, debug: false,
+      special: 0, selected: false, specialDisabled: false });
     // 아무 모델도 켜지지 않은 초기 프레임: 몸
     if (!body && !hlf && !squid && !inp.dead && this.state < 0) body = true;
     this.disp = { body, hlf, squid };

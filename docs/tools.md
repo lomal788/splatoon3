@@ -148,3 +148,15 @@ sh web/tools/quick_decomp.sh C:/dev/splatoon3/analysis/decomp/<영역>/<이름>.
 |---|---|---|
 | `r8_camweapon_as_request_first_tick_emu.py` | 요청 whole1,025 + 첫 틱 whole1,025 + 래퍼 복사 블록1,025; 9,225 f32 비트 일치. metadata·출력 capacity0·연속2틱 실패 경계 유지 | [graphics/as_request_first_tick.md](graphics/as_request_first_tick.md) |
 | `r8_gfx_projected_shadow_creation_emu.py` | 그림자 생성 블록64사례·126객체 및 Scene 등록. 실제 도구 이름과 단계별 명령은 shadow 지원 문서 확인 | [graphics/projected_shadow_runtime.md](graphics/projected_shadow_runtime.md) |
+
+## Shader 역번역의 c1 분기표 함정 (2026-10-03 추가)
+
+기존 `shader_dump/Program.cs`는 inline c1 값을 GLSL 생성 **뒤** 치환했지만 IGpuAccessor.ConstantBuffer1Read를 구현하지 않았다. Ryujinx Decoder가 BRX 간접 분기표를 읽을 때 기본0을 받아 CCLUT color_correction_map의 switch 분기가 누락됐다. 315행 역번역이원본전체수식이라고판정하면실패다.
+
+표준 도구는 이제 ControlShader.GetConstants(byteCode)를 Acc에 전달하고 ConstantBuffer1Read(offset)로 실제 u32를 공급한다. 빌드된표준CLI로다시덤프하면map pixel1694행이며독립보완CLI와SHA256동일. 근거 [graphics/ink_lighting_r2.md](graphics/ink_lighting_r2.md), 자료 analysis/visual_gap_r2/light/cclut_map_canonical. 기존 산출물을 무조건완전한GLSL로믿지말고 BRX가있는셰이더는보완도구로검사한다. 세FX프로그램1202/1885/1385의vert/frag6파일은재검사출력이같았다.
+
+raw 명령·stage header검사는 `dotnet analysis/visual_gap_r2/fx/build/bin/Release/net7.0/shader_raw_audit.dll <bfsha> <model> <program> <outprefix>`와 `... ops <outprefix.vert.bin>`를사용한다. shader raw/역번역은[판독]이며원본GPU[실행]으로표기하지않는다.
+
+## Negate 괄호 출력 함정 — 2026-10-03
+
+bundled Ryujinx InstGen.Negate의 `zero - expr`는 Special/unary precedence 때문에 곱 안에서 괄호 없이 출력된다. 원시 p1714 `eyeX*(-invLen)`이 GLSL `eyeX*0-invLen`로 바뀐다. 원본 이상 동작이 아닌 분석도구 오류다. [표면 raw·paired 보완 CLI](graphics/reference_ink_surface.md), [캐릭터](graphics/reference_character_lighting.md), [FX](effect_sound/reference_shooter_visuals.md). 표준 CLI/번들DLL은 이번에 바꾸지 않았다. 분석 전용 source copy에서 반환식 전체 괄호 한 곳을 보완한 CLI를 analysis/reference_graphics_r3/surface/dump에 저장했다. 분석용 새source adapter의 인터페이스 차이도 commands.md에 기록했다. CB1 분기표 보완과 별개이므로 legacy GLSL SHA동일/생성성공을 수식 동등성 증명으로 삼지 않는다.

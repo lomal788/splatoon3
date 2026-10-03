@@ -630,6 +630,10 @@ this+0x15e8 = −57.29578 · atan2f(G 행렬 성분)      // 자세에서 바로
   - (3) 조준 yaw 자동 회전(입력 함수 0x71024e0178, cam_main_full.c 5594~5790행): `+0x30 ∈ {1,2}`이고 `+0x124 != 0`이면 조준 방향을 `(+0xe8, +0xf0)` 쪽으로 각도 차 × rate(본체+0x26c 프레임 0이면 0.05, 1~5면 0.05+0.05·n/6, 6 이상 0.1)만큼 돌리고, `+0x30 == 3`(비행)이고 +0x88 != 0이면 `(+0x90, +0x98)` 쪽으로 진행률 t에 따라 `+0xc0 == 2`면 rate = 0.1·(t≤0.4 ? 0 : t≥0.85 ? 1 : ((t−0.4)/0.45)^2.4094), 그 밖이면 0.2·(t≤0.1 ? 0 : ((t−0.1)/0.9)^2.4094) [판독-부분; 지수 = 1/0.4150375. 디컴파일의 분기가 겹쳐 있어 `+0xc0 == 2`이고 t ≤ 0.4인 구간은 목표가 (+0xe8, +0xf0)·rate 0.1(LAB_71024e3554)일 수 있음 — asm 확인 필요]. 회전량 = 그 밖 입력 계수 × rate × (−부호 있는 각도 차), Y축 회전(사인표) [판독]. 같은 자리에서 본체+0x9314(→ +0x9304/+0x930c 쪽, rate = 본체+0xdc·0.04+0.03)와 this+0x1940(+0x38 ∈ {1,2,4} → +0xec/+0xf4 쪽, rate 0.15)도 같은 방식으로 덮어씁니다 [판독], 의미 [미확정].
   - DokanWarp+0x30 단계 값 1·2·3의 이름(준비·발사·비행)과 착지점 선택 화면은 미니맵([../ui/ui_minimap.md](../ui/ui_minimap.md) §6.5) [단계 이름 추정].
 
+
+
+**2026-10-03 자동 yaw 대상 타입 정정 [판독]+[데이터]:** 위 this+1940의 “의미 미확정” 중 타입은 `23555f0→RTTI58c0080→2656038→VT563db40/slot2 2655338`의 원본 이름 `spl::PlayerMissionTicketGateAction`으로 확정했다. 자동 덮어쓰기 순서는 기본/Dokan→B9314→C1940이며 C1940 state1/2/4에서 rate.15를 적용한다. B9314 runtime writer와 실제 사격장 flags는 미확정이다. 이 타입 식별을 일반 정지 마우스 뒤돌기 원인으로 연결하지 않는다. [mouse_original_controls.md §4·6·10·11](mouse_original_controls.md).
+
 ### 7.1 첫 재시작의 방향 반전 조건 — 8차(2026-10-03) [판독]+[실행]
 
 §7과§11의 재시작 번호는기존원본열거함수0x710349fe34 근거([../combat/player_life.md](../combat/player_life.md) §6.11)로 cRespawn0,cFirst1,cWarp_CameraReset2,cWarp_CameraNoReset3,cVanish4,cCoopZombie5,cPlayGamePadRecorder6입니다. 이번신규원본은 **0x71027c9190·0x71027c9424**로, 기존27c95f0의조건을닫습니다.
@@ -682,6 +686,9 @@ D = PlayerDokanWarp(this+0x1920, VT0x5634ff8). 단계 값의 **동작 정의**�
 | `PlayerCamera` | 리셋·프레임 순서·출력(three.js `PerspectiveCamera(fov=55, near=0.2, far=2000)`, `lookAt`) |
 
 프레임 순서: (플레이어 입력 0x710249f494: 스틱 기록·반전) → 입력(yaw 적용 → pitch/p, 슈퍼점프 자동 yaw) → 리그 → 수직 추종 → 붐 질의·거리 비율 → 근접 보정 → 출력. 60fps 고정 스텝(값이 전부 프레임 단위)이며 렌더 보간은 웹 쪽 선택입니다(원본 동등성 영향 없음).
+
+**2026-10-03 마우스 시점 정정:** 위 “원본 동등성 영향 없음”은 무조건적 결론으로 사용할 수 없다. current web의 stationary input −210°와 endpoint quaternion shortest +150° 보간·catch-up 이력 소실 반례를 실제 웹 source/Three CPU에서 재현했다. 이는 원본에 없는 마우스/렌더 이식 계약의 문제이며 원본 제어식 오류로 승격하지 않는다. 수직 마우스 중단 뒤 p 목표 후행도 따로 재현했다. [mouse_view_jumps.md §6·9·10](mouse_view_jumps.md). 기존 기저/리그 native fixture 확인과 전체 마우스 조작감 완료를 구분한다.
+
 
 이름 대응: `+0x16c → pitchNorm`, `+0x150c → pitchAngleDeg`, `+0x14f8 → yawVel`, `+0x1504 → pitchVel`, `+0x14fc/+0x1508 → yawMax/pitchMax`, `+0x1518 → verticalFollowRate`, `+0x1a4 → rigForward`, `+0x18c → aimForward`.
 

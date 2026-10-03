@@ -394,3 +394,10 @@ else { t = 0; step = 1/B }
 ### 11.11 r9 typed tag 정정 — 2026-10-03
 
 §2.4의 “상위4비트8/A/D/E가 타입”은 보편 분기로 사용할 수 없다. 타입은 호출 reader가 정하고 공통 bit31=상수/참조, bit24=값칸 주소 override, float 상위2bit=3은 파라미터 표다 [판독]. 신규39CDA20의 이전 미실행 typed/override/miss를1536건 실행해 nibble8..F가 모두 정수 reader에서 같은typed API를 부름을 확인했다 [실행: 명시적getter fixture]. [asb_typed_tags.md §3~§10](asb_typed_tags.md). 기존float/string/bool 판독은 재사용이며 upstream 실제값·전체포즈 미확정은 유지한다.
+
+
+## 재질·눈 패턴·총구 그래픽 r9 — 2026-10-03
+
+[현재 반영·검증·다음 지시](../port/graphics_priority_r9.md): 탱크/하네스/병의 native 재질·owner texture, raw type11 눈 채널, [Maya0/rotation0 UV6lane](character_texsrt_r9.md), [실제 Muzzle 시각 행렬 및 내적 정정](../effect_sound/muzzle_attachment_r9.md)을 웹과 MD에 반영했다. FMAA 원본1,212/피부 홀더67/SRT313/내적 격리블록2,048, 선택 GLSL↔웹GPU448건은 각각 범위가 다른 검증이며 원본 NVN/전체프레임 일치가 아니다.
+
+고정 원본556/986=56.39%·그래픽102/204=50.00%, port13/62=20.97%(일부37/차이9/원본미확정3)·GR0/10/일부7/10 유지. 신규 부분 근거를 기존 복합 질문 전체 확정으로 승격하지 않았다. 몸CP/skin idx·weighted type11/type18·다른 SRT mode/rotation·cube/BRDF/SPP·잠영 파문/Custom1/VAT·native 최종픽셀은 남는다. 최종 테스트·브라우저·보호 SHA와 실패는 r9 요약의 실행 기록을 따른다.

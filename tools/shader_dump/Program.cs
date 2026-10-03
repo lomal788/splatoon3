@@ -258,7 +258,9 @@ static class P
         {
             var data = byteCode.AsSpan(48).ToArray();
             var opt = new TranslationOptions(TargetLanguage.Glsl, TargetApi.OpenGL, TranslationFlags.None);
-            code = Translator.CreateContext(0, new Acc(data), opt).Translate().Code;
+            // BRX target tables read c1 while decoding, before GLSL substitution.
+            var inlineConstants = new ShaderLibrary.CompileTool.ControlShader(control).GetConstants(byteCode);
+            code = Translator.CreateContext(0, new Acc(data, inlineConstants), opt).Translate().Code;
         }
         catch (Exception e) { return "// TRANSLATE FAILED: " + e.Message + "\n"; }
 
@@ -297,8 +299,9 @@ static class P
 
     class Acc : IGpuAccessor
     {
-        readonly byte[] d;
-        public Acc(byte[] data) { d = data; }
+        readonly byte[] d, constants;
+        public Acc(byte[] data, byte[] inlineConstants) { d = data; constants = inlineConstants; }
+        public uint ConstantBuffer1Read(int offset) => offset >= 0 && offset <= constants.Length - 4 ? BitConverter.ToUInt32(constants, offset) : 0;
         public ReadOnlySpan<ulong> GetCode(ulong address, int minimumSize) => MemoryMarshal.Cast<byte, ulong>(new ReadOnlySpan<byte>(d).Slice((int)address));
     }
 
@@ -409,3 +412,4 @@ static class P
         Console.WriteLine($"{f.Variations.Count} variations -> {outdir}");
     }
 }
+

@@ -6,7 +6,7 @@ import {
 } from "./asb.ts";
 
 /** 클립 정보 공급자: 이름 → { 프레임 수(FSKA FrameCount), 반복 } 또는 없음 */
-export type ClipInfo = (name: string) => { frames: number; loop: boolean } | null;
+export type ClipInfo = (name: string, type?: number) => { frames: number; loop: boolean } | null;
 
 /** 슬롯 엔트리(§4.1) */
 interface Entry {
@@ -113,7 +113,7 @@ export class Wrapper {
 
   private enter(layer: Layer, inst: Inst): void {
     if (inst.k === "leaf") {
-      const info = inst.t === 3 ? this.clipInfo(inst.clip) : null;
+      const info = inst.t === 3 || inst.t === 11 ? this.clipInfo(inst.clip, inst.t) : null;
       if (inst.t === 3 && !info) this.missing.add(inst.clip);
       const e: Entry = { cur: 0, prev: 0, rate: 1, end: info ? info.frames : 0, loop: info ? info.loop : false, loopStart: 0, endOverride: -1, skip: false };
       if (inst.ctrl) this.applyCtrl(e, inst.ctrl, info);

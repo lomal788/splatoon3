@@ -3,6 +3,9 @@
 //   P = P0 + m·(V0·f(t) + G·g(t)),  f = a==1 ? t : (1-a^t)/(1-a),  g = a==1 ? t²/2 : (t-(a^t-1)/ln a)/(1-a)
 // 시간 단위 = 게임 프레임. 위치·속도 단위 = 원본 월드 단위(코어와 같음).
 import * as THREE from "three";
+import { VERT, FRAG } from "./particle_shaders.ts";
+import { applyEmitterRender } from "./render_state.ts";
+import { FX_PROGRAMS, FX_WEB_DEFAULTS } from "./shader_contract.ts";
 
 export type Emitter = Record<string, unknown>;
 type V3 = [number, number, number];
@@ -46,10 +49,10 @@ function toLocal(m: EmitMatrix, v: V3): V3 {
   return [d(m.x), d(m.y), d(m.z)];
 }
 
-/** 이미터 자체 회전(emitterRotate, XYZ 라디안)을 행렬에 곱한다 [추정: 회전 순서 XYZ] */
+/** 이미터 회전 Rz·Ry·Rx. 원본 080e4cc 순서; 삼각함수/난수는 웹 경계 */
 function applyEmitterRotate(m: EmitMatrix, r: V3): EmitMatrix {
   if (!r[0] && !r[1] && !r[2]) return m;
-  const e = new THREE.Euler(r[0], r[1], r[2], "XYZ");
+  const e = new THREE.Euler(r[0], r[1], r[2], "ZYX");
   const q = new THREE.Matrix4().makeRotationFromEuler(e);
   const b = new THREE.Matrix4().makeBasis(new THREE.Vector3(...m.x), new THREE.Vector3(...m.y), new THREE.Vector3(...m.z));
   b.multiply(q);
@@ -57,127 +60,6 @@ function applyEmitterRotate(m: EmitMatrix, r: V3): EmitMatrix {
   b.extractBasis(x, y, z);
   return { o: m.o, x: x.toArray() as V3, y: y.toArray() as V3, z: z.toArray() as V3 };
 }
-
-const VERT = /* glsl */ `
-#include <common>
-attribute vec3 aOrigin;
-attribute vec3 aBx;
-attribute vec3 aBy;
-attribute vec3 aBz;
-attribute vec3 aP0;
-attribute vec3 aV0;
-attribute vec3 aG;
-attribute vec4 aTime;   // birth, life, momentum, alive
-attribute vec3 aScale0;
-attribute vec3 aRot0;
-attribute vec3 aRotAdd;
-attribute vec4 aRand;
-attribute vec3 aColor;
-uniform float uNow;
-uniform float uAir;
-uniform float uRotRegist;
-uniform vec4 uScaleK[8];
-uniform int uScaleN;
-uniform vec4 uAlphaK[8];
-uniform int uAlphaN;
-uniform int uAlphaType;
-uniform vec4 uColorK[8];
-uniform int uColorN;
-uniform int uColorType;
-uniform vec3 uPivot;
-uniform int uPlane;     // 0 = 그대로(XY), 1 = POLYGON_XZ(Rx −90°: 로컬 Y → −Z) [추정], 2 = 구 근사(y 크기 = x)
-uniform int uBill;      // 0 카메라 빌보드, 2 Y 빌보드, 5 VelLook(카메라 빌보드로 근사), 3/4 폴리곤(이미터 축)
-uniform int uRotOrder;  // 4 YZX, 6 ZXY, 그 밖 XYZ
-uniform float uLoopRate;
-uniform float uLoopRandom;
-varying vec2 vUv;
-varying vec4 vColor;
-
-vec4 keyLerp(vec4 k[8], int cnt, float t) {
-  if (cnt <= 1) return k[0];
-  if (t < k[0].w) return k[0];
-  for (int i = 1; i < 8; i++) {
-    if (i >= cnt) break;
-    if (t < k[i].w) {
-      float d = k[i].w - k[i - 1].w;
-      float s = d > 0.0 ? (t - k[i - 1].w) / d : 1.0;
-      return mix(k[i - 1], k[i], s);
-    }
-  }
-  for (int i = 7; i >= 0; i--) { if (i < cnt) return k[i]; }
-  return k[0];
-}
-
-mat3 rx(float a) { float c = cos(a), s = sin(a); return mat3(1.0, 0.0, 0.0, 0.0, c, s, 0.0, -s, c); }
-mat3 ry(float a) { float c = cos(a), s = sin(a); return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c); }
-mat3 rz(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0.0, -s, c, 0.0, 0.0, 0.0, 1.0); }
-
-void main() {
-  float t = uNow - aTime.x;
-  vUv = uv;
-  if (aTime.w < 0.5 || t < 0.0 || t >= aTime.y) {
-    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    vColor = vec4(0.0);
-    return;
-  }
-  float a = uAir;
-  float f = a == 1.0 ? t : (1.0 - pow(a, t)) / (1.0 - a);
-  float g = a == 1.0 ? 0.5 * t * t : (t - (pow(a, t) - 1.0) / log(a)) / (1.0 - a);
-  vec3 P = aP0 + aTime.z * (aV0 * f + aG * g);
-  float tn = uLoopRate > 0.0 ? fract((aRand.x * uLoopRandom * uLoopRate + t) / uLoopRate) : t / aTime.y;
-  vec3 sc = keyLerp(uScaleK, uScaleN, tn).xyz * aScale0;
-  if (uPlane == 2) sc.y = sc.x;
-  float r = uRotRegist;
-  float R = r == 1.0 ? t : (1.0 - pow(r, t)) / (1.0 - r);
-  vec3 rot = aRot0 + aRotAdd * R;
-  mat3 M = uRotOrder == 4 ? ry(rot.y) * rz(rot.z) * rx(rot.x)
-         : uRotOrder == 6 ? rz(rot.z) * rx(rot.x) * ry(rot.y)
-         : rx(rot.x) * ry(rot.y) * rz(rot.z);
-  vec3 q = position;
-  vec3 v = uPlane == 1 ? vec3(q.x, q.z, -q.y) : q;
-  v = (v + 0.5 * uPivot) * sc;
-  vec3 lv = M * v;
-  vec3 center = aOrigin + aBx * P.x + aBy * P.y + aBz * P.z;
-  if (uBill == 0 || uBill == 5) {
-    vec4 vc = viewMatrix * vec4(center, 1.0);
-    gl_Position = projectionMatrix * (vc + vec4(lv, 0.0));
-  } else if (uBill == 2) {
-    vec3 tc = cameraPosition - center;
-    tc.y = 0.0;
-    float tl = length(tc);
-    vec3 fz = tl > 1e-5 ? tc / tl : vec3(0.0, 0.0, 1.0);
-    vec3 rx = normalize(cross(vec3(0.0, 1.0, 0.0), fz));
-    gl_Position = projectionMatrix * viewMatrix * vec4(center + rx * lv.x + vec3(0.0, 1.0, 0.0) * lv.y + fz * lv.z, 1.0);
-  } else {
-    vec3 world = center + aBx * lv.x + aBy * lv.y + aBz * lv.z;
-    gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
-  }
-  float al = uAlphaType == 2 ? keyLerp(uAlphaK, uAlphaN, tn).x : uAlphaK[0].x;
-  vec3 c0 = uColorType == 2 ? keyLerp(uColorK, uColorN, tn).xyz : vec3(1.0);
-  vColor = vec4(aColor * c0, al);
-}
-`;
-
-const FRAG = /* glsl */ `
-uniform sampler2D uMap;
-uniform float uHasMap;
-uniform float uColorScale;
-varying vec2 vUv;
-varying vec4 vColor;
-void main() {
-  float m;
-  if (uHasMap > 0.5) {
-    m = texture2D(uMap, vUv).r;
-  } else {
-    vec2 d = vUv * 2.0 - 1.0;
-    m = clamp(1.0 - dot(d, d), 0.0, 1.0);
-  }
-  float a = clamp(vColor.a * m, 0.0, 1.0);
-  if (a < 0.004) discard;
-  gl_FragColor = vec4(vColor.rgb * uColorScale, a);
-  #include <colorspace_fragment>
-}
-`;
 
 const ATTRS: [string, number][] = [
   ["aOrigin", 3],
@@ -204,6 +86,11 @@ function keyUniform(k: number[][]): THREE.Vector4[] {
   return out;
 }
 
+export interface ParticleInputs {
+  samplers?: ReadonlyMap<number,THREE.Texture>;
+  lighting?: Record<string,THREE.IUniform>;
+  depth?: Record<string,THREE.IUniform>;
+}
 /** 이미터 하나의 파티클 묶음(인스턴스 메시 하나). */
 export class ParticleBatch {
   readonly name: string;
@@ -214,13 +101,17 @@ export class ParticleBatch {
   private readonly owner: (EmitterInstance | null)[];
   private readonly cap: number;
   private next = 0;
+  private readonly particleData: Float32Array;
+  private readonly particleTexture: THREE.DataTexture;
+  private readonly emptyGrid: THREE.DataTexture;
+  private readonly attrColumns=new Map(ATTRS.map(([name],i)=>[name,i]));
   readonly uniforms: Record<string, THREE.IUniform>;
 
   /**
    * prim = G3PR 프리미티브 형상(없으면 1×1 사각형). sphere = 프리미티브가 없는 탄 ball 의 구 근사.
    * billboardType: nn::vfx 순서 0 Billboard, 2 YBillboard, 3 PolygonXY, 4 PolygonXZ, 5 VelLook [3·4 는 셰이더 옵션, 나머지 추정].
    */
-  constructor(name: string, def: Emitter, cap: number, map: THREE.Texture | null, prim: THREE.BufferGeometry | null, sphere: boolean) {
+  constructor(name: string, def: Emitter, cap: number, map: THREE.Texture | null, prim: THREE.BufferGeometry | null, sphere: boolean,inputs:ParticleInputs={}) {
     this.name = name;
     this.def = def;
     this.cap = cap;
@@ -228,11 +119,36 @@ export class ParticleBatch {
     const base: THREE.BufferGeometry = prim ?? (sphere ? new THREE.IcosahedronGeometry(0.5, 1) : new THREE.PlaneGeometry(1, 1));
     this.geo = new THREE.InstancedBufferGeometry();
     this.geo.index = base.index;
-    this.geo.setAttribute("position", base.getAttribute("position"));
+    // Keep every decoded G3PR attribute. Native VAT row is separate from UV.xy.
+    for(const [key,attribute] of Object.entries(base.attributes))this.geo.setAttribute(key,attribute);
+    const vertexCount=base.getAttribute("position").count;
+    if(!this.geo.hasAttribute("normal"))this.geo.computeVertexNormals();
+    if(!this.geo.hasAttribute("tangent")){
+      const fallbackTangent=new Float32Array(vertexCount*4);
+      for(let i=0;i<vertexCount;i++)fallbackTangent[i*4+3]=1;
+      // Zero XYZ selects the derivative basis; positive handedness is its web adapter default.
+      this.geo.setAttribute("tangent",new THREE.BufferAttribute(fallbackTangent,4));
+    }
+    const c=base.getAttribute("color"),colors=new Float32Array(vertexCount*4);
+    for(let i=0;i<vertexCount;i++)colors.set(c?[c.getX(i),c.getY(i),c.getZ(i),c.itemSize>3?c.getW(i):1]:[1,1,1,1],i*4);
+    this.geo.setAttribute("fxVertexColor",new THREE.BufferAttribute(colors,4));
+    if(!this.geo.hasAttribute("uv1"))this.geo.setAttribute("uv1",new THREE.BufferAttribute(new Float32Array(vertexCount*2),2));
+    // Original 082c0a0 merges f32x2 _u0/_u1 as a vec4 at offset12: native z == _u1.x.
+    const row=base.getAttribute("vatRow")??base.getAttribute("_vat_row")??([1383,1385].includes(n(def,"shaderIndex"))?base.getAttribute("uv1"):undefined);
+    const vatRows=new Float32Array(vertexCount);
+    if(row)for(let i=0;i<vertexCount;i++)vatRows[i]=row.getX(i);
+    this.geo.setAttribute("vatRow",new THREE.BufferAttribute(vatRows,1));
     const uvA = base.getAttribute("uv");
     if (uvA) this.geo.setAttribute("uv", uvA);
     else this.geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(base.getAttribute("position").count * 2), 2));
     this.geo.instanceCount = cap;
+    // Thirteen instance fields plus surface attributes exceed WebGL's 16-location minimum.
+    // A state texture leaves one aSlot location while preserving all primitive attributes.
+    this.particleData=new Float32Array(cap*ATTRS.length*4);
+    this.particleTexture=new THREE.DataTexture(this.particleData,ATTRS.length,cap,THREE.RGBAFormat,THREE.FloatType);
+    this.particleTexture.minFilter=this.particleTexture.magFilter=THREE.NearestFilter;
+    this.particleTexture.generateMipmaps=false;this.particleTexture.needsUpdate=true;
+    this.geo.setAttribute("aSlot",new THREE.InstancedBufferAttribute(Float32Array.from({length:cap},(_,i)=>i),1));
     for (const [a, s] of ATTRS) {
       const attr = new THREE.InstancedBufferAttribute(new Float32Array(cap * s), s);
       attr.setUsage(THREE.DynamicDrawUsage);
@@ -241,17 +157,49 @@ export class ParticleBatch {
     }
     const loop = keys(def, "loopRate_c0_a0_c1_a1_scale");
     const loopR = keys(def, "loopRandom_c0_a0_c1_a1_scale");
+    const periods=loop as unknown as number[],phases=loopR as unknown as number[];
+    const modes=(def.keyInterpolation??def.keyInterpolationTypes??[0,0,0,0,0]) as number[];
+    const maps=inputs.samplers??new Map<number,THREE.Texture>();
+    const program=n(def,"shaderIndex");
+    const contractReady=["scaleKeys","color0Keys","color1Keys","alpha0Keys","alpha1Keys"].every(k=>keys(def,k).length>0);
+    // An old or incomplete loader cannot supply the native combiner contract. Keep its prior web fallback.
+    const known=FX_PROGRAMS.has(program)&&contractReady;
+    const vat=maps.get(2)??null,hasVat=known&&(program===1383||program===1385)&&!!vat&&!!row;
+    const near=Array.isArray(def.nearFade)?def.nearFade as number[]:[0,0];
+    this.emptyGrid=new THREE.DataTexture(new Uint32Array(400).fill(0xffffffff),20,20,THREE.RedIntegerFormat,THREE.UnsignedIntType);
+    this.emptyGrid.minFilter=this.emptyGrid.magFilter=THREE.NearestFilter;this.emptyGrid.needsUpdate=true;
     this.uniforms = {
       uNow: { value: 0 },
+      uParticles:{value:this.particleTexture},uProgram:{value:known?program:0},
+      uVat:{value:vat},uHasVat:{value:hasVat?1:0},uVatRate:{value:FX_WEB_DEFAULTS.vatRate},uVatNormalOffset:{value:n(def,"vatNormalOffset")},
+      uLinkedAlpha:{value:FX_WEB_DEFAULTS.linkedAlpha},uAlphaRemap:{value:new THREE.Vector2(...FX_WEB_DEFAULTS.alphaRemap as [number,number])},
+      uFade:{value:1},uNearFade:{value:new THREE.Vector2(near[0]??0,near[1]??0)},uSoftDistance:{value:n(def,"softDistance")},
+      uAlphaThreshold:{value:n(def,"alphaThreshold",program===1202?.5:0)},
+      uColor1K:{value:keyUniform(keys(def,"color1Keys"))},uAlpha1K:{value:keyUniform(keys(def,"alpha1Keys"))},
+      uColor1N:{value:n(def,"numColor1Keys",Math.max(1,keys(def,"color1Keys").length))},
+      uAlpha1N:{value:n(def,"numAlpha1Keys",Math.max(1,keys(def,"alpha1Keys").length))},
+      uColor1Type:{value:n(def,"color1Type")},uAlpha1Type:{value:n(def,"alpha1Type")},
+      uPeriods:{value:new THREE.Vector4(...[0,1,2,3].map(i=>periods[i]??0) as [number,number,number,number])},
+      uPhases:{value:new THREE.Vector4(...[0,1,2,3].map(i=>phases[i]??0) as [number,number,number,number])},
+      uKeyModes:{value:new THREE.Vector4(...[0,1,2,3].map(i=>modes[i]??0) as [number,number,number,number])},uScaleMode:{value:modes[4]??0},
+      uMap1:{value:maps.get(1)??null},uMap2:{value:maps.get(2)??null},uHasNormal:{value:maps.has(1)?1:0},
+      uLightingAvailable:{value:known&&inputs.lighting?1:0},
+      uSceneDepth:{value:null},uDepthNear:{value:.1},uDepthFar:{value:3000},uDepthResolution:{value:new THREE.Vector2(1,1)},uDepthAvailable:{value:0},
+      uWebRoughness:{value:FX_WEB_DEFAULTS.roughness},uWebFresnel:{value:FX_WEB_DEFAULTS.fresnel},
+      hLightColor:{value:new THREE.Vector3(1,1,1)},hLightDirection:{value:new THREE.Vector3(0,-1,0)},hSH:{value:Array.from({length:7},()=>new THREE.Vector4())},
+      hGrid:{value:this.emptyGrid},hGridOrigin:{value:new THREE.Vector3()},hInvCell:{value:new THREE.Vector3(1,1,1)},
+      hDynColor:{value:Array.from({length:30},()=>new THREE.Vector4())},hDynAtt:{value:Array.from({length:30},()=>new THREE.Vector4())},
+      hDynPos:{value:Array.from({length:30},()=>new THREE.Vector4())},hDynDir:{value:Array.from({length:30},()=>new THREE.Vector4())},
+      hDepthFog:{value:new THREE.Vector4()},hHeightFog:{value:new THREE.Vector4()},hDepthRange:{value:new THREE.Vector3(10,1000,.3125)},hHeightRange:{value:new THREE.Vector2(15,90)},
       uAir: { value: n(def, "airRegist", 1) },
       uRotRegist: { value: n(def, "rotateRegist", 1) },
       uScaleK: { value: keyUniform(keys(def, "scaleKeys")) },
-      uScaleN: { value: n(def, "numScaleKeys", 1) },
+      uScaleN: { value: n(def, "numScaleKeys", Math.max(1,keys(def,"scaleKeys").length)) },
       uAlphaK: { value: keyUniform(keys(def, "alpha0Keys")) },
-      uAlphaN: { value: n(def, "numAlpha0Keys", 1) },
+      uAlphaN: { value: n(def, "numAlpha0Keys", Math.max(1,keys(def,"alpha0Keys").length)) },
       uAlphaType: { value: n(def, "alpha0Type", 0) },
       uColorK: { value: keyUniform(keys(def, "color0Keys")) },
-      uColorN: { value: n(def, "numColor0Keys", 1) },
+      uColorN: { value: n(def, "numColor0Keys", Math.max(1,keys(def,"color0Keys").length)) },
       uColorType: { value: n(def, "color0Type", 0) },
       uPivot: { value: new THREE.Vector3(...v3(def, "pivotOffset")) },
       uPlane: { value: !prim && sphere ? 2 : n(def, "billboardType", 3) === 4 ? 1 : 0 },
@@ -259,10 +207,11 @@ export class ParticleBatch {
       uRotOrder: { value: n(def, "rotType", 0) },
       uLoopRate: { value: Number((loop as unknown as number[])[4] ?? 0) },
       uLoopRandom: { value: Number((loopR as unknown as number[])[4] ?? 0) },
-      uMap: { value: map },
-      uHasMap: { value: map ? 1 : 0 },
+      uMap: { value: maps.get(0)??map },
+      uHasMap: { value: maps.has(0)||map ? 1 : 0 },
       uColorScale: { value: n(def, "colorScale", 1) },
     };
+    Object.assign(this.uniforms,inputs.lighting,inputs.depth);
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -270,7 +219,13 @@ export class ParticleBatch {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      toneMapped:false,
     });
+    applyEmitterRender(mat,def);
+    mat.userData.portRemaining=["native dynamic0/1 and Custom1 producer","native env array layer6","FX-specific BRDF/light coefficients","GPU linked/default alpha","CPU full particle trajectory","sampler texture scroll","unknown shader programs retain web fallback","volume2 and native direction table remain unknown","emitter SRT random/poly trig"];
+    mat.userData.nativeProgram=program;mat.userData.knownShaderContract=known;mat.userData.contractInputsReady=contractReady;
+    mat.userData.vat={enabled:hasVat,rowSource:row?(base.hasAttribute("vatRow")?"native primitive VAT row":"082c0a0 packed _u0/_u1: uv1.x"):"missing",rateSource:"FX_WEB_DEFAULTS.vatRate (native producer unknown)"};
+    mat.userData.webDefaults=FX_WEB_DEFAULTS;
     this.mesh = new THREE.Mesh(this.geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.name = `fx:${name}`;
@@ -281,7 +236,9 @@ export class ParticleBatch {
     const at = this.attrs.get(a)!;
     const arr = at.array as Float32Array;
     const s = at.itemSize;
-    for (let k = 0; k < s; k++) arr[i * s + k] = v[k] ?? 0;
+    const dst=(i*ATTRS.length+this.attrColumns.get(a)!)*4;
+    for (let k = 0; k < s; k++) {arr[i * s + k] = v[k] ?? 0;this.particleData[dst+k]=arr[i*s+k];}
+    this.particleTexture.needsUpdate=true;
     at.addUpdateRange(i * s, s);
     at.needsUpdate = true;
   }
@@ -346,7 +303,7 @@ export class ParticleBatch {
     const ps = v3(e, "particleScale", [1, 1, 1]);
     const psr = v3(e, "particleScaleRandom");
     const shared = psr[0] === psr[1] && psr[1] === psr[2];
-    const u0 = rnd();
+    const u0 = shared?rnd():0;
     const sc: V3 = [0, 1, 2].map((k) => ps[k] * (1 - ((shared ? u0 : rnd()) * psr[k]) / 100)) as V3;
     const es = v3(e, "emitterScale", [1, 1, 1]);
     const scale: V3 = [sc[0] * es[0] * inst.scale, sc[1] * es[1] * inst.scale, sc[2] * es[2] * inst.scale];
@@ -374,6 +331,10 @@ export class ParticleBatch {
     for (let i = 0; i < this.cap; i++) if (this.owner[i] === inst) this.writeMatrix(i, inst.matrix);
   }
 
+  /** POS keeps birth rotation/scale and follows current origin only (08157b0). */
+  followPosition(inst:EmitterInstance):void {
+    for(let i=0;i<this.cap;i++)if(this.owner[i]===inst)this.set("aOrigin",i,inst.matrix.o);
+  }
   kill(inst: EmitterInstance): void {
     const at = this.attrs.get("aTime")!;
     const arr = at.array as Float32Array;
@@ -381,13 +342,14 @@ export class ParticleBatch {
       if (this.owner[i] !== inst) continue;
       this.owner[i] = null;
       arr[i * 4 + 3] = 0;
+      this.particleData[(i*ATTRS.length+7)*4+3]=0;this.particleTexture.needsUpdate=true;
       at.addUpdateRange(i * 4, 4);
       at.needsUpdate = true;
     }
   }
 
   dispose(): void {
-    this.geo.dispose();
+    this.geo.dispose();this.particleTexture.dispose();this.emptyGrid.dispose();
     (this.mesh.material as THREE.Material).dispose();
   }
 }
@@ -400,6 +362,7 @@ export class EmitterInstance {
   scale: number;
   private readonly born: number;
   private nextEmit: number;
+  private emissionDebt=0;
   emitting = true;
   done = false;
   stoppedAt = -1;
@@ -434,7 +397,8 @@ export class EmitterInstance {
     }
     if (now < start || now < this.nextEmit) return;
     const rate = n(e, "emitRate", 1) * (1 - (n(e, "emitRateRandom") / 100) * rnd());
-    const cnt = Math.max(1, Math.round(rate));
+    this.emissionDebt+=rate;
+    const cnt=Math.max(0,Math.floor(this.emissionDebt));this.emissionDebt-=cnt;
     for (let k = 0; k < cnt; k++) this.batch.spawn(this, now, rnd);
     // 다음 간격 = interval + 1 + floor(u·intervalRandom) (0x710080e9a4)
     this.nextEmit = now + n(e, "emitInterval") + 1 + Math.floor(rnd() * n(e, "emitIntervalRandom"));

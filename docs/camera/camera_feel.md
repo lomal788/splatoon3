@@ -170,3 +170,6 @@ sin = T[i].s + T[i].ds * fr ;  cos = T[i].c + fr * T[i].dc
 ### 11.6. 사망 카메라 받는 쪽 해소 (2026-10-03 r9)
 
 §1 표의 “받는 쪽 미확정”은 [판독]+[실행]으로 해소했습니다. 다른 SplPlayer의 PlayerCamera가 수신해0에서시작하는 rate로일반 리그 Pos/At을추종하며, snapshot factory24e6184/publisher24dffd8과실제 Behavior 교환이이를 연결 Actor getter2676548에공급합니다. 자기 메인은활성snapshot을C+d4에복사하고24e50c0이선택해기존Spectator/포저에전달합니다. 초기rate0, 위치계산후rate+=f32((1-rate)*.01), 해제6c2b6a0f는ec/ed/ef만0이며저장포즈보존. 상세 [r9_lifecycle.md](r9_lifecycle.md) §3~11, camera_snapshot_emu.json factory1/publish1024/swap1024/reader2048/maincopy1024/getter1024/reset3 0bad. 수신/보간은camera_death_emu.json의새r9근거. hardwareposture/최종픽셀과실제솔로사망사건을실행으로확대하지않습니다.
+
+### 2026-10-03 정지 마우스 시점 보완
+[mouse_view_jumps.md](mouse_view_jumps.md)에 large delta·최단 quaternion 역방향 보간과 mouse stop 뒤 pitch 후행을 실제 웹 실행으로 기록했다. 사용자 실제 사건의 input trace는 미수집이므로 직접 원인은 미확정이다. [원본 자동 제어](mouse_original_controls.md)와 [입력 수명](mouse_input_lifecycle.md)을 분리했다.

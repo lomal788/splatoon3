@@ -1,4 +1,4 @@
-// 무기 시스템 한 프레임: 탄 갱신(슬롯18) → 물리(바디 스텝) → 접촉(슬롯22→58/59/60) → 이동 후(슬롯19·21) → 사격 → 정리.
+// 프레임 시작 활성 목록: 탄 pre → 물리 → 접촉 → 플레이어 사격(slot19 group3) → 기존 탄 post19/21(group4) → 정리.
 // 순서 근거·미확정은 docs/impl/weapon.md §프레임 순서.
 import { f32, v3 } from "../fmath.ts";
 import { Layer, type DamageInfo, type Hit, type PaintRequest, type Team } from "../types.ts";
@@ -7,7 +7,7 @@ import { Btn } from "../input.ts";
 import { readShooter } from "./actors.ts";
 import { FLOOR_NY } from "./body.ts";
 import { Bullet, type BulletParams, type Contact, type SpawnInfo } from "./bullet.ts";
-import { applyRate, damageRate, knockback, shooterDamage } from "./damage.ts";
+import { knockback, shooterDamage } from "./damage.ts";
 import type { V3 } from "./move.ts";
 import { horizontalDir, shooterDepthScale, shooterWidthHalf, splashPaintSize } from "./paint_shape.ts";
 import {
@@ -16,9 +16,10 @@ import {
   type WallDropMoveParam, type WeaponShooterParam,
 } from "./params.ts";
 import { canConsumeInk, consumeInk, INK_RECOVER_STD, ShooterAction, type InkPort } from "./shooter.ts";
+import { consumedInk, lackInk, recoverInk, stopInk, type InkState } from "./ink.ts";
 import { cameraAxis } from "./spawn.ts";
 import { scheduleSplash, splashOnMove } from "./splash.ts";
-import { DEFAULT_SEEDS, seedsFrom, type MatchSeeds } from "./swerve.ts";
+import { LOBBY_SEEDS, seedsFrom, type MatchSeeds } from "./swerve.ts";
 import { movingIntoWall, quantize, WALL_DROP_RADIUS, wallDropVelocity, WallDrop, WallDropThinOut, type WallContact, type WallDropPaint } from "./wall_drop.ts";
 
 /** shared "bullets" 항목(표시용 읽기 전용) */
@@ -53,7 +54,7 @@ interface WeaponSet {
   splash: BulletParams;
   wdMove: WallDropMoveParam;
   wdPaint: WallDropCollisionPaintParam;
-  /** 스플래시 탄이 만드는 벽 낙하: BulletSplashShooter 표의 WallDrop* [데이터, 어느 표를 읽는지는 추정] */
+  /** 스플래시 탄이 만드는 벽 낙하: BulletSplashShooter 표의 WallDrop* [판독+실행: shooter_bullet §3.3.6] */
   wdMoveSplash: WallDropMoveParam;
   wdPaintSplash: WallDropCollisionPaintParam;
   wdCommon: WallDropCommonParam;
@@ -94,7 +95,7 @@ function loadSet(w: World, weapon: string): WeaponSet {
 function matchSeeds(w: World): MatchSeeds {
   const s = w.data.tables["match_seed"] as { a?: number; b?: number; c?: number; d?: number } | undefined;
   if (s && [s.a, s.b, s.c, s.d].every((x) => typeof x === "number")) return seedsFrom(s.a!, s.b!, s.c!, s.d!);
-  return DEFAULT_SEEDS;
+  return LOBBY_SEEDS;
 }
 
 /** 탄 슬롯105 0x71016696f8: 요청 번호 = min(max(GameFrame, 0), 0x1745d1) */
@@ -119,6 +120,11 @@ export class WeaponRuntime {
   /** 플레이어 쪽 잉크 필드가 없을 때의 임시 잉크(본체+0x698 대응) */
   localInk = 1;
   localRecoverStop = 0;
+  localRecoverStopNoInk = 0;
+  localRecoverStopSquid = 0;
+  localConsumeHold = 0;
+  localStealthFrames = 0;
+  localStealthBlend = 0;
   respawns = -1;
   axis: V3 = [0, 0, 1];
   readonly views: BulletView[] = [];
@@ -136,18 +142,18 @@ export class WeaponRuntime {
   }
 
   step(w: World): void {
-    for (const b of this.bullets) if (b.pre()) b.dead = true;
-    for (const d of this.drops) d.move();
-    for (const b of this.bullets) this.physics(w, b);
-    for (const d of this.drops) {
-      d.integrate();
-      this.dropContact(w, d);
-    }
-    for (const b of this.bullets) if (b.contact && !b.dead) this.onContact(w, b, b.contact);
-    for (const b of this.bullets) this.post19(w, b);
-    for (const b of this.bullets) this.post21(w, b);
-    for (const d of this.drops) d.post();
-    this.fire(w);
+    // 원본 작업 그래프는 활성 목록을 프레임 시작에 고정한다. 접촉/사격/slot56에서
+    // 만들어진 탄·방울은 생성 프레임의 pre/physics/post 어느 것도 실행하지 않는다.
+    const bullets = [...this.bullets], drops = [...this.drops];
+    for (const b of bullets) if (b.pre()) b.dead = true;
+    for (const d of drops) d.move();
+    for (const b of bullets) if (!b.dead) this.physics(w, b);
+    for (const d of drops) { d.integrate(); this.dropContact(w, d); }
+    for (const b of bullets) if (b.contact && !b.dead) this.onContact(w, b, b.contact);
+    this.fire(w); // player slot19 group3 → bullet slot19/21 group4
+    for (const b of bullets) if (!b.dead) this.post19(w, b);
+    for (const b of bullets) if (!b.dead) this.post21(w, b);
+    for (const d of drops) d.post();
     this.cleanup(w);
   }
 
@@ -158,11 +164,11 @@ export class WeaponRuntime {
     b.contact = null;
     const col = w.collision;
     const moved = p0[0] !== p1[0] || p0[1] !== p1[1] || p0[2] !== p1[2];
-    if (col && !b.body.collisionOff && moved) {
+    if (col && !b.body.collisionOff) {
       const from = v3(p0[0], p0[1], p0[2]), to = v3(p1[0], p1[1], p1[2]);
-      let hit: Hit | null = b.rField > 0 ? col.sweepSphere(from, to, b.rField, Layer.Ground | Layer.Water) : null;
+      let hit: Hit | null = b.rField > 0 ? (col.overlapSphere?.(from, b.rField, Layer.Ground | Layer.Water)[0] ?? (moved ? col.sweepSphere(from, to, b.rField, Layer.Ground | Layer.Water) : null)) : null;
       if (b.rPlayer > 0) {
-        const o = col.sweepSphere(from, to, b.rPlayer, Layer.Object);
+        const o = col.overlapSphere?.(from, b.rPlayer, Layer.Object).find((h) => h.actor !== this.owner) ?? (moved ? col.sweepSphere(from, to, b.rPlayer, Layer.Object) : null);
         if (o && o.actor !== this.owner && (!hit || o.t < hit.t)) hit = o;
       }
       if (hit) {
@@ -191,15 +197,17 @@ export class WeaponRuntime {
     if (dmg && c.actor >= 0) {
       const h = w.hittables.get(c.actor);
       if (h) {
+        h.onBulletContact?.({ pos: v3(...b.body.pos), velocity: v3(...b.body.stepVelSec) });
         const raw = shooterDamage(b.age, dmg);
         const sameTeam = h.team !== -1 && h.team === b.info.team;
-        const value = sameTeam ? 0 : applyRate(raw, damageRate(w.data.tables, this.set.rateRow, h.rateCol));
+        const value = raw; // native Sender는 기본값. receiver가 extraRate→row/col rate를 한 번 적용한다.
         const vel: V3 = [b.vel[0], b.vel[1], b.vel[2]];
         const kb = knockback(value, vel, [0, 0, 0]);
         const l = Math.hypot(vel[0], vel[1], vel[2]) || 1;
         const info: DamageInfo & { knockback: V3; age: number; raw: number; bullet: number } = {
           attacker: b.info.owner, team: b.info.team, value, pos: v3(c.point[0], c.point[1], c.point[2]),
           dir: v3(vel[0] / l, vel[1] / l, vel[2] / l), rateRow: this.set.rateRow, critical: false, knockback: kb, age: b.age, raw, bullet: b.id,
+          contactVelocity: v3(...b.body.stepVelSec), bodyPos: v3(...b.body.pos),
         };
         if (!sameTeam) {
           h.onDamage(info);
@@ -209,7 +217,7 @@ export class WeaponRuntime {
     }
     const surface = !c.ground ? ((c.layer & Layer.Water) !== 0 ? "Water" : "Object") : c.normal[1] > FLOOR_NY ? "Floor" : "Wall";
     w.events.emit({
-      type: "BulletHit", id: b.id, kind: b.kind, owner: b.info.owner, team: b.info.team, pos: c.point, normal: c.normal, surface,
+      type: "BulletHit", id: b.id, kind: b.kind, age: b.age, owner: b.info.owner, team: b.info.team, pos: c.point, normal: c.normal, surface,
       paintable: c.paintable, vel: [b.vel[0], b.vel[1], b.vel[2]], row: this.set.rateRow, target: c.actor >= 0 ? c.actor : undefined, damage: damaged,
     });
     if (!c.ground) this.slot60(b);
@@ -308,9 +316,8 @@ export class WeaponRuntime {
     let point = c.point, normal = c.normal, paintable = c.paintable;
     if (col) {
       const r = Math.min(Math.max(b.rField, 0.05), 2000);
-      const from = v3(b.prevPos[0], b.prevPos[1], b.prevPos[2]);
-      const to = v3(f32(b.vel[0] + b.prevPos[0]), f32(b.vel[1] + b.prevPos[1]), f32(b.vel[2] + b.prevPos[2]));
-      const h = col.sweepSphere(from, to, r, Layer.Ground);
+      const center = v3(...c.point);
+      const h = col.overlapSphere?.(center, r, Layer.Ground).find((h) => !(h.normal[1] > FLOOR_NY));
       if (h && !(h.normal[1] > FLOOR_NY)) {
         point = toV3(h.point);
         normal = toV3(h.normal);
@@ -344,23 +351,20 @@ export class WeaponRuntime {
     w.events.emit({ type: "BulletSpawn", id: d.id, kind: "WallDrop", owner: d.owner, team: d.team, pos: [...pos], vel: [...vel], parent: b.id });
   }
 
-  /** 벽 낙하 접촉: 반지름 0.2 구가 닿는 면(웹: 마지막 벽 법선 반대·아래 방향 레이 2개로 대신함). */
+  /** 벽 낙하 접촉: 원본 반지름 0.2 구의 면 접촉 계약. native 후보 순서/태그는 미확정. */
   private dropContact(w: World, d: WallDrop): void {
     const col = w.collision;
     if (!col || d.dead) return;
-    const o = v3(d.pos[0], d.pos[1], d.pos[2]);
-    const down = col.raycast(o, v3(0, -1, 0), WALL_DROP_RADIUS, Layer.Ground);
-    if (down && down.normal[1] > FLOOR_NY) {
-      const p = d.onGroundContact({ point: toV3(down.point), normal: toV3(down.normal), body: down.actor >= 0 ? down.actor : 1 });
-      this.dropPaint(w, d, p);
-      return;
-    }
-    const n = d.planeN;
-    const side = col.raycast(o, v3(-n[0], -n[1], -n[2]), WALL_DROP_RADIUS, Layer.Ground);
-    if (side && !(side.normal[1] > FLOOR_NY)) {
-      const ct: WallContact = { point: toV3(side.point), normal: toV3(side.normal), body: side.actor >= 0 ? side.actor : 1 };
+    const o = v3(...d.pos);
+    const contacts = col.overlapSphere?.(o, WALL_DROP_RADIUS, Layer.Ground) ?? [];
+    // 후보 순서는 웹 BVH 순서. native 복수 접촉/typed tag 순서는 COL04에 남긴다.
+    for (const h of contacts) {
+      if (!this.paintable(w, h)) continue;
+      const ct: WallContact = { point: toV3(h.point), normal: toV3(h.normal), body: h.actor >= 0 ? h.actor : 1 };
+      if (h.normal[1] > FLOOR_NY) { this.dropPaint(w, d, d.onGroundContact(ct)); return; }
       const p = d.onWallContact(ct);
       if (p) this.dropPaint(w, d, p);
+      if (d.dead) return;
     }
   }
 
@@ -388,6 +392,8 @@ export class WeaponRuntime {
       this.action.reset(this.set.wsp, w.frame, 0, this.seeds);
       this.localInk = 1;
       this.localRecoverStop = 0;
+      this.localRecoverStopNoInk = 0; this.localRecoverStopSquid = 0;
+      this.localConsumeHold = 0; this.localStealthFrames = 0; this.localStealthBlend = 0;
     }
     const usePl = sv.ink !== null && pl !== null;
     const tank = (): number => (usePl ? (pl!.ink as number) : this.localInk);
@@ -395,10 +401,15 @@ export class WeaponRuntime {
       if (usePl) pl!.ink = v;
       else this.localInk = v;
     };
-    const stop = (n: number): void => {
-      if (pl && typeof pl.inkRecoverStop === "number") pl.inkRecoverStop = Math.max(pl.inkRecoverStop as number, n);
-      else this.localRecoverStop = Math.max(this.localRecoverStop, n);
+    const inkState: InkState = usePl ? pl as unknown as InkState : {
+      ink: this.localInk, inkRecoverStop: this.localRecoverStop, inkRecoverStopNoInk: this.localRecoverStopNoInk,
+      inkRecoverStopSquid: this.localRecoverStopSquid, inkConsumeHold: this.localConsumeHold,
+      inkStealthFrames: this.localStealthFrames, inkStealthBlend: this.localStealthBlend,
     };
+    for (const key of ["inkRecoverStop", "inkRecoverStopNoInk", "inkRecoverStopSquid", "inkConsumeHold", "inkStealthFrames", "inkStealthBlend"] as const) {
+      if (typeof inkState[key] !== "number") inkState[key] = 0;
+    }
+    if (!usePl) { recoverInk(inkState, { state: 0x56, fastStealth: false, airFrames: 0 }); setTank(inkState.ink); }
     let lack = false;
     const ink: InkPort = {
       can: (cost) => canConsumeInk(tank(), cost),
@@ -409,24 +420,30 @@ export class WeaponRuntime {
           return false;
         }
         setTank(next);
+        consumedInk(inkState);
         return true;
       },
-      recoverStop: (frames) => stop(frames),
+      recoverStop: (frames, ok) => stopInk(inkState, frames, ok),
       lack: (frames) => {
         lack = true;
-        stop(frames);
+        lackInk(inkState, frames);
       },
       postDelay: (n) => {
         if (pl && typeof pl.squidLock === "number") pl.squidLock = Math.max(pl.squidLock as number, n);
       },
     };
+    if (sv.clearMainLatches) this.action.gate.clearLatch();
     const actions: string[] = [];
     const shot = this.action.step(this.set.wsp, this.set.splashSpawn, this.set.add, {
-      zr: (w.pad.hold & Btn.Fire) !== 0 && (w.pad.hold & Btn.Squid) === 0, squid: sv.blocked, pos: sv.pos, vel: sv.vel, aim: sv.aim, axis: this.axis,
+      zr: sv.mainInputFrames !== null ? sv.mainInputFrames > 0 : (w.pad.hold & Btn.Fire) !== 0 && (w.pad.hold & Btn.Squid) === 0, squid: sv.blocked, pos: sv.pos, vel: sv.vel, aim: sv.aim, axis: this.axis,
       rigForward: sv.rigForward, pitch: sv.pitch, airFramesGe4: sv.airFrames >= 4, jumped: sv.jumped, frame: w.frame,
       seeds: this.seeds, spawnSpeed: this.set.shooter.move.SpawnSpeed,
     }, ink, actions);
-    if (!usePl) this.localRecover();
+    if (!usePl) {
+      this.localRecoverStop = inkState.inkRecoverStop; this.localRecoverStopNoInk = inkState.inkRecoverStopNoInk;
+      this.localRecoverStopSquid = inkState.inkRecoverStopSquid; this.localConsumeHold = inkState.inkConsumeHold;
+      this.localStealthFrames = inkState.inkStealthFrames; this.localStealthBlend = inkState.inkStealthBlend;
+    }
     if (pl && typeof pl.weapon === "object" && pl.weapon) {
       const link = pl.weapon as { shooting?: boolean; moveSpeed?: number; frame?: number };
       link.shooting = this.action.firing;
@@ -436,6 +453,8 @@ export class WeaponRuntime {
     for (const a of actions) w.events.emit({ type: a, owner: this.owner, weapon: this.set.weapon });
     if (lack) w.events.emit({ type: "NoInk", owner: this.owner });
     if (!shot) return;
+    // WeaponShooterNormal ActorReservation: 메인 탄32 [데이터]. 소비와 RNG는 생성 전에 끝난다.
+    if (this.bullets.filter((b) => b.kind === "Shooter").length >= 32) return;
     const info: SpawnInfo = {
       kind: "Shooter", owner: this.owner, team: this.team, weapon: this.set.weapon, pos: shot.pos, dir: shot.dir, speed: shot.speed,
       extraSpeed: 0, frame: shot.frame, split: shot.split, angle: shot.angle, local: true, paintDir: [0, 0],
@@ -445,12 +464,6 @@ export class WeaponRuntime {
     this.bullets.push(b);
     w.events.emit({ type: "Fire", owner: this.owner, team: this.team, pos: [...shot.pos], dir: [...shot.dir], vel: [...shot.vel], weapon: this.set.weapon, bullet: b.id });
     w.events.emit({ type: "BulletSpawn", id: b.id, kind: "Shooter", owner: this.owner, team: this.team, pos: [...shot.pos], vel: [...b.vel] });
-  }
-
-  /** 잉크 회복은 physics 담당(본체+0x698, 0x7102483134). 플레이어 쪽 필드가 없을 때만 임시로 같은 식(정지 카운터 → 기어 0 Std 1/600)을 쓴다. */
-  private localRecover(): void {
-    if (this.localRecoverStop > 0) this.localRecoverStop--;
-    else if (this.localInk < 1) this.localInk = Math.min(f32(this.localInk + Math.min(INK_RECOVER_STD, f32(1 - this.localInk))), 1);
   }
 
   // ---- 정리 -----------------------------------------------------------

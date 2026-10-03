@@ -9,11 +9,14 @@ import type { System, World } from "../world.ts";
 import { stepBody, type BodyStepResult } from "./body.ts";
 import * as C from "./consts.ts";
 import { contactCleanup, groundReset, updateStepPaint } from "./contact.ts";
-import { gearLerp, makePlayerParam } from "./gear.ts";
+import { makePlayerParam } from "./gear.ts";
 import { airCorrection, updateInputDir, updateMove } from "./move.ts";
+import { mainInput } from "../weapon/input.ts";
+import { recoverInk } from "../weapon/ink.ts";
 import { applyState, requestJumpState, requestLandState, updateStateMachine } from "./sm.ts";
 import { findSpawn } from "./spawn.ts";
 import { createPlayerState, type PlayerState } from "./state.ts";
+import { createPlayerDisplayState, nativeCornerProbe, nativeCornerZeroWitness, nativeSmDisplay, stepPlayerDisplay } from "./display.ts";
 import { isSquidMove, stateName } from "./states.ts";
 import { composeFinal, jumpHoldAdd, tryJump, verticalUpdate, wallKickStick } from "./vertical.ts";
 
@@ -23,10 +26,6 @@ export { stateName, isSquidMove, isSquidSM, STATE_TABLE } from "./states.ts";
 export { apRate, gearLerp, makePlayerParam, type PlayerParam } from "./gear.ts";
 export { CAPSULE_RADIUS, CAPSULE_B, BODY_OFFSET_Y } from "./body.ts";
 export * as PlayerConst from "./consts.ts";
-
-/** 잉크 회복 프레임(0AP) — PlayerGearSkillParam_InkRecoveryUp 생성자 기본값 [판독: param_reflect] */
-const INK_RECOVER_STD = [600, 410, 220] as const; // InkRecoverFrm_Std_Low/Mid/High
-const INK_RECOVER_STEALTH = [180, 148.5, 117] as const; // InkRecoverFrm_Stealth_Low/Mid/High
 
 /** shared "camera" 에서 조준 수평 방향(본체+0x538 = PlayerCamera+0x1a4)과 오른쪽 벡터(PlayerCamera+0x68 → X 기저 [실행: player_camera §6.7]). */
 export function readCamera(w: World, aim: Vec3, right: Vec3): void {
@@ -87,6 +86,9 @@ export function readInput(p: PlayerState, pad: PadState): void {
   if (lock > 0 && c) { p.squidRequest = false; p.squidLatch = true; }
   if (p.squidRequest && lock < 1) p.squidLatch = false;
   p.squidLock = Math.max(p.squidLock, 1) - 1;
+  const main = mainInput(p.mainInputFrames, first === Btn.Fire, { ...p.mainInputGates, blocked: p.mainInputGates.blocked || p.squidRequest });
+  p.mainInputFrames = main.frames;
+  p.clearMainLatches = main.clearLatches;
 }
 
 interface Ctx {
@@ -172,7 +174,10 @@ export function respawn(w: World, p: PlayerState): void {
   p.onGround = true; p.prevOnGround = true; p.wallCling = false;
   p.launch.active = false; p.launch.apply = false;
   p.transform = 0; p.squidBuf = 0;
-  p.ink = 1; p.inkRecoverStop = 0;
+  p.ink = 1; p.inkRecoverStop = 0; p.inkRecoverStopNoInk = 0; p.inkRecoverStopSquid = 0;
+  p.inkConsumeHold = 0; p.inkStealthFrames = 0; p.inkStealthBlend = 0;
+  p.display = createPlayerDisplayState(); p.displayBinding = null; p.inkFastStealth = undefined;
+  p.mainInputFrames = 0; p.clearMainLatches = false;
   applyState(p, C.STATE_RESET);
   p.respawns++;
   // 시작 위치가 바닥 위 조금 떠 있으면(StartPos y=0.01) 접지 처리로 내려앉는다
@@ -249,6 +254,7 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   updateStepPaint(p, w.paint, p.onGround ? p.groundP : p.pos);
   updateCling(w, p, res);
   ctx.clingRecent = p.wallCling ? C.WALLKICK_RING : Math.max(0, ctx.clingRecent - 1);
+  updateOrdinaryDisplay(w, p, res);
   // 상태기계
   if (co.landedAir > 0) requestLandState(p, shooting);
   const want = p.squidRequest && p.squidLock < 1;
@@ -256,17 +262,18 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   const hv = Math.hypot(p.vel[0], p.vel[1], p.vel[2]);
   p.animSpeed = hv;
   const ev = updateStateMachine(p, { want, shoot: shooting, animSpeed: hv, aim: ctx.aim, frame: w.frame });
+  // Native 249648c invokes display after the state update. Hidden forces both human flags off,
+  // so this ordinary alive counter write does not require the absent AS wrapper inputs.
+  if (p.displayBinding?.supported && p.display.hidden) p.transform = nativeSmDisplay({ hidden: true, humanCommand: false, squidCommand: false,
+    formCounter: p.transform, modelKind: 0, dead: false, state: p.state,
+    old: { body: false, hlf: false, squid: false, rail: false } }).formCounter;
   if (ev.toSquid) w.events.emit({ type: "ToSquid", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]) });
   if (ev.toHuman) w.events.emit({ type: "ToHuman", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]) });
   const swimNow = isSquidMove(p.state) && p.onGround && p.step.cls < 2 && hv > 0.001;
   if (swimNow && !ctx.swimWas) w.events.emit({ type: "Swim", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]) });
   ctx.swimWas = swimNow;
-  // 잉크 탱크 회복 [추정: 회복식] — weapon 이 소비·회복 정지를 쓴다
-  if (p.inkRecoverStop > 0) p.inkRecoverStop--;
-  else if (p.ink < 1) {
-    const frames = p.swimming ? gearLerp(INK_RECOVER_STEALTH[0], INK_RECOVER_STEALTH[1], INK_RECOVER_STEALTH[2], 0) : gearLerp(INK_RECOVER_STD[0], INK_RECOVER_STD[1], INK_RECOVER_STD[2], 0);
-    p.ink = Math.min(1, f32(p.ink + f32(1 / frames)));
-  }
+  // Ordinary supported B7a0 supply; unsupported producer inputs retain the stated legacy recovery adapter.
+  recoverInk(p, { state: p.state, fastStealth: p.inkFastStealth ?? p.swimming, airFrames: p.airFrames });
   // 낙하·물·장외 → 리스폰
   if (col && fellOut(col, p, co.tris)) respawn(w, p);
 
@@ -277,6 +284,7 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   dbg["physics.vy"] = p.vy;
   dbg["physics.air"] = p.airFrames;
   dbg["physics.ink"] = `own ${p.step.own.toFixed(2)} enemy ${p.step.enemyMove.toFixed(2)} cls ${p.step.cls}`;
+  dbg["render.hidden"] = p.displayBinding?.supported ? `${p.display.hidden} delay=${p.display.delay} age=${p.display.age}` : p.displayBinding?.reason;
   if (col?.fallback) dbg["physics.collision"] = "placeholder 평면";
   w.shared.set("debug", dbg);
 }
@@ -284,6 +292,36 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
 const UP = [0, 1, 0];
 const DOWN = v3(0, -1, 0);
 const O = v3();
+const DISPLAY_PROBE_START = v3();
+const DISPLAY_PROBE_END = v3();
+
+/** Ordinary static-ground supplier. Sphere geometry follows the native probe, but PC contact
+ * comes from the web collision adapter. This is not a whole Phive corner query or a wall-edge producer. */
+export function updateOrdinaryDisplay(w: World, p: PlayerState, res: BodyStepResult): void {
+  const col = w.collision as MeshCollisionWorld | null;
+  let edge: { edgeBlend: 0; edgeTarget: 0 } | undefined;
+  if (col && !col.fallback && p.onGround && res.gtri >= 0 && p.floorN[1] >= C.FLOOR_NY && !p.wallCling) {
+    // Static stage only: web contact/body position and zero platform velocity are adapter inputs.
+    const probe = nativeCornerProbe({ contact: res.gp, bodyPosition: p.pos, platformVelocity: [0, 0, 0], worldTolerance: f32(.01) });
+    if (probe) { DISPLAY_PROBE_START.set(probe.start); DISPLAY_PROBE_END.set(probe.end); }
+    if (probe && col.sweepSphere(DISPLAY_PROBE_START, DISPLAY_PROBE_END, probe.radius, Layer.Ground,
+      { layerIndex: 1, hitMask: 8, subIndex: 0, subMask: 0xffffffff })) {
+      // Conditional native zero leaf: probe reduces a7c to <=.01; native lo>=.06 and
+      // the ordinary nonnegative blend update yield zero. Bounds here are witnesses,
+      // not captured values for the missing live Ba7c/Ba74 or platform velocity B108.
+      edge = nativeCornerZeroWitness(f32(.01), f32(.06), 0, 0);
+    }
+  }
+  p.displayBinding = stepPlayerDisplay(p.display, {
+    state: p.state, paintClass: p.step.cls, airFrames: p.airFrames, ceilingTimer: p.ceilTimer,
+    chargeFrames: p.wallJumpCharge, chargeMax: p.gear.wallJumpChargeFrames,
+    normal: p.floorN, rawNormal: p.floorNRaw, verticalVelocity: p.vy, ...edge,
+    b781: false, b7f4: false, b7f9: false, railLatch: false, forceByte: false,
+    launchActive: p.launch.active, wallChargeRelease: false, debugForce: false,
+    dokanKind: 0, grindActive: false, warpActive: false, specialCandidate: false,
+  });
+  p.inkFastStealth = p.displayBinding.supported ? p.display.hidden : undefined;
+}
 
 /** 오징어 벽 붙기 판정(0x710268c3fc 요약): 벽 접촉점의 아군 잉크가 임계를 넘으면 다음 프레임 지면 한계 −0.2571. */
 function updateCling(w: World, p: PlayerState, res: BodyStepResult): void {

@@ -95,6 +95,10 @@ export interface CameraShared {
   prevViewZ: Float32Array;
   squidBlend: number;
   boomRatio: number;
+  /** Web mouse adapter: signed applied yaw, including complete turns. */
+  mouseYawDelta: number;
+  /** Native/stick paths retain their original pitch follow and basis interpolation. */
+  mouseLook: boolean;
 }
 
 const v3 = (x = 0, y = 0, z = 0): Float32Array => Float32Array.of(x, y, z);
@@ -120,6 +124,7 @@ export class PlayerCamera {
     prevRight: v3(1, 0, 0), prevUp: v3(0, 1, 0), prevViewZ: v3(0, 0, 1),
     squidBlend: 0,
     boomRatio: 1,
+    mouseYawDelta: 0, mouseLook: false,
   };
 
   initialized = false;
@@ -168,6 +173,7 @@ export class PlayerCamera {
   /** 리셋 0x71024d6598. isRestart = 재시작(리스폰 등) 비트: 0이면 p 추종 비율을 0.2 로, 1이면 1.0 으로 둔다. */
   reset(pl: CameraPlayerInput | null, isRestart: boolean, dir?: ArrayLike<number>): void {
     const o = this.out;
+    o.mouseYawDelta = 0; o.mouseLook = false;
     o.fov = RIG.fov;
     o.near = 0.2;
     o.far = 2000;
@@ -275,6 +281,8 @@ export class PlayerCamera {
     const fr = div(o.fov, RIG.fov);
     const fovRatio = fr < 0 ? 0 : fr > 1 ? 1 : fr;
     const yaw = mul(pad.lookYaw, fovRatio);
+    o.mouseLook = pad.lookMode === "mouse";
+    o.mouseYawDelta = o.mouseLook ? yaw : 0;
     if (yaw !== 0) {
       const f = o.aimForward;
       const rotated: [number, number, number] = [0, 0, 0];
@@ -289,7 +297,9 @@ export class PlayerCamera {
     s = s > 90 ? 90 : s < -90 ? -90 : s;
     const [pt, corr] = pitchAngleToP(s - 75, 0, false, 0, 0, true);
     this.s = add(s, corr);
-    this.p = mix(this.p, pt, this.pFollow);
+    // Mouse supplies displacement, not stick velocity: the native curve remains,
+    // but its target must not keep chasing the last mouse sample after release.
+    this.p = o.mouseLook ? F(pt) : mix(this.p, pt, this.pFollow);
     o.rigForward.set(o.aimForward);
   }
 

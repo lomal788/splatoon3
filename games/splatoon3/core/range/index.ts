@@ -2,7 +2,7 @@
 // 시험 사격장(대전 로비 Lby_Lobby00): 표적 spl::SighterTarget(일반·대형·이동), 사격 구역 LobbyShootingArea, 시작 위치.
 // 팁 시험(TipsTrial)·나무 인형·PaintedArea·기믹 스포너는 1차 범위 밖(분석만 — 문서 §1, §11).
 import { f32 } from "../fmath.ts";
-import type { CollisionWorld, DamageInfo, Hittable, Team } from "../types.ts";
+import type { BulletContactInfo, CollisionWorld, DamageInfo, Hittable, Team } from "../types.ts";
 import { Layer } from "../types.ts";
 import type { System, World } from "../world.ts";
 import { insideAnyArea, makeArea, updateShootLatch, type ShootingArea } from "./area.ts";
@@ -148,6 +148,7 @@ class RangeSystem implements System {
         team: t.team,
         rateCol: t.rateCol,
         onDamage: (info) => this.onDamage(t, info),
+        onBulletContact: (info) => this.onBulletContact(t, info),
       };
       w.hittables.set(t.id, hit);
       this.mainIds.set(t.id, w.newId());
@@ -188,14 +189,18 @@ class RangeSystem implements System {
   private onDamage(t: SighterTarget, info: DamageInfo): void {
     const w = this.world;
     const out = t.receive(info, this.rate);
-    // 탄 접촉 휨 충격(vt22): 접촉 속도(y=0) × BulletImpulsScaler. 속도는 DamageInfo 확장 필드 vel(프레임당)에서 — 문서 §6.3, 조정 요청.
+    // 기존 합성 caller의 프레임 속도 vel만 호환. 실제 weapon은 별도 vt22 접촉 콜백을 쓴다.
     const vel = (info as DamageInfo & { vel?: ArrayLike<number> }).vel;
-    if (vel && t.bodiesEnabled) {
-      const s = t.cfg.param.BulletImpulsScaler;
-      t.addBendImpulse(info.pos, [f32(f32(vel[0] * 60) * s), 0, f32(f32(vel[2] * 60) * s)], 0);
-    }
+    if (vel) this.onBulletContact(t, { pos: info.bodyPos ?? info.pos, velocity: Float32Array.of(f32(vel[0] * 60), f32(vel[1] * 60), f32(vel[2] * 60)) });
     w?.events.emit({ type: "Damage", target: t.id, value: out.damage, result: out.result, critical: info.critical, pos: [info.pos[0], info.pos[1], info.pos[2]], attacker: info.attacker });
     this.flushEvents(t);
+  }
+
+  /** 21f0348 Actor_Bullet branch: body 위치, 속도 y=0, scaler, kind0. */
+  private onBulletContact(t: SighterTarget, info: BulletContactInfo): void {
+    if (!t.bodiesEnabled) return;
+    const k = t.cfg.param.BulletImpulsScaler;
+    t.addBendImpulse(info.pos, [f32(info.velocity[0] * k), 0, f32(info.velocity[2] * k)], 0);
   }
 
   private flushEvents(t: SighterTarget): void {

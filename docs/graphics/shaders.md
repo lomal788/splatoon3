@@ -1,5 +1,7 @@
 # 셰이더 해독 — Hoian_UBER 재질 · 도색 스탬프(Hoian_Proc) · UI MeterAction
 
+**2026-10-03 첨부 화면 분석 정정 [판독]:** 원시 Maxwell와 분석용 Negate 괄호 보완 CLI로 기존 역번역의 부호 괄호 결함을 확인했다. p1714 BRDF.y는 **−roughness**이며, 잉크 SH는 최종N과 world-up을 혼합하고 다시 정규화하지 않는다. cube array 층12는 **implicit LOD+bias0**로 샘플하며 명시 mip0 고정이 아니다. 기존 설명은 당시 기록으로 보존한다. [원시 주소·정정 이유·보완 출력](reference_ink_surface.md#6-계산식조건상세-의사코드). 원본 GPU 픽셀은 미검증이다.
+
 Splatoon 3 v0의 셰이더 바이너리를 컨테이너 구조부터 풀고, Maxwell SASS를 GLSL로 역번역해 웹 포팅에 필요한 식·상수·슬롯 의미를 확정한 문서입니다. 확정 수준 표기는 [README](../README.md)를 따릅니다. 이 문서에서 **[판독]**은 "원본 셰이더 기계어를 Ryujinx 번역기로 GLSL로 옮긴 것을 판독"했거나 main 코드를 디컴파일해 판독한 경우입니다. 번역기가 만든 GLSL은 원본 소스가 아니라 SASS와 같은 동작을 하는 식입니다(변수명 `temp_N`, `precise`, `fma`는 번역기 산물).
 
 관련 문서: [formats_bfres_bntx.md §5](formats_bfres_bntx.md)(재질 → glTF 근사), [team_color.md](team_color.md)(팀색 14색 계산), [../paint/paint_and_score.md](../paint/paint_and_score.md)(도색 요청·점수), [../ui/ui_hud.md §6.5](../ui/ui_hud.md)(특수 게이지).

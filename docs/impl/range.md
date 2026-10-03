@@ -1,5 +1,7 @@
 # range — 시험 사격장 구현 기록
 
+2026-10-03 탄·총 통합 정정: weapon은 raw damage를 넘기고 target receiver에서 rate를 한 번만 적용한다. 물리 contact callback을 DamageInfo와 분리하여 body center·stepVelSec·y=0·BulletImpulsScaler를 휨에 연결했다. 실제 총/표적 fixture에서 damage123 및 HP877·휨 활성 확인. 과거 info.vel 누락/단위 미확정 기록은 이 연결 범위에서 정정한다. 근거·153개 테스트 결과는 [weapon.md](weapon.md) §4~10. 아래는 이전 구현 기록을 보존한다.
+
 담당 폴더: `games/splatoon3/core/range/`, `games/splatoon3/client/range/`. 분석 명세: [../range/shooting_range.md](../range/shooting_range.md)(이하 "명세").
 공유 키: `world.shared.get("range")` = `RangeShared`(core/range/index.ts). 이벤트: `Damage`, `Break`.
 
