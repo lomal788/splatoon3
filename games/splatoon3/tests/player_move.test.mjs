@@ -160,6 +160,10 @@ test("StartPos: 이름 없는 팀 StartPos 를 고름", () => {
   const p = w.shared.get("player");
   assert.equal(p.spawnPos[2], f(-11.96));
   assert.equal(p.spawnYaw, -0.38);
+  // 0.01 떠 있던 시작 위치가 바닥에 내려앉음. 원본 경로에는 지지 없는 첫 프레임에 바닥으로 붙이는 단계가 없고(SplAlongGnd 는 S+0x20 == 1 필요),
+  // GameOnGround 중력 법선 성분(0.48 유닛/초 = 0.008/프레임)과 native 접촉(target −d·288)으로 2 프레임에 붙는다(body.ts). 이전 판의 1 프레임은
+  // 웹 근사(지지 탐색 쓸어 넘기기로 즉시 붙임)였다 — 2026-10-04 정정.
   w.step(pad(0));
-  assert.ok(Math.abs(p.pos[1]) < 1e-3, `y ${p.pos[1]}`); // 0.01 떠 있던 시작 위치가 바닥에 내려앉음
+  w.step(pad(0));
+  assert.ok(Math.abs(p.pos[1]) < 1e-3, `y ${p.pos[1]}`);
 });

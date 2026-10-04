@@ -5,11 +5,9 @@ import type { World } from "../../core/world.ts";
 import type { ClientContext, View } from "../context.ts";
 import { DEV } from "../env.ts";
 import { applyInkSurface, type InkSurfaceBinding } from "../render/ink_surface.ts";
-import { buildTeamSets, FALLBACK_ROW, type TeamColorRow } from "../render/teamcolor.ts";
+import { buildTeamSets, lobbyTeamRow, lobbyTeamSeed, type TeamColorRow } from "../render/teamcolor.ts";
 import { bindVisualPaint } from "./visual_geometry.ts";
 
-/** Native lobby team-row selector remains unconfirmed; keep the same row as render. */
-const TEAM_ROW="OrangeBlue";
 interface PageView { tex:THREE.DataTexture; }
 
 export function createPaintView(ctx:ClientContext):View {
@@ -45,7 +43,7 @@ export function createPaintView(ctx:ClientContext):View {
       // Empty-ink startup captures complete before changing the stage draw geometry.
       if(!visual&&map.environmentReady){
         const table=w.data.tables.team_color as {dataSets?:(TeamColorRow&{name?:string})[]}|undefined;
-        const row=table?.dataSets?.find(r=>r.name===TEAM_ROW)??FALLBACK_ROW;
+        const row=lobbyTeamRow(table,lobbyTeamSeed);
         const sets=buildTeamSets(row,false,map.env.light);
         const ink=sets.slice(0,3).map(s=>s.colors[9]!.slice(0,3) as [number,number,number]);
         const bright=sets.slice(0,3).map(s=>s.colors[10]!.slice(0,3) as [number,number,number]);

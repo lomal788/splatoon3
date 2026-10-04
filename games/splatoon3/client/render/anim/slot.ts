@@ -94,7 +94,7 @@ export class Wrapper {
     this.cmd = state;
     this.displayOnly = false;
     this.slotRate = rate;
-    const inst = instantiate(this.asb, cmd, this.bb, this.fps, this.weaponAbbr);
+    const inst = instantiate(this.asb, cmd, this.bb, this.fps, this.weaponAbbr, (clip, type) => type !== 3 && type !== 11 || this.clipInfo(clip, type) !== null);
     if (!inst) {
       this.layers.length = 0;
       return;
@@ -114,7 +114,8 @@ export class Wrapper {
   private enter(layer: Layer, inst: Inst): void {
     if (inst.k === "leaf") {
       const info = inst.t === 3 || inst.t === 11 ? this.clipInfo(inst.clip, inst.t) : null;
-      if (inst.t === 3 && !info) this.missing.add(inst.clip);
+      // 0x71039d3608: an unbound skeletal leaf creates no entry; +0x96 bit0 marks it finished.
+      if (inst.t === 3 && !info) { this.missing.add(inst.clip); return; }
       const e: Entry = { cur: 0, prev: 0, rate: 1, end: info ? info.frames : 0, loop: info ? info.loop : false, loopStart: 0, endOverride: -1, skip: false };
       if (inst.ctrl) this.applyCtrl(e, inst.ctrl, info);
       layer.entries.set(inst.node, e);

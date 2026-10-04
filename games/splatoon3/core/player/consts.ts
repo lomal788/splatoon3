@@ -24,6 +24,17 @@ export const STICK_DEADZONE = fb(0x3dcccccd); // [0x71058bbbe4] 0.1
 export const STICK_RANGE = fb(0x3f666666); // [0x71058bbbe8] 0.9 = 1 − 0.1
 export const STICK_POW = fb(0x40800000); // [0x71058bbdf8] 4
 export const FWD_BLEND_STEP = fb(0x3b449ba6); // [0x71058bbdf4] 0.003 (본체+0xd4c 증가량)
+export const STICK_FALL = fb(0x3e4ccccd); // [0x71058bbcd0] 0.2 본체+0x480 이 내려갈 때 따라가는 비율
+export const WALL_INPUT_DECAY = fb(0x3cf5c28f); // [0x71058bbcd8] 0.03 벽 입력 계수 x 바닥 감소량
+export const WALL_INPUT_E = fb(0x3eb33333); // [0x71058bbcdc] 0.35
+export const WALL_INPUT_G = fb(0x3e4ccccd); // [0x71058bbce0] 0.2
+export const SQUID_HOLD_MAX = 100; // 본체+0x786 상한 (0x71024a0550)
+export const HISTORY_CAP = 24; // 생성자 +0x828 = 0x18
+export const HISTORY_SCAN = 9; // [0x71058bc100]
+export const HISTORY_RECENT = 6; // [0x71058bc0f0]
+export const LAUNCH_RESET_FRAMES = 90; // [0x71058bc0e8] n 리셋 간격
+export const STICK_LOCK_WALLJUMP = 15; // [0x71058bc10c] 덮어쓰기 스틱 프레임 L+0x54
+export const STICK_LOCK_RELEASE = 15; // [0x71058bc154] 래치 해제 때 본체+0xaec
 
 // ---- 공중 프레임 ----
 export const AIR_DAMP_START = 4; // [0x71058bbc20] (s32)
@@ -103,6 +114,23 @@ export const WALLKICK_H = fb(0x3e449ba6); // [0x71058bc0d0] 0.192
 export const WALLKICK_V = fb(0x3e6b851f); // [0x71058bc0d4] 0.23
 export const WALLKICK_VMAX = fb(0x3e99999a); // [0x71058bc0dc] 0.3
 export const WALLKICK_RING = 6; // [0x71058bc0f0]
+export const WALLKICK_VK = 0; // [0x71058bc0d8] 0 (0x7102455db0 이 명시적으로 0을 씀)
+export const ROLL_SPEED_K = fb(0x3f800000); // [0x71058bc0c0] 1.0
+export const ROLL_JUMP = fb(0x3e2e978d); // [0x71058bc0c4] 0.1705
+export const ROLL_MIN_RATIO = fb(0x3f400000); // [0x71058bc0b8] 0.75 (× 0.192)
+export const ROLL_COS = fb(0x3effffff); // SDK cosf([0x71058bc0bc] 60 · 0.017453292) 원본 실행 결과
+export const ROLL_SQUID_HOLD = 6; // [0x71058bc114]
+export const ROLL_DIR_EPS = Math.fround(1.1920929e-7);
+export const WALLJUMP_OFFWALL_MAX = 15; // [0x71058bc13c]
+export const WALLJUMP_LATCH_LO = fb(0x3ca3d70a); // [0x71058bc120] 0.02
+export const WALLJUMP_LATCH_HI = fb(0x3e800000); // [0x71058bc124] 0.25
+export const WALLJUMP_LATCH_C0 = 0; // [0x71058bc128] (s32 → f32)
+export const WALLJUMP_LATCH_MIN = fb(0x3e4ccccd); // [0x71058bc144] 0.2
+export const LAUNCH_KD_MAX = 10; // 0x7102459630 감쇠 반복 상한
+export const LAUNCH_AD0 = 90 - 12 + 6; // ([0x71058bbf2c] − [0x71058bbf30]) + 6
+export const LAUNCH_ADC = 4 + 6; // [0x71058bbf3c] + 6
+export const SQUID_K_NINJA = fb(0x3f666666); // [0x71058c0348] 0.9 (0x710266c6e4)
+export const ABILITY_SQUID_MOVE_SPATTER = 104; // SquidMoveSpatter_Reduction(징어닌자)
 
 // ---- 접지 정리 (player_state.md §7.3) ----
 export const SQUID_WALL_VS_MIN = fb(0xbd23d70a); // −0.04 [0x71058bbe68]

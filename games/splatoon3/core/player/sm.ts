@@ -121,7 +121,7 @@ export function updateStateMachine(p: PlayerState, inp: SmInput): SmEvents {
     } else {
       applyState(p, 0x91);
       p.transform = 0x5a;
-      if (p.jump3dHold && p.airFrames < 4) p.toHumanFrame = inp.frame;
+      if (p.holdBlock && p.airFrames < 4) p.toHumanFrame = inp.frame;
     }
     ev.toHuman = true;
   }
@@ -179,6 +179,17 @@ function formState(p: PlayerState, inp: SmInput): void {
     // G: ToHuman 계열은 이동·공격 입력이 있으면 프레임 1부터 끊김
     if (p.stateFrame < 1) return;
     if (idle && !inp.shoot) return;
+  }
+  // P12 Somersault: B+0x7f4 && (B+0x784 && B+0xac4 < 1 || cur == 0x8d) && cur ∈ 0x82..0x90 → 0x8d (state_big_full.c 1492~1540행)
+  if (p.launch.active && (inp.want || cur === 0x8d)) {
+    if (cur === 0x8d || !(cur >= 0x82 && cur <= 0x90)) return;
+    applyState(p, 0x8d);
+    return;
+  }
+  // P13 WallJump: want && B+0x782 && B+0x780 && cur == 0x87 && !B+0x7a0 → 0x90, SM+0x1f4 = 게임 프레임 (SM+0xf6·[SM+0x10]+8 은 통과로 둠)
+  if (inp.want && p.holdBlock && p.jump3dHold && cur === 0x87 && !p.display.hidden) {
+    if (requestState(p, 0x90)) p.toHumanFrame = inp.frame;
+    return;
   }
   if (cur === 0x90 && !end) return;
   const jumpSet = (cur >= 0x89 && cur <= 0x8c) || (cur >= 0x99 && cur <= 0xa9);
@@ -241,6 +252,18 @@ function ground(p: PlayerState, inp: SmInput, idle: boolean): void {
   }
   if (cur >= 0x82 && cur <= 0x84 && !animEnded(p) && cur !== 0x84) return;
   if (cur === 0x84 && !animEnded(p)) return;
+  // H: want && clamp((B+0x774 − 10 − 0)/(WallJumpChargeFrm − 0)) > 0 → 0x8f WallJumpCharge (state_big_full.c 2370~2422행)
+  if (inp.want) {
+    const x = f32(p.wallJumpCharge - 10);
+    const F = p.gear.wallJumpChargeFrames;
+    if (0 < x && 0 < F) {
+      if (cur === 0x8f) return;
+      const trans = (cur >= 0x91 && cur <= 0x98) || (cur >= 0x82 && cur <= 0x84) || cur === 0xf1 || cur === 0xf2 || cur === 0xad || cur === 0xae;
+      if (trans && !animEnded(p)) return;
+      requestState(p, 0x8f);
+      return;
+    }
+  }
   const air = p.airFrames;
   if (air < 13 || inp.want) {
     if (!idle) {

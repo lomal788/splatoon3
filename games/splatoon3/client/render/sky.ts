@@ -11,6 +11,8 @@ export class SkyView {
   private visibleExposure=4;
   private captureExposure=80;
   private captureSaturation=1;
+  private readonly skySource:{value:THREE.Texture|null}[]=[];
+  hdr:"bc6h"|"8bit-linear"="8bit-linear";
   constructor(gltf:GLTF,raw:unknown) {
     this.root=gltf.scene;this.root.name="splatoon3.sky";
     const data=raw as {rendering?:{Lighting?:{SkySphere?:{ExposureNotInEnvMap?:number;EmissionIntensInEnvMap?:number;SaturationInEnvMap?:number;Offset?:{X:number;Y:number;Z:number};Scale?:number}}}};
@@ -26,6 +28,8 @@ export class SkyView {
       mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
       const old=mesh.material as THREE.MeshStandardMaterial,f=fresOf(old);
       const isSun=old.name==="mSun",texture=isSun?old.map:old.emissiveMap;
+      // mSky_Alb is native BC6H_UFLOAT (linear); the bundle stores those linear values in 8 bits, so no sRGB decode.
+      if(!isSun&&texture){texture.colorSpace=THREE.NoColorSpace;texture.needsUpdate=true;}
       const exp={value:this.visibleExposure};this.exposure.push(exp);
       const sat={value:1};this.saturation.push(sat);
       const cap={value:false};this.capture.push(cap);
@@ -34,7 +38,7 @@ export class SkyView {
       const albedo=f?.params?.albedo_color?.value as number[]|undefined;
       const alpha=f?parameter(f,"opacity",1):1;
       mesh.material=new THREE.ShaderMaterial({
-        name:old.name,uniforms:{source:{value:texture},exposure:exp,saturation:sat,envCapture:cap,intensity:{value:intensity},emissionColor:{value:new THREE.Vector3(...(color??[1,1,1]).slice(0,3))},albedoColor:{value:new THREE.Vector3(...(albedo??[0,0,0]).slice(0,3))},alpha:{value:alpha}},
+        name:old.name,uniforms:{source:isSun?{value:texture}:this.trackSource(texture),exposure:exp,saturation:sat,envCapture:cap,intensity:{value:intensity},emissionColor:{value:new THREE.Vector3(...(color??[1,1,1]).slice(0,3))},albedoColor:{value:new THREE.Vector3(...(albedo??[0,0,0]).slice(0,3))},alpha:{value:alpha}},
         vertexShader:"varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
         fragmentShader:isSun?
           "uniform sampler2D source;uniform float intensity,alpha;varying vec2 vUv;void main(){vec3 c=texture2D(source,vUv).rgb;gl_FragColor=vec4(c*(intensity+1.),clamp(alpha,0.,1.));}":
@@ -45,6 +49,9 @@ export class SkyView {
       });
     });
   }
+  private trackSource(texture:THREE.Texture|null):{value:THREE.Texture|null} {const u={value:texture};this.skySource.push(u);return u;}
+  /** Original BC6H_UFLOAT blocks (asset_r11_env.py); only when the GPU decodes BPTC float. */
+  useHdr(texture:THREE.Texture):void {for(const u of this.skySource)u.value=texture;this.hdr="bc6h";}
   setCapture(active:boolean):void {
     for(const x of this.exposure)x.value=active?this.captureExposure:this.visibleExposure;
     for(const x of this.saturation)x.value=active?this.captureSaturation:1;

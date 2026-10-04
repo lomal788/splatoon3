@@ -36,7 +36,10 @@ function buildMesh(quads, materials) {
 }
 
 const floor = (y, x0, x1, z0, z1, m = 0) => ({ pts: [[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], m });
-const wallZ = (z, x0, x1, y0, y1, m = 0) => ({ pts: [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], m });
+// 벽·경사 면은 −z(플레이어 쪽)를 향하도록 감는다: 원본 접지 판정의 얼굴 법선 0x7103c4988c(flag1)는 삼각형 (b−a)×(c−a)를
+// winding 그대로 쓰고(player_state.md §7.3.4 [판독]+[실행]), 몸 뒤쪽을 향한 면의 접촉은 분류에서 버린다(0x7102c5dd20 첫 검사).
+// 실제 Lby_Lobby00 충돌 메시도 바깥쪽 winding 이다(법선 위 1500 / 아래 737 / 옆 4092 삼각형). 이전 판은 반대로 감겨 있었다(2026-10-04 정정).
+const wallZ = (z, x0, x1, y0, y1, m = 0) => ({ pts: [[x0, y0, z], [x0, y1, z], [x1, y1, z], [x1, y0, z]], m });
 
 const MATS = [
   { name: "Stone", layer: "SplSolidGround", paintable: true },
@@ -106,10 +109,13 @@ test("캐릭터: 벽에 막히고 비스듬히 밀면 벽을 따라 미끄러짐
   assert.equal(p.onGround, true);
 });
 
-test("캐릭터: 30° 경사는 오르고 60° 경사는 못 오름", () => {
-  for (const [deg, climbs] of [[30, true], [60, false]]) {
+// 최대 경사: CharacterControllerParam MaxSlopeAngle 75° → S+0x190 [데이터+판독], 지지 분류 0x7102c5dd20 은 θ < 75° 면 바닥이다.
+// 이전 판의 "60° 못 오름"은 웹 근사(n.y < 0.6414 면 수직 벽 취급)였고 원본 분류로는 60° 도 지지된다(게임 쪽 a38/a2c 미끄럼이 별도로 끌어내림).
+// 그래서 못 오르는 쪽 경사를 75° 를 넘는 80° 로 바꾼다 — 2026-10-04 정정.
+test("캐릭터: 30° 경사는 오르고 80° 경사는 못 오름", () => {
+  for (const [deg, climbs] of [[30, true], [80, false]]) {
     const t = Math.tan((deg * Math.PI) / 180);
-    const ramp = { pts: [[-5, 0, 2], [5, 0, 2], [5, 6 * t, 8], [-5, 6 * t, 8]], m: 0 };
+    const ramp = { pts: [[-5, 0, 2], [-5, 6 * t, 8], [5, 6 * t, 8], [5, 0, 2]], m: 0 };
     const col = buildMesh([floor(0, -10, 10, -10, 2), ramp], MATS.slice(0, 1));
     const w = makeWorld(col);
     const p = w.shared.get("player");
@@ -175,10 +181,17 @@ test("오징어 벽 수영: 아군 잉크 벽을 앞으로 밀면 오르고, 멈
   }
   assert.ok(clung, "벽 붙기");
   assert.ok(p.pos[1] > 0.5 && p.floorN[2] < -0.9, `벽 위 y ${p.pos[1]} N ${[...p.floorN]}`);
-  for (let i = 0; i < 40; i++) w.step(pad(0, 0, Btn.Squid)); // 손을 떼면 감속(잠복 가속 하한 0.008·b(|v|/0.192))
+  // 스틱을 놓으면 벽 입력 계수 x = 본체+0x488(0x71024a7100 [실행], move.ts) 가 0 이 되어 미끄럼 계수 s = min(a38, 1 − own²·x) = a38 이고
+  // a38/a2c 벽 미끄럼(cling acc s^1.737·0.005, |a2c| ≤ 0.1)이 오징어를 끌어내린다(player_state.md §7.3.2 ④⑤ [판독]).
+  // 이전 판의 "멈추면 머묾"은 x = 오징어 버튼 [추정]에 기댄 값이었다 — 2026-10-04 정정. 미끄러지는 동안 벽 지지는 유지된다.
   const y0 = p.pos[1];
+  let clingWhileSliding = true;
+  for (let i = 0; i < 40; i++) {
+    w.step(pad(0, 0, Btn.Squid));
+    if (p.pos[1] > 0.05 && !(p.onGround && p.wallCling)) clingWhileSliding = false;
+  }
   for (let i = 0; i < 60; i++) w.step(pad(0, 0, Btn.Squid));
-  assert.ok(Math.abs(p.pos[1] - y0) < 0.01 && p.onGround && p.wallCling, `머묾 ${y0} → ${p.pos[1]}`);
+  assert.ok(clingWhileSliding && p.pos[1] < y0 && p.onGround, `미끄러져 내려옴 ${y0} → ${p.pos[1]}`);
   for (let i = 0; i < 80; i++) w.step(pad(0, 1, Btn.Squid));
   assert.ok(Math.abs(p.pos[1] - 4) < 1e-3 && p.pos[2] > 5.5 && p.onGround, `꼭대기 ${[...p.pos]}`);
 });

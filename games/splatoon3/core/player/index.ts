@@ -6,19 +6,19 @@ import { f32, v3, type Vec3 } from "../fmath.ts";
 import { Btn, type PadState } from "../input.ts";
 import { Layer } from "../types.ts";
 import type { System, World } from "../world.ts";
-import { stepBody, type BodyStepResult } from "./body.ts";
+import { bodyOf, noCollisionStep, resetBody, stepBody, type BodyStepResult } from "./body.ts";
 import * as C from "./consts.ts";
 import { contactCleanup, groundReset, updateStepPaint } from "./contact.ts";
 import { makePlayerParam } from "./gear.ts";
-import { airCorrection, updateInputDir, updateMove } from "./move.ts";
+import { airCorrection, inputPost, inputStick, launchPre, updateInputDir, updateMove } from "./move.ts";
 import { mainInput } from "../weapon/input.ts";
 import { recoverInk } from "../weapon/ink.ts";
-import { applyState, requestJumpState, requestLandState, updateStateMachine } from "./sm.ts";
+import { applyState, requestLandState, updateStateMachine } from "./sm.ts";
 import { findSpawn } from "./spawn.ts";
 import { createPlayerState, type PlayerState } from "./state.ts";
 import { createPlayerDisplayState, nativeCornerProbe, nativeCornerZeroWitness, nativeSmDisplay, stepPlayerDisplay } from "./display.ts";
 import { isSquidMove, stateName } from "./states.ts";
-import { composeFinal, jumpHoldAdd, tryJump, verticalUpdate, wallKickStick } from "./vertical.ts";
+import { composeFinal, jumpHoldAdd, tryJump, verticalUpdate, wallChargeStage } from "./vertical.ts";
 
 export { createPlayerState } from "./state.ts";
 export type { PlayerState, PlayerWeaponLink, StepPaint, LaunchState } from "./state.ts";
@@ -28,7 +28,7 @@ export { CAPSULE_RADIUS, CAPSULE_B, BODY_OFFSET_Y } from "./body.ts";
 export * as PlayerConst from "./consts.ts";
 
 /** shared "camera" 에서 조준 수평 방향(본체+0x538 = PlayerCamera+0x1a4)과 오른쪽 벡터(PlayerCamera+0x68 → X 기저 [실행: player_camera §6.7]). */
-export function readCamera(w: World, aim: Vec3, right: Vec3): void {
+export function readCamera(w: World, aim: Vec3, right: Vec3, up?: Vec3): void {
   const cam = w.shared.get("camera") as Record<string, unknown> | undefined;
   let fx = 0, fz = 1;
   const pick = (k: string): ArrayLike<number> | null => {
@@ -50,16 +50,16 @@ export function readCamera(w: World, aim: Vec3, right: Vec3): void {
     // 정면 (fx,0,fz) 의 오른쪽 = (−fz, 0, fx) (오른손 Y-up, 정면 +Z 일 때 오른쪽 −X)
     right[0] = f32(-fz); right[1] = 0; right[2] = f32(fx);
   }
+  if (up) {
+    const u = pick("up");
+    if (u) { up[0] = f32(u[0]); up[1] = f32(u[1]); up[2] = f32(u[2]); }
+    else { up[0] = 0; up[1] = 1; up[2] = 0; }
+  }
 }
 
 /** 입력 0x710249f494 일부: 스틱, 점프 버튼, 오징어 요청(InputSender 우선순위 → 본체+0x784). */
 export function readInput(p: PlayerState, pad: PadState): void {
-  p.stick[0] = f32(pad.moveX);
-  p.stick[1] = f32(pad.moveY);
-  const sl = f32(Math.sqrt(f32(f32(p.stick[0] * p.stick[0]) + f32(p.stick[1] * p.stick[1]))));
-  let m = f32(f32(sl - C.STICK_DEADZONE) / C.STICK_RANGE);
-  m = m < 0 ? 0 : m > 1 ? 1 : m;
-  p.stickMag01 = m;
+  inputStick(p, pad.moveX, pad.moveY);
   p.jumpHeld = (pad.hold & Btn.Jump) !== 0;
   p.jumpPressed = (pad.trigger & Btn.Jump) !== 0;
   p.fireHeld = (pad.hold & Btn.Fire) !== 0;
@@ -73,6 +73,8 @@ export function readInput(p: PlayerState, pad: PadState): void {
   }
   p.inputOrder = p.inputOrder.filter((b) => (pad.hold & b) !== 0);
   const first = p.inputOrder[0] ?? 0;
+  p.inputFirst = first;
+  p.squidButton = (pad.hold & Btn.Squid) !== 0;
   p.squidInput = first === Btn.Squid; // +0x785 = Sender+0x55
   const lock = p.squidLock;
   let c: boolean;
@@ -94,14 +96,14 @@ export function readInput(p: PlayerState, pad: PadState): void {
 interface Ctx {
   aim: Vec3;
   right: Vec3;
-  clingRecent: number;
+  up: Vec3;
   swimWas: boolean;
   weaponTable: string;
 }
 
 export function createPlayerSystem(): System {
   let p: PlayerState | null = null;
-  const ctx: Ctx = { aim: v3(0, 0, 1), right: v3(-1, 0, 0), clingRecent: 0, swimWas: false, weaponTable: "" };
+  const ctx: Ctx = { aim: v3(0, 0, 1), right: v3(-1, 0, 0), up: v3(0, 1, 0), swimWas: false, weaponTable: "" };
   return {
     id: "player",
     init(w: World) {
@@ -164,15 +166,20 @@ function enumIndex(v: unknown, names: string[], def: number): number {
 export function respawn(w: World, p: PlayerState): void {
   p.pos[0] = p.spawnPos[0]; p.pos[1] = p.spawnPos[1]; p.pos[2] = p.spawnPos[2];
   p.prevPos.set(p.pos);
+  // 몸체 리셋 0x71024f4440: 몸체 원점 = 위치 + (0, r, 0) [실행] (body.ts)
+  resetBody(bodyOf(p), p.pos);
   p.facing[0] = f32(Math.sin(p.spawnYaw)); p.facing[1] = 0; p.facing[2] = f32(Math.cos(p.spawnYaw));
   p.vel.fill(0); p.desired.fill(0); p.final.fill(0); p.jump3d.fill(0); p.takeoff.fill(0); p.slide.fill(0);
   p.knock.fill(0); p.unexplained.fill(0);
   p.cap = 0; p.vy = 0; p.vySum = 0; p.slideAmt = 0; p.ceilTimer = 0; p.landStiff = 0; p.wallJumpCharge = 0;
   p.airFrames = 0; p.airFrames2 = 0; p.airRatio = 0; p.airStep = 0; p.airStepRatio = 0; p.groundFrames = 0;
-  p.sinceJump = 100; p.riseFrames = 0; p.jumpKeep = 0; p.jump3dHold = false;
+  // 리스폰 이동 리셋 0x71023547bc: +0x734 = 9999, +0x774..+0x782·입력 구조체 +0x470..+0x497·+0xaec·발사 구조체 0, 이동 이력은 유지
+  p.sinceJump = 9999; p.riseFrames = 0; p.jumpKeep = 0; p.jump3dHold = false; p.holdBlock = false; p.wallJumpOff = 0;
+  p.stick[0] = 0; p.stick[1] = 0; p.stickMag01 = 0; p.stickMagSmooth = 0; p.wallInputDir = 0; p.wallInput = 0;
+  p.stickLock = 0; p.squidHoldFrames = 0; p.squidInkFrames = 0;
   p.floorN.set([0, 1, 0]); p.floorNRaw.set([0, 1, 0]); p.surfN.set([0, 1, 0]); p.groundN.set([0, 1, 0]);
   p.onGround = true; p.prevOnGround = true; p.wallCling = false;
-  p.launch.active = false; p.launch.apply = false;
+  { const L = p.launch; L.vel.fill(0); L.active = L.active2 = L.apply = L.wallJump = L.wasSquid = false; L.count = 0; L.frame = 0; L.speed = 0; L.lock = 0; L.lockStick[0] = 0; L.lockStick[1] = 0; }
   p.transform = 0; p.squidBuf = 0;
   p.ink = 1; p.inkRecoverStop = 0; p.inkRecoverStopNoInk = 0; p.inkRecoverStopSquid = 0;
   p.inkConsumeHold = 0; p.inkStealthFrames = 0; p.inkStealthBlend = 0;
@@ -192,12 +199,15 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
 
   // ===== 슬롯18 메인 계산 =====
   readInput(p, pad);
-  readCamera(w, ctx.aim, ctx.right);
+  readCamera(w, ctx.aim, ctx.right, ctx.up);
   const sq = isSquidMove(p.state);
   // 아군 잉크 속 잠복 0x7102458cfc: 상태 ∈ S(Surprise 제외) && 천장 타이머 0 && 발밑 분류 아군
   p.swimming = sq && p.state !== 0x88 && p.ceilTimer <= 0 && p.step.cls < 2;
   const weaponActive = p.weapon.frame >= 0;
   const shooting = !sq && (weaponActive ? p.weapon.shooting : p.fireHeld && !p.squidRequest);
+  // +0xad8 조건값은 [미확정] — 사격 자세면 1 로 둔다
+  inputPost(p, ctx.up, w.frame, shooting ? 1 : 0);
+  launchPre(p);
   // 모델 정면 [추정]: 사람은 조준 방향, 오징어는 이동 방향
   if (!sq) p.facing.set(ctx.aim);
   else {
@@ -206,42 +216,42 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   }
   const bodyInAir = !p.onGround;
   verticalUpdate(p, bodyInAir);
-  // 벽 점프: 이번 프레임 점프 눌림 && 바닥 법선이 벽 && 최근 6프레임 안 벽 붙기 && 스틱이 벽 반대쪽 [추정: 입력 링 버퍼]
-  const wallKick = sq && p.jumpPressed && p.floorN[1] < C.FLOOR_NY && ctx.clingRecent > 0 && wallKickStick(p, ctx.aim);
-  const j = tryJump(p, wallKick);
-  if (j !== "none") {
-    p.sinceJump = 0;
-    groundReset(p, true);
-    requestJumpState(p, shooting);
-    w.events.emit({ type: "Jump", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]), wall: j === "wall" });
-  }
+  const jctx = { aim: ctx.aim, frame: w.frame, shooting };
+  const j = tryJump(p, jctx);
+  if (j.kind === "jump") groundReset(p, true);
+  if (j.kind !== "none") w.events.emit({ type: "Jump", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]), wall: j.kind === "wall" });
   jumpHoldAdd(p);
+  const wc = wallChargeStage(p, jctx);
+  if (wc === "wall" || wc === "latch") w.events.emit({ type: "Jump", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]), wall: true });
   if (C.VY_EPS < p.vy || 0 < p.airFrames) p.riseFrames++;
   else p.riseFrames = 0;
   updateInputDir(p, ctx.aim, ctx.right);
-  updateMove(p, { shooting, aimFold: shooting });
+  updateMove(p, { shooting });
   if (p.launch.apply) {
-    p.vel.set(p.launch.vel);
-    if (!sq) airCorrection(p, p.vel);
-    p.cap = f32(Math.hypot(p.launch.vel[0], p.launch.vel[1], p.launch.vel[2]));
+    const v = p.vel;
+    v.set(p.launch.vel);
+    if (!p.launch.wasSquid) airCorrection(p, v);
+    p.cap = f32(Math.sqrt(f32(f32(f32(v[0] * v[0]) + f32(v[1] * v[1])) + f32(v[2] * v[2]))));
     p.launch.apply = false;
   }
   composeFinal(p);
   p.forceAir = C.VY_EPS < p.vy;
 
-  // ===== Phive 캐릭터 컨트롤러 =====
+  // ===== Phive Entity 월드(단계0 그룹6): 캐릭터 컨트롤러 → native 솔버 → SplResultPlayer → write-back (body.ts) =====
+  // 원본 순서 phive_controller.md §6.7: 슬롯18 → Phive → 접촉 반응 큐(플레이어 몸체 콜백 없음) → 슬롯19/20/21
   p.prevPos.set(p.pos);
   let res: BodyStepResult;
-  const onGroundMode = !p.forceAir && p.onGround;
   if (col) {
-    const limit = p.wallCling ? C.OVERHANG_NY : C.FLOOR_NY;
-    const disp = onGroundMode ? [p.final[0], f32(p.final[1] - p.vy), p.final[2]] : p.final;
-    const filter = col.bodyFilter(playerBodyFilter(sq));
-    res = stepBody(col, p.pos, disp, { groundLimit: limit, up: onGroundMode ? p.floorN : UP, onGround: onGroundMode, filter });
+    const fallbackMask = playerBodyFilter(sq).fallbackMask;
+    const paint = w.paint as { monitorCounts?: (pos: ArrayLike<number>, n: ArrayLike<number>) => [number, number, number, number] } | null;
+    res = stepBody(col, bodyOf(p), p.pos, {
+      final: p.final, vy: p.vy, forceAir: p.forceAir, state: p.state, inputDir: p.dir, inputMag: p.inputMag,
+      team: p.team, ownThr: p.step.ownThr, enemyThr: p.step.enemyThr,
+      inkCounts: paint ? (typeof paint.monitorCounts === "function" ? paint.monitorCounts.bind(paint) : sampleCounts(w)) : null,
+      materialOf: (tri) => col.material(col.mesh.mat[tri]),
+    }, (sub) => col.playerTerrainFilter(sub, fallbackMask));
   } else {
-    for (let i = 0; i < 3; i++) p.pos[i] = f32(p.pos[i] + p.final[i]);
-    res = { supported: p.pos[1] <= 0, gn: [0, 1, 0], gp: [p.pos[0], 0, p.pos[2]], gtri: -1, contacts: [] };
-    if (p.pos[1] < 0) p.pos[1] = 0;
+    res = noCollisionStep(p.pos, p.final);
   }
   for (let i = 0; i < 3; i++) p.unexplained[i] = f32(f32(p.pos[i] - p.prevPos[i]) - p.final[i]);
 
@@ -251,9 +261,9 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   p.groundMaterial = p.onGround && col && res.gtri >= 0 ? col.mesh.mat[res.gtri] : p.onGround ? p.groundMaterial : -1;
   if (co.landed && !wasGround) w.events.emit({ type: "Land", owner: p.id, pos: v3(p.pos[0], p.pos[1], p.pos[2]), air: co.landedAir });
   // 발밑 잉크·벽 붙기
-  updateStepPaint(p, w.paint, p.onGround ? p.groundP : p.pos);
+  // 발밑 샘플 = 접지 정보 O+0x48 델리게이트(Disk 1×1 모니터 4개 가중 합, body.ts/contact.ts)
+  updateStepPaint(p, bodyOf(p).monitors.sample());
   updateCling(w, p, res);
-  ctx.clingRecent = p.wallCling ? C.WALLKICK_RING : Math.max(0, ctx.clingRecent - 1);
   updateOrdinaryDisplay(w, p, res);
   // 상태기계
   if (co.landedAir > 0) requestLandState(p, shooting);
@@ -289,11 +299,19 @@ function stepPlayer(w: World, p: PlayerState, ctx: Ctx): void {
   w.shared.set("debug", dbg);
 }
 
-const UP = [0, 1, 0];
 const DOWN = v3(0, -1, 0);
 const O = v3();
 const DISPLAY_PROBE_START = v3();
 const DISPLAY_PROBE_END = v3();
+
+/** PaintWorld 가 모니터 카운트를 주지 않으면(대체 구현) sample(반경 1) 비율을 카운트 형식으로 바꾼다 — 웹 대체 경로. */
+function sampleCounts(w: World): (pos: ArrayLike<number>, n: ArrayLike<number>) => [number, number, number, number] {
+  return (pos) => {
+    O[0] = pos[0]; O[1] = pos[1]; O[2] = pos[2];
+    const r = w.paint ? w.paint.sample(O, 1).ratio : [0, 0, 0];
+    return [Math.round(r[0] * 1000), Math.round((r[1] ?? 0) * 1000), Math.round((r[2] ?? 0) * 1000), 1000];
+  };
+}
 
 /** Ordinary static-ground supplier. Sphere geometry follows the native probe, but PC contact
  * comes from the web collision adapter. This is not a whole Phive corner query or a wall-edge producer. */

@@ -32,6 +32,8 @@ export interface PlayerLike {
   /** 상태 요청 재생 속도(0x7102447bfc rate, PlayerState.stateRate) — 있으면 render 규칙 대신 사용 */
   stateRate?: number;
   display?: { hidden: boolean };
+  /** [본체+0x698] 잉크 탱크 잔량 0..1 */
+  ink?: number;
 }
 
 export interface PlayerSnap {
@@ -47,6 +49,10 @@ export interface PlayerSnap {
   animSpeed: number | null;
   animRate: number | null;
   displayHidden: boolean | null;
+  /** 본체+0x698 tank remaining (PlayerState.ink) */
+  ink?: number | null;
+  /** Shooter lack path this game frame (weapon "NoInk" event) → tank+0x4c0 = max(·,60) */
+  lack?: boolean;
 }
 
 function v3(v: V3 | undefined): [number, number, number] | null {
@@ -77,5 +83,6 @@ export function readPlayer(w: World): PlayerSnap | null {
     animSpeed: num(p.animSpeed),
     animRate: num(p.stateRate),
     displayHidden: typeof p.display?.hidden === "boolean" ? p.display.hidden : null,
+    ink: num(p.ink),
   };
 }

@@ -25,6 +25,20 @@ export function textureForSlot(f:FresMaterial,slot:string):string|null {return f
 const literal=(v:number):string=>Number.isInteger(v)?v+".0":Math.fround(v).toString();
 const vec=(v:number[]):string=>"vec4("+v.slice(0,4).map(literal).join(",")+")";
 export interface HoianUniforms {myTeamColor:{value:THREE.Vector3};myTeamColorHueComplement:{value:THREE.Vector3};texMatrices?:Record<number,{row0:{value:THREE.Vector4};row1:{value:THREE.Vector4};verified:boolean}>}
+/** Mat values animated by FMAA (tank Gauge/InkShortage): uniforms instead of compile-time literals, same initial FRES values. */
+const LIVE_PARAMS:Record<string,string>={albedo_color:"hLiveAlbedo",team_color_blend:"hLiveTeamBlend",team_color_blend_alpha:"hLiveTeamBlendAlpha",emission_intensity:"hLiveEmissionIntensity"};
+export function setHoianMaterialParam(mat:THREE.Material,name:string,offsets:Record<string,number>):boolean {
+  const live=mat.userData.hoianLive as Record<string,{value:number|THREE.Vector4}>|undefined,u=live?.[LIVE_PARAMS[name]];
+  if(!u)return false;
+  for(const [key,v] of Object.entries(offsets)){const o=Number(key);
+    if(u.value instanceof THREE.Vector4){if(o%4||o>12)return false;u.value.setComponent(o/4,Math.fround(v));}
+    else if(o===0)u.value=Math.fround(v);else return false;}
+  // Default emission path keeps three's emissive×emissiveMap: native Emm·emission_color·emission_intensity.
+  const emi=mat.userData.hoianEmissionDefault as number[]|undefined;
+  if(name==="emission_intensity"&&emi&&(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial)
+    (mat as THREE.MeshStandardMaterial).emissive.setRGB(Math.fround(emi[0]*Number(u.value)),Math.fround(emi[1]*Number(u.value)),Math.fround(emi[2]*Number(u.value)),THREE.LinearSRGBColorSpace);
+  return true;
+}
 /** Native Mat two-vec4 matrix input. TexSrt -> matrix producer is a separate native question. */
 export function setHoianTexMatrix(u:HoianUniforms,index:number,packed:readonly number[]):void {
   const m=u.texMatrices?.[index];if(!m||packed.length!==8||packed.some(v=>!Number.isFinite(v)))throw new Error("Hoian native texture matrix unavailable: "+index);
@@ -136,8 +150,13 @@ export function applyHoian(mat:THREE.MeshStandardMaterial,f:FresMaterial,team:Ma
   const useAlbedo=!["False","0"].includes(option(f,"enable_albedo_tex","1"));
   const alb=vector(f,"albedo_color",[1,1,1,1]),emi=vector(f,"emission_color",[1,1,1,1]),backlight=vector(f,"transmission_color_backlight",[1,1,1,1]);
   if(!useAlbedo){mat.map=null;mat.color.setRGB(1,1,1);}
+  const live={hLiveAlbedo:{value:new THREE.Vector4(...[0,1,2,3].map(i=>Math.fround(alb[i]??1)))},hLiveTeamBlend:{value:parameter(f,"team_color_blend",0)},
+    hLiveTeamBlendAlpha:{value:parameter(f,"team_color_blend_alpha",0)},hLiveEmissionIntensity:{value:parameter(f,"emission_intensity",0)}};
+  mat.userData.hoianLive=live;
+  const replace2=["0","1","2","3"].some(i=>option(f,"enable_calc_color"+i,"False")==="True"&&option(f,"blitz_calc_color"+i+"_replace_color","0")==="2");
+  if(ect==="0"&&!replace2&&!rawCalcEmission)mat.userData.hoianEmissionDefault=emi.slice(0,3);
   mat.onBeforeCompile=sh=>{
-    Object.assign(sh.uniforms,uniforms,textures);
+    Object.assign(sh.uniforms,uniforms,textures,live);
     const available=new Set<number>();
     if(textures.hResource0Tex?.value)available.add(9);if(textures.hResource1Tex?.value)available.add(10);
     if(textures.hTransmissionTex?.value)available.add(4);
@@ -149,20 +168,22 @@ export function applyHoian(mat:THREE.MeshStandardMaterial,f:FresMaterial,team:Ma
       uvWrites+="hUV"+i+"=vec2("+src+".x*hTexRow0_"+i+".x+"+src+".y*hTexRow0_"+i+".z+hTexRow1_"+i+".x,"+src+".x*hTexRow0_"+i+".y+"+src+".y*hTexRow0_"+i+".w+hTexRow1_"+i+".y);\n";
     }
     for(const key of Object.keys(textures))fragment+="uniform sampler2D "+key+";\n";
+    fragment+="uniform vec4 hLiveAlbedo;\nuniform float hLiveTeamBlend,hLiveTeamBlendAlpha,hLiveEmissionIntensity;\n";
     const sample=(key:string):string=>"texture2D("+key+",hUV"+selectors[key]+")";
-    let setup="vec4 hCalcAlbedo="+(useAlbedo?"diffuseColor":vec(alb))+";\n";
-    if(tcm==="2"&&textures.hTcl?.value)setup+="hCalcAlbedo.rgb=mix(hCalcAlbedo.rgb,myTeamColor,clamp("+sample("hTcl")+".r+"+literal(parameter(f,"team_color_blend_alpha",0))+",0.,1.));\n";
-    else if(tcm==="3")setup+="hCalcAlbedo.rgb=mix("+vec(alb)+".rgb,myTeamColor,clamp("+literal(parameter(f,"team_color_blend",0))+",0.,1.));\n";
+    let setup="vec4 hCalcAlbedo="+(useAlbedo?"diffuseColor":"hLiveAlbedo")+";\n";
+    if(tcm==="2"&&textures.hTcl?.value)setup+="hCalcAlbedo.rgb=mix(hCalcAlbedo.rgb,myTeamColor,clamp("+sample("hTcl")+".r+hLiveTeamBlendAlpha,0.,1.));\n";
+    else if(tcm==="3")setup+="hCalcAlbedo.rgb=mix(hLiveAlbedo.rgb,myTeamColor,clamp(hLiveTeamBlend,0.,1.));\n";
     setup+="vec4 hCalcRoughness=vec4(max(roughnessFactor,.0001)),hCalcMetalness=vec4(metalnessFactor),hCalcTransmission="+vec(backlight)+",hCalcUnderFilm="+vec(vector(f,"under_film_color",[1,1,1,1]))+";\n";
-    setup+="vec4 hCalcOpacity=vec4(diffuseColor.a),hCalcEmission="+(rawCalcEmission&&textures.hNativeEmissionTex?.value?"vec4("+sample("hNativeEmissionTex")+".rgb*"+vec(emi)+".rgb,1.)":"vec4(totalEmissiveRadiance,1.)")+";\n";
+    const rawEmission=!!(rawCalcEmission&&textures.hNativeEmissionTex?.value);
+    setup+="vec4 hCalcOpacity=vec4(diffuseColor.a),hCalcEmission="+(rawEmission?"vec4("+sample("hNativeEmissionTex")+".rgb*"+vec(emi)+".rgb,1.)":"vec4(hLiveEmissionIntensity!=0.?totalEmissiveRadiance/hLiveEmissionIntensity:vec3(0.),1.)")+";\n";
     if(available.has(9))setup+="vec4 hResource0="+sample("hResource0Tex")+";\n";
     if(available.has(10))setup+="vec4 hResource1="+sample("hResource1Tex")+";\n";
     if(available.has(4))setup+="hCalcTransmission="+sample("hTransmissionTex")+"*"+vec(backlight)+";\n";
     if(option(f,"transmission_multi_color","0")==="2")setup+="hCalcTransmission.rgb*=myTeamColor;\n";
     setup+=calcColorGlsl(f,available,skipped);
     setup+="diffuseColor.rgb=hCalcAlbedo.rgb;diffuseColor.a=hCalcOpacity.w;roughnessFactor=hCalcRoughness.x;metalnessFactor=hCalcMetalness.x;\n";
-    const emiInt=literal(parameter(f,"emission_intensity",0));
-    if(ect==="1")setup+="totalEmissiveRadiance=diffuseColor.rgb*hCalcEmission.rgb;\n";
+    const emiInt="hLiveEmissionIntensity";
+    if(ect==="1")setup+="totalEmissiveRadiance=diffuseColor.rgb*hCalcEmission.rgb"+(rawEmission?"":"*"+emiInt)+";\n";
     else if(ect==="2")setup+="totalEmissiveRadiance=myTeamColor*"+vec(emi)+".rgb*"+emiInt+";\n";
     else if(["0","1","2","3"].some(i=>option(f,"enable_calc_color"+i,"False")==="True"&&option(f,"blitz_calc_color"+i+"_replace_color","0")==="2"))
       setup+="totalEmissiveRadiance=hCalcEmission.rgb*"+emiInt+";\n";

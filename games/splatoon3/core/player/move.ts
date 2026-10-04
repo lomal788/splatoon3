@@ -1,49 +1,180 @@
 // 담당: [physics] — 이동 속도 갱신 0x710245b2b4(일반 경로)와 공중/접지 보정 0x710245f964.
 // 근거: docs/player/movement_physics.md §6.1~6.5, 디컴파일 analysis/decomp/move/move_full_main.c 10277~12773행.
 // 연산마다 f32 반올림, 디컴파일의 연산 순서를 그대로 따른다(FMA 없음 — §9.4).
+import { directionSlerp } from "../camera/native_math.ts";
 import { f32, type Vec3 } from "../fmath.ts";
 import * as C from "./consts.ts";
-import { curve } from "./gear.ts";
-import type { PlayerState } from "./state.ts";
+import { curve, squidSpeedK } from "./gear.ts";
+import type { MoveHistoryEntry, PlayerState } from "./state.ts";
 import { isSquidMove } from "./states.ts";
 
-/** sead 방향 보간 0x7101252ff0(t, out, a, b): 크기는 선형, 방향은 구면 보간. 원본은 sead 사인 표를 쓰므로 비트 일치는 아님. */
+/** sead 방향 보간 0x7101252ff0(t, out, a, b, axis = null): 크기는 선형, 방향은 sead 사인·아탄 표 계산(movement_physics.md §6.3.3). */
 export function slerpDir(t: number, out: Vec3, a: ArrayLike<number>, b: ArrayLike<number>): Vec3 {
-  if (t <= 0) {
-    out[0] = a[0]; out[1] = a[1]; out[2] = a[2];
-    return out;
-  }
-  if (t >= 1) {
-    out[0] = b[0]; out[1] = b[1]; out[2] = b[2];
-    return out;
-  }
-  let ax = a[0], ay = a[1], az = a[2];
-  const la = f32(Math.sqrt(f32(f32(f32(ax * ax) + f32(ay * ay)) + f32(az * az))));
-  if (la > 0) {
-    const i = f32(1 / la);
-    ax = f32(ax * i); ay = f32(ay * i); az = f32(az * i);
-  }
-  if (la === 0) { ax = 0; ay = 0; az = 0; }
-  let bx = b[0], by = b[1], bz = b[2];
-  const lb = f32(Math.sqrt(f32(f32(f32(bx * bx) + f32(by * by)) + f32(bz * bz))));
-  if (lb > 0) {
-    const i = f32(1 / lb);
-    bx = f32(bx * i); by = f32(by * i); bz = f32(bz * i);
-  }
-  if (lb === 0) { bx = 0; by = 0; bz = 0; }
-  const d = f32(f32(f32(az * bz) + f32(ay * by)) + f32(ax * bx));
-  let wa = f32(1 - t), wb = t;
-  if (d <= 0.999999 && d >= -0.999999) {
-    const th = f32(Math.acos(d));
-    const s = f32(Math.sin(th));
-    wa = f32(f32(Math.sin(f32(f32(1 - t) * th))) / s);
-    wb = f32(f32(Math.sin(f32(t * th))) / s);
-  }
-  const mag = f32(f32(la * f32(1 - t)) + f32(lb * t));
-  out[0] = f32(f32(f32(bx * wb) + f32(ax * wa)) * mag);
-  out[1] = f32(f32(f32(by * wb) + f32(ay * wa)) * mag);
-  out[2] = f32(f32(f32(bz * wb) + f32(az * wa)) * mag);
+  const r = directionSlerp(t, a, b);
+  out[0] = r[0]; out[1] = r[1]; out[2] = r[2];
   return out;
+}
+
+/** 아군 잉크 속 잠복 0x7102458cfc: 상태 ∈ S(Surprise 제외) && 천장 타이머 ≤ 0 && 발밑 분류 아군. 코옵·레일·토관 조건은 없음. */
+export function squidInk(p: PlayerState): boolean {
+  return isSquidMove(p.state) && p.state !== 0x88 && p.ceilTimer <= 0 && p.step.cls < 2;
+}
+
+/** 상승 중: vs + jump3d.y > 0.001 && +0x734 < +0x77c && StepPaint+0x30 ∉ {2,3} (§6.8.2) */
+export function rising(p: PlayerState): boolean {
+  return C.VY_EPS < f32(p.vy + p.jump3d[1]) && p.sinceJump < p.jumpKeep && p.step.cls !== 2 && p.step.cls !== 3;
+}
+
+/** 롤로 떠서 발사 높이 위에 있는 동안: L+0x3c && !L+0x41 && L+0x3f && 액터 높이 ≥ L+0x30 */
+export function rollAirborne(p: PlayerState): boolean {
+  const L = p.launch;
+  return L.active && !L.wallJump && L.wasSquid && !(p.pos[1] < L.height);
+}
+
+/**
+ * 입력 함수 0x710249f494 의 스틱 부분: 본체+0x786(직전 +0x785 기준, 0x71024a0564), 스틱 공급(잠금·덮어쓰기),
+ * 기록·데드존(0x71024a0850~0x71024a093c). 원본 실행 3009건 비트 일치식(§6.3.2).
+ */
+export function inputStick(p: PlayerState, srcX: number, srcY: number): void {
+  p.squidHoldFrames = p.squidInput ? (p.squidHoldFrames >= C.SQUID_HOLD_MAX ? C.SQUID_HOLD_MAX : p.squidHoldFrames + 1) : 0;
+  p.stickSrc[0] = f32(srcX);
+  p.stickSrc[1] = f32(srcY);
+  let x = 0, y = 0;
+  if (p.state !== 0x10e && p.stickLock < 1) {
+    if (p.launch.lock > 0) { x = p.launch.lockStick[0]; y = p.launch.lockStick[1]; }
+    else { x = p.stickSrc[0]; y = p.stickSrc[1]; }
+  }
+  p.stick[0] = x;
+  p.stick[1] = y;
+  const len = f32(Math.sqrt(f32(f32(y * y) + f32(x * x))));
+  let m: number;
+  if (len <= C.STICK_DEADZONE) m = 0;
+  else if (len >= 1) m = 1;
+  else {
+    const d = f32(1 - C.STICK_DEADZONE);
+    m = d === 0 ? 0 : f32(f32(len - C.STICK_DEADZONE) / d);
+  }
+  const prev = p.stickMagSmooth;
+  p.stickMagSmooth = prev > m ? f32(prev + f32(f32(m - prev) * C.STICK_FALL)) : m;
+  p.stickMag01 = m;
+}
+
+const sgn1 = (v: number): number => (v >= 0 ? 1 : -1);
+
+/**
+ * 벽 입력 계수 0x71024a7100(S = 본체+0x474, N = 본체+0x180, D = 본체+0xd40, C = 카메라 기저 Y).
+ * +0x484 = S+0x10, +0x488 = S+0x14. 원본 실행 6000건 비트 일치식(§6.3.2).
+ */
+export function wallInputUpdate(p: PlayerState, cam: ArrayLike<number>): void {
+  const N = p.floorN, D = p.fwdAxis;
+  const nx = N[0], ny = N[1], nz = N[2], dx = D[0], dy = D[1], dz = D[2], cx = cam[0], cy = cam[1], cz = cam[2];
+  const sx = p.stick[0], sy = p.stick[1];
+  const ax = Math.abs(sx), sgx = sgn1(sx);
+  const wx = f32(f32(ny * dz) - f32(nz * dy));
+  const wy = f32(f32(nz * dx) - f32(dz * nx));
+  const wz = f32(f32(dy * nx) - f32(ny * dx));
+  const e = f32(f32(f32(wx * cx) + f32(wy * cy)) + f32(wz * cz));
+  const f = f32(f32(f32(dx * cx) + f32(dy * cy)) + f32(dz * cz));
+  const ay = Math.abs(sy), ae = Math.abs(e), sge = sgn1(e), af = Math.abs(f);
+  if (!(ny < C.FLOOR_NY)) {
+    let o10 = f32(p.wallInputDir + -1);
+    if (o10 <= 0) o10 = 0;
+    let o14 = f32(p.wallInput - C.WALL_INPUT_DECAY);
+    if (o14 <= 0) o14 = 0;
+    p.wallInputDir = o10;
+    p.wallInput = o14;
+    return;
+  }
+  let w = f32(1 - ny);
+  if (w > 1) w = 1;
+  const a = f32(f32(f32(sgx * 0.5) * sge) + 0.5);
+  const t1 = f32(w * f32(ax * f32(f32(ae * a) + -0.5)));
+  const sgf = sgn1(f);
+  const s16 = sy >= 0 ? sgf : -sgf;
+  const t2 = f32(w * f32(ay * f32(f32(af * f32(0.5 - s16)) + -0.5)));
+  const s20 = f32(t1 + t2);
+  p.wallInputDir = s20 < -1 ? -1 : s20 > 1 ? 1 : s20;
+  let g: number;
+  if (f < 0) g = af;
+  else {
+    const r = ae <= 0 ? 0 : C.WALL_INPUT_E <= ae ? 1 : f32(ae / C.WALL_INPUT_E);
+    const k = f32(C.WALL_INPUT_G + f32(f32(1 - C.WALL_INPUT_G) * r));
+    g = af <= 0 ? 0 : k <= af ? 1 : k === 0 ? 0 : f32(af / k);
+  }
+  let pm = f32(-sgx);
+  pm = f32(sge * pm);
+  const q0 = f32(f32((pm > 0 ? pm : 0) + -0.5));
+  const s2 = f32(ax * f32(f32(ae * q0) + 0.5));
+  const q = f32(f32(f32((s16 > 0 ? s16 : 0) + -0.5) * g) + 0.5);
+  const s1 = f32(s2 + f32(ay * q));
+  p.wallInput = s1 < 0 ? 0 : s1 > 1 ? 1 : s1;
+}
+
+/** 이동 이력 1항목 추가(입력 함수, [0x71058bbb82] = 1 경로) — §6.4.2 */
+export function pushHistory(p: PlayerState): void {
+  const v = p.vel;
+  let x = v[0], z = v[2], y = 0;
+  const l = f32(Math.sqrt(f32(f32(f32(x * x) + 0) + f32(z * z))));
+  const wall = p.floorN[1] < C.FLOOR_NY;
+  if (0 < l) {
+    const i = f32(1 / l);
+    x = f32(x * i); y = f32(i * 0); z = f32(z * i);
+  }
+  const speed = C.FLOOR_NY <= p.floorN[1]
+    ? f32(Math.sqrt(f32(f32(f32(v[0] * v[0]) + f32(v[1] * v[1])) + f32(v[2] * v[2]))))
+    : f32(v[1] + p.jump3d[1]);
+  const H = p.history, cap = H.buf.length;
+  if (!(H.count < cap)) {
+    H.start = H.start + 1 < cap ? H.start + 1 : 0;
+    H.count--;
+  }
+  let i = H.start + H.count;
+  if (cap <= i) i -= cap;
+  H.count++;
+  const e = H.buf[i];
+  e.dir[0] = x; e.dir[1] = y; e.dir[2] = z;
+  e.speed = speed;
+  e.squidInk = squidInk(p);
+  e.wall = wall;
+}
+
+/** 최신 항목부터 k번째(0 = 최신) */
+export function historyAt(p: PlayerState, k: number): MoveHistoryEntry {
+  const H = p.history, cap = H.buf.length;
+  let i = H.start + H.count - 1 - k;
+  if (cap <= i) i -= cap;
+  return H.buf[i];
+}
+
+/**
+ * 입력 함수의 나머지: 벽 입력 계수, 이동 이력, 연속 발사 횟수 리셋(§6.8.1), 잠복 연속 프레임 +0x790(0x71024a4318),
+ * 스틱 잠금 +0xaec 감소, 사격 자세 유지 +0xad8 = max(x − 1, 조건값), 카메라 리셋 래치 +0xab0.
+ */
+export function inputPost(p: PlayerState, cam: ArrayLike<number>, frame: number, aimCond: number, camResetPressed = false): void {
+  wallInputUpdate(p, cam);
+  p.stickLock = Math.max(p.stickLock, 1) - 1;
+  p.aimHold = Math.max(p.aimHold - 1, aimCond);
+  p.camResetLatch = camResetPressed;
+  pushHistory(p);
+  const L = p.launch;
+  if (0 < L.count) {
+    if (!isSquidMove(p.state) || ((L.frame + C.LAUNCH_RESET_FRAMES) | 0) < Math.max(frame | 0, 0)) L.count = 0;
+  }
+  if (isSquidMove(p.state) && (squidInk(p) || rising(p))) p.squidInkFrames = Math.max(p.squidInkFrames, 0) + 1;
+  else p.squidInkFrames = (p.squidInkFrames >= 1 ? 0 : p.squidInkFrames) - 1;
+}
+
+/** 메인 계산 시작부 0x7102477780~0x71024778a4: 발사 활성 해제, 덮어쓰기 스틱 프레임 감소. */
+export function launchPre(p: PlayerState): void {
+  const L = p.launch;
+  if (L.active || L.active2) {
+    // 대시 패널 없음, [본체+0xa668]+0x1b8 == −1(원격 아님)으로 둔다
+    if (!L.apply && 1 <= p.groundFrames && !(C.VY_EPS < p.vy)) {
+      L.active = false;
+      L.active2 = false;
+    } else if (!(p.state >= 0x82 && p.state <= 0x90)) L.active = false;
+  }
+  L.lock = Math.max(L.lock, 1) - 1;
 }
 
 const TMP = new Float32Array(3);
@@ -53,8 +184,10 @@ const TMP = new Float32Array(3);
  * aim = 본체+0x538(카메라 리그 수평 시선), right = PlayerCamera+0x68 이 가리키는 벡터(카메라 오른쪽으로 추정).
  */
 export function updateInputDir(p: PlayerState, aim: ArrayLike<number>, right: ArrayLike<number>): void {
-  p.fwdBlend = f32(C.FWD_BLEND_STEP + p.fwdBlend);
-  if (p.fwdBlend > 1) p.fwdBlend = 1;
+  if (!p.camResetLatch) {
+    p.fwdBlend = f32(C.FWD_BLEND_STEP + p.fwdBlend);
+    if (p.fwdBlend > 1) p.fwdBlend = 1;
+  } else p.fwdBlend = 0;
   const N = p.floorN;
   let cx = f32(f32(N[1] * right[2]) - f32(N[2] * right[1]));
   let cy = f32(f32(N[2] * right[0]) - f32(right[2] * N[0]));
@@ -67,6 +200,12 @@ export function updateInputDir(p: PlayerState, aim: ArrayLike<number>, right: Ar
   TMP[0] = cx; TMP[1] = cy; TMP[2] = cz;
   // s = 0.5([0x71058bbe74]) 이므로 k = |N × right| 그대로
   slerpDir(f32(1 - len), TMP, TMP, aim);
+  const L = p.launch;
+  if (L.lock === C.STICK_LOCK_WALLJUMP) {
+    L.lockAxis[0] = TMP[0]; L.lockAxis[1] = TMP[1]; L.lockAxis[2] = TMP[2];
+    L.lockK = len;
+  }
+  if (0 < L.lock) { TMP[0] = L.lockAxis[0]; TMP[1] = L.lockAxis[1]; TMP[2] = L.lockAxis[2]; }
   slerpDir(p.fwdBlend, p.fwdAxis, p.fwdAxis, TMP);
   const F = p.fwdAxis;
   const d = f32(f32(f32(F[0] * N[0]) + f32(F[1] * N[1])) + f32(F[2] * N[2]));
@@ -111,7 +250,7 @@ function targetSpeed(p: PlayerState, shooting: boolean): { target: number; raw: 
   const sq = isSquidMove(p.state);
   if (sq) {
     const squid = pp.squid[st];
-    const k = 1; // 0x710266c6e4 미판독 — 기본 1 [추정]
+    const k = squidSpeedK(pp, 0); // 특수 상태 0x16 없음 → 인자 bit0 = 0
     t = f32(f32(C.SQUID_DRY + f32(f32(f32(squid * k) - C.SQUID_DRY) * p.step.own)) + f32(f32(C.SQUID_ENEMY - C.SQUID_DRY) * enemy));
   } else {
     t = human;
@@ -164,8 +303,6 @@ const COS90 = f32(Math.cos(f32(f32(90) * f32(0.017453292))));
 export interface MoveContext {
   /** 이번 프레임 사격 자세 */
   shooting: boolean;
-  /** 공중 감쇠 접기 조건(본체+0xad8 ≥ 1 && 상태 ∉ S) — 사격 자세로 대신함 [추정] */
-  aimFold: boolean;
 }
 
 /** 0x710245b2b4 일반 경로. p.vel 갱신, p.desired/p.cap 기록. */
@@ -190,7 +327,7 @@ export function updateMove(p: PlayerState, ctx: MoveContext): void {
 
   // ---- 공중 상한 보간·착지 경직 → desired ----
   let capEff = p.cap;
-  const launchRoll = p.launch.active && !p.launch.wallJump && p.launch.wasSquid;
+  const launchRoll = rollAirborne(p);
   if (p.airFrames > 0 && !launchRoll) {
     let vx = v[0], vyy = v[1], vz = v[2];
     const vl = f32(Math.sqrt(f32(f32(f32(vx * vx) + f32(vyy * vyy)) + f32(vz * vz))));
@@ -300,7 +437,8 @@ export function updateMove(p: PlayerState, ctx: MoveContext): void {
     }
     const F = p.facing;
     let h = f32(f32(f32(f32(f32(nx * F[0]) + f32(ny * F[1])) + f32(nz * F[2])) + 1) * 0.5);
-    if (ctx.aimFold) {
+    // (본체+0xad8 ≥ 1 && 상태 ∉ S) || 전역/플래그(없음)
+    if (1 <= p.aimHold && !isSquidMove(p.state)) {
       if (h <= 0.5) h = f32(C.AIR_H_A - f32(f32(f32(h - 0.5) + f32(h - 0.5)) * f32(C.AIR_H_B - C.AIR_H_A)));
       else h = f32(1 - f32(f32(f32(h - 1) + f32(h - 1)) * f32(C.AIR_H_A - 1)));
     }
@@ -387,8 +525,7 @@ export function updateMove(p: PlayerState, ctx: MoveContext): void {
 
 /** 0x710245f964 — 이동 속도 v 의 공중/접지 보정 (§6.5). */
 export function airCorrection(p: PlayerState, v: Vec3): void {
-  const L = p.launch;
-  if (L.active && !L.wallJump && L.wasSquid) return; // 롤 발사 중(시각 조건은 근사: 활성 동안)
+  if (rollAirborne(p)) return;
   const air = p.airFrames;
   if (air < C.AIR_DAMP_START) {
     if (0 < air || (p.sinceJump === 0 && C.VY_EPS < p.vy)) {

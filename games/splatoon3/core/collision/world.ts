@@ -3,8 +3,11 @@
 import type { Vec3 } from "../fmath.ts";
 import { v3 } from "../fmath.ts";
 import { Layer, type CollisionWorld, type DynamicShape, type Hit, type SphereQueryFilter } from "../types.ts";
-import { LAYER_HIT_MASK, SUB_LAYER_HIT_MASK, hitsLayer, layerFromFilter, layerFromName, maskValue, PhiveLayer } from "./filter.ts";
-import { TriMesh, type Penetration, type SweepResult, type TriFilter } from "./mesh.ts";
+import {
+  combinedPairFilter, LAYER_HIT_MASK, LAYER_TABLE_DEFAULT_GROUND, LAYER_TABLE_DEFAULT_SPLPLAYER, SUB_LAYER_HIT_MASK, hitsLayer,
+  layerFromFilter, layerFromName, maskValue, PhiveLayer, type PairBody,
+} from "./filter.ts";
+import { TriMesh, type BodyContact, type Penetration, type SweepResult, type TriFilter } from "./mesh.ts";
 
 export interface MaterialInfo {
   name: string;
@@ -39,6 +42,7 @@ export class MeshCollisionWorld implements CollisionWorld {
   /** 에셋이 없어 평면으로 대체 중인지 */
   readonly fallback: boolean;
   private readonly dyn = new Map<number, DynEntry>();
+  private readonly ptFilters = new Map<string, TriFilter>();
 
   constructor(mesh: TriMesh, materials: MaterialInfo[], fallback = false) {
     this.mesh = mesh;
@@ -169,6 +173,37 @@ export class MeshCollisionWorld implements CollisionWorld {
 
   overlapBody(a: ArrayLike<number>, b: ArrayLike<number>, r: number, filter: TriFilter, out: Penetration[]): Penetration[] {
     return this.mesh.overlapSegment(a[0], a[1], a[2], b[0], b[1], b[2], r, filter, out);
+  }
+
+  /**
+   * 캐릭터 몸(세로 캡슐 선분 a→b, 반경 r)과 삼각형별 최근접 접촉(분리 거리 d ≤ reach). 원본 native manifold·TOI 생성의 대체(PHY05 [미확정]):
+   * 삼각형마다 한 접촉, 법선 = 삼각형 최근접점 → 몸 쪽, d = 거리 − r(음수 = 침투), face = 삼각형 (b−a)×(c−a) 정규화(원본 winding 유지).
+   */
+  bodyContacts(a: ArrayLike<number>, b: ArrayLike<number>, r: number, reach: number, filter: TriFilter, out: BodyContact[]): BodyContact[] {
+    return this.mesh.segmentContacts(a[0], a[1], a[2], b[0], b[1], b[2], r, reach, filter, out);
+  }
+
+  /**
+   * 플레이어 몸체 ↔ 지형 삼각형 COL02 필터 0x7103c5e244 [실행 식]: 플레이어 F(L 5, S = 하위 레이어, bit28 0) ↔ 지형 F(L 3, bit28 1, 삼각형 행).
+   * 비교 그룹: 플레이어 팀+1 ≠ 0, 지형 0 → Default 표 [판독]. 플레이어 F+0x18/+0x1c(Blockable 마스크)와 지형 F+0x18/+0x1c 의 런타임 값은
+   * raw 이름→숫자 연결이 [미확정]이라 전부 허용(0xffffffff)으로 둔다. 원시 행이 없는 재질(웹 데이터)은 웹 Layer 비트로 대신 판정한다.
+   */
+  playerTerrainFilter(subLayer: number, fallbackMask: number): TriFilter {
+    const key = `${subLayer}:${fallbackMask}`;
+    let f = this.ptFilters.get(key);
+    if (f) return f;
+    const player: PairBody = { L: PhiveLayer.SplPlayer, S: subLayer, m18: 0xffffffff, m1c: 0xffffffff, bit28: false, group: 1 };
+    const ground: PairBody = { L: PhiveLayer.Ground, S: 0, m18: 0xffffffff, m1c: 0xffffffff, bit28: true, group: 0 };
+    const noRow = { compound: false, cb8: 0, cbc: 0, row: null };
+    const cache = this.materials.map((mt) => {
+      if (mt.hitMask === null) return (mt.layer & fallbackMask) !== 0;
+      const row = { compound: false, cb8: 0, cbc: 0, row: [mt.hitMask >>> 0, (mt.subMask ?? 0xffffffff) >>> 0] as [number, number] };
+      return combinedPairFilter(player, noRow, ground, row, LAYER_TABLE_DEFAULT_SPLPLAYER, LAYER_TABLE_DEFAULT_GROUND) === 1;
+    });
+    const m = this.mesh.mat;
+    f = (tri) => cache[m[tri]] ?? true;
+    this.ptFilters.set(key, f);
+    return f;
   }
 
   /** 맵 경계(낙하 판정 보조). */

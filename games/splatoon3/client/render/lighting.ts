@@ -3,6 +3,7 @@ import { directionalSH, F, mul, type V3 } from "./graphics_math.ts";
 import { lightGrid, staticSpotRigs } from "./dynamic_lights.ts";
 import { CubeSHProjection, SH_CAPTURE_POLICY } from "./sh_projection.ts";
 import type { NativeShadowState } from "./shadows.ts";
+import { NativeEnvironment } from "./env_prefilter.ts";
 
 type Json=Record<string,unknown>;
 const obj=(v: unknown):Json=>v&&typeof v==="object"?v as Json:{};
@@ -14,6 +15,7 @@ function vector(v:unknown,d:number[]):number[] {
 export class LightingState {
   shadows:NativeShadowState|null=null;
   readonly projection=new CubeSHProjection();
+  readonly env=new NativeEnvironment();
   readonly uniforms = {
     hLightColor:{value:new THREE.Vector3(1,1,1)}, hLightAlpha:{value:1}, hLightDirection:{value:new THREE.Vector3(0,-1,0)},
     hSH:{value:Array.from({length:7},()=>new THREE.Vector4())},
@@ -26,12 +28,13 @@ export class LightingState {
     hDynAtt:{value:Array.from({length:30},()=>new THREE.Vector4())},
     hDynPos:{value:Array.from({length:30},()=>new THREE.Vector4())},
     hDynDir:{value:Array.from({length:30},()=>new THREE.Vector4())},
+    ...this.env.uniforms,
   };
   readonly stats = { rigs:0, gridLights:0, occupiedCells:0, captures:0, shSource:"native startup fallback", environmentSource:"none", skyCapture:"Hoian cube27: native luminance/saturation; Illuminate and other cube materials remain" };
   private raw:unknown=null;
   private cube:THREE.WebGLCubeRenderTarget|null=null;
   private prefilter:THREE.WebGLRenderTarget|null=null;
-  configure(raw:unknown,color:V3,intensity:number,direction:V3):void {
+  configure(raw:unknown,color:V3,intensity:number,direction:V3,highlight:THREE.Texture|null=null):void {
     this.raw=raw;
     const u=this.uniforms,r=obj(obj(raw).rendering),fog=obj(r.Fog),shadow=obj(obj(r.Shadow).BakeShadow);
     u.hLightColor.value.set(...color.map(v=>mul(v,intensity)) as V3);u.hLightDirection.value.set(...direction);
@@ -40,6 +43,8 @@ export class LightingState {
     const rgba=main.Color??obj(tcl.defaultDay).DiffuseColor??[...color,1];
     const alpha=Array.isArray(rgba)?rgba[3]:obj(rgba).A??obj(rgba).a;
     u.hLightAlpha.value=mul(typeof alpha==="number"?alpha:1,intensity);
+    const rgbaArray=Array.isArray(rgba)?rgba as number[]:[Number(obj(rgba).R??color[0]),Number(obj(rgba).G??color[1]),Number(obj(rgba).B??color[2]),typeof alpha==="number"?alpha:1];
+    this.env.configure(raw,direction,rgbaArray,highlight);
     this.setSH(directionalSH([0,1,0],color.map(v=>mul(mul(.1,intensity),v)) as V3));
     const depth=obj(fog.DepthFog),height=obj(fog.HeightFog);
     u.hDepthFog.value.fromArray(vector(depth.Color,[0,0,0,0]));
@@ -87,17 +92,20 @@ export class LightingState {
         hidden.forEach(o=>o.visible=false);setSkyCapture(true);
         cam.update(renderer,scene);
         hidden.forEach((o,i)=>o.visible=visibility[i]);setSkyCapture(false);
-        const sh=await this.projection.project(renderer,this.cube.texture);this.setSH(sh);
-        this.prefilter?.dispose();this.prefilter=pmrem.fromCubemap(this.cube.texture);
+        // 1037098: Illuminate result is copied back to the base cube before SH projection and prefilter.
+        const source=this.env.illuminate(renderer,this.cube.texture);
+        const sh=await this.projection.project(renderer,source);this.setSH(sh);
+        this.env.prefilter(renderer,source);
+        this.prefilter?.dispose();this.prefilter=pmrem.fromCubemap(source);
         scene.environment=this.prefilter.texture;this.stats.captures++;
       }
       this.stats.shSource=SH_CAPTURE_POLICY.projection+" + native CPU packing; input cube remains web";
-      this.stats.environmentSource="web PMREM (native 12-layer prefilter remains)";
+      this.stats.environmentSource="native 12-layer GGX prefilter (web atlas) + GGXEnvBRDF for Hoian forward; PMREM kept for non-native materials";
     } finally {
       hidden.forEach((o,i)=>o.visible=visibility[i]);setSkyCapture(false);pmrem.dispose();
       renderer.setRenderTarget(oldTarget);renderer.setViewport(oldViewport);renderer.setScissor(oldScissor);renderer.setScissorTest(oldScissorTest);
       renderer.toneMapping=oldTone;renderer.autoClear=oldAuto;
     }
   }
-  dispose():void {this.uniforms.hGrid.value.dispose();this.cube?.dispose();this.prefilter?.dispose();this.projection.dispose();}
+  dispose():void {this.env.dispose();this.uniforms.hGrid.value.dispose();this.cube?.dispose();this.prefilter?.dispose();this.projection.dispose();}
 }

@@ -281,6 +281,41 @@ export class PaintWorldImpl implements PaintWorld {
     return { team, ratio, texels: total };
   }
 
+  /**
+   * [physics 추가] 발밑 모니터 카운트: 접촉점 pos·법선 n 의 1×1 `Disk` 스탬프(쿼드 ±1 → 반경 1 원) 안 소유 스텐실 수(모드 14/15/16)와
+   * 칠 가능 텍셀 수(모드 17). 원본은 PaintMonitor 패스의 GPU 카운트를 1~2 프레임 늦게 읽는다(지연 [미확정], 여기서는 즉시) —
+   * paint_and_score.md §7 [r6 paint]. 높이 범위(InkTexInfo Disk 행)·패널 대표 평면 투영은 근사(차트 평면 위 원).
+   */
+  monitorCounts(pos: ArrayLike<number>, n: ArrayLike<number>): [number, number, number, number] {
+    const out: [number, number, number, number] = [0, 0, 0, 0];
+    const s = this.surf;
+    for (const ci of s.chartsInSphere(pos, 1)) {
+      const c = s.charts[ci];
+      const pg = s.pages[c.page];
+      if (c.n[0] * n[0] + c.n[1] * n[1] + c.n[2] * n[2] <= 0.001) continue;
+      const rx = pos[0] - c.o[0], ry = pos[1] - c.o[1], rz = pos[2] - c.o[2];
+      const cu = (rx * c.e1[0] + ry * c.e1[1] + rz * c.e1[2]) * TEXELS_PER_UNIT;
+      const cv = (rx * c.e2[0] + ry * c.e2[1] + rz * c.e2[2]) * TEXELS_PER_UNIT;
+      const rt = TEXELS_PER_UNIT, lim = rt * rt;
+      const i0 = Math.max(0, Math.floor(cu - rt)), i1 = Math.min(c.w - 1, Math.ceil(cu + rt));
+      const j0 = Math.max(0, Math.floor(cv - rt)), j1 = Math.min(c.h - 1, Math.ceil(cv + rt));
+      for (let j = j0; j <= j1; j++) {
+        const dv = j + 0.5 - cv;
+        const row = (c.y0 + j) * pg.w + c.x0;
+        for (let i = i0; i <= i1; i++) {
+          const du = i + 0.5 - cu;
+          if (du * du + dv * dv > lim) continue;
+          const k = row + i;
+          if (!pg.inside[k]) continue;
+          out[3]++;
+          const t = BIT_TEAM[pg.stencil[k]];
+          if (t !== undefined) out[t]++;
+        }
+      }
+    }
+    return out;
+  }
+
   counts(): { team: [number, number, number]; total: number } {
     return { team: [this.team[0], this.team[1], this.team[2]], total: this.surf.totalInside };
   }

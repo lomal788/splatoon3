@@ -4,6 +4,7 @@ import type { FresMaterial } from "./hoian.ts";
 import type { BakeMaterial } from "./bake.ts";
 import type { LightingState } from "./lighting.ts";
 import { SHADOW_GLSL } from "./shadows.ts";
+import { PREFILTER_LOOKUP_GLSL } from "./env_prefilter.ts";
 const WORLD_VERTEX=String.raw`
   #include <worldpos_vertex>
   vec4 hWorld=vec4(transformed,1.);
@@ -71,7 +72,7 @@ export function applyForward(mat:THREE.MeshStandardMaterial,f:FresMaterial,light
     Object.assign(sh.uniforms,lighting.uniforms);
     Object.assign(sh.uniforms,lighting.shadows?.uniforms);
     sh.vertexShader="varying vec3 hWorldPosition;\n"+sh.vertexShader.replace("#include <worldpos_vertex>",WORLD_VERTEX);
-    sh.fragmentShader=DECL+SHADOW_GLSL+"\n"+sh.fragmentShader;
+    sh.fragmentShader=DECL+SHADOW_GLSL+PREFILTER_LOOKUP_GLSL+"\n"+sh.fragmentShader;
     let sample="vec3 hBakeLight=vec3(0.);float hOccAO=0.,hOccBake=0.;\n";
     if(bake) {
       const defines=mat as unknown as {defines:Record<string,string>};
@@ -96,10 +97,8 @@ export function applyForward(mat:THREE.MeshStandardMaterial,f:FresMaterial,light
         hDynamic(hWorldPosition,hN,hV,hDiffuse,hF0,hR))*(1.-hOccAO);
       reflectedLight.directDiffuse=hDiffuse*.318309873*(hNoL*hLightColor+hBakeLight)*hShadow;
       reflectedLight.directSpecular=hSpecular(hF0,hR,hN,hV,hL)*(hNoL*hLightColor+hBakeLight)*hShadow;
-      #ifdef USE_ENVMAP
-      reflectedLight.indirectSpecular=getIBLRadiance(normalize(vViewPosition),normal,hR)*
-        EnvironmentBRDF(normal,normalize(vViewPosition),hF0,1.,hR)*(1.-hOccAO);
-      #endif
+      // Native cPrefilEnvMapArray layer roundEven(5.5-5.5cos(pi r)) x GGXEnvBRDF (env_prefilter.ts).
+      reflectedLight.indirectSpecular=hNativeEnvSpecular(hN,hV,hF0,hR)*(1.-hOccAO);
     `+FORWARD_LIGHTING_END: "reflectedLight.directDiffuse=diffuseColor.rgb;\n";
     sh.fragmentShader=sh.fragmentShader.replace("#include <lights_fragment_begin>",accum)
       .replace("#include <lights_fragment_maps>","").replace("#include <lights_fragment_end>","").replace("#include <aomap_fragment>","");

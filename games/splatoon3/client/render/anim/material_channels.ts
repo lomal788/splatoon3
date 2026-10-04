@@ -96,3 +96,19 @@ export function sampleOrdinaryMaterialLeaves(group:MaterialAnimationGroup|null|u
   if(a.length!==1||F(a[0].weight)!==1)return {supported:false,reason:"native material multi-leaf/weighted blend unsupported"};
   return sampleMaterialClip(group,a[0].clip,a[0].frame);
 }
+
+/** Holder 14522b0(Color_Skin)/145249c(Color_Eye): the clip is attached once at frame 0, then frame=index
+ * only inside [0,FrameCount). The static FRES value is therefore never the displayed one. */
+export function nativeHolderClipFrame(group:MaterialAnimationGroup|null|undefined,clip:string,index:number,previous=0):{accepted:boolean;frame:number}|null {
+  const info=materialClipInfo(group,clip);return info?nativeSkinIndex(previous,index,info.frames):null;
+}
+
+/** One sampled FMAA parameter (f32 lane byte offsets) written into the typed FRES value. */
+export function writeNativeMaterialParam(params:Record<string,{type?:string;value?:unknown}>|undefined,name:string,offsets:Record<string,number>):boolean {
+  const p=params?.[name];if(!p)return false;
+  const lanes=Object.entries(offsets).map(([k,v])=>[Number(k),F(v)] as const);
+  if(lanes.some(([o])=>!Number.isInteger(o)||o%4!==0))return false;
+  if(Array.isArray(p.value)){const value=p.value as number[];if(lanes.some(([o])=>o/4>=value.length))return false;for(const [o,v] of lanes)value[o/4]=v;return true;}
+  if(typeof p.value==="number"&&lanes.every(([o])=>o===0)){for(const [,v] of lanes)p.value=v;return true;}
+  return false;
+}

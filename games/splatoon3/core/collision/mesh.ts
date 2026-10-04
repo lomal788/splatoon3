@@ -30,6 +30,25 @@ export interface Penetration {
   pz: number;
 }
 
+/** 캐릭터 몸 ↔ 삼각형 최근접 접촉(core/player/body.ts 의 manifold·지지 판정 근사 입력). */
+export interface BodyContact {
+  tri: number;
+  /** 분리 거리(음수 = 침투) */
+  d: number;
+  /** 법선(삼각형 최근접점 → 몸 쪽, 단위) */
+  nx: number;
+  ny: number;
+  nz: number;
+  /** 삼각형 위 최근접점 */
+  px: number;
+  py: number;
+  pz: number;
+  /** 삼각형 면 법선 (b−a)×(c−a) 정규화(winding 그대로) */
+  fx: number;
+  fy: number;
+  fz: number;
+}
+
 export type TriFilter = (tri: number) => boolean;
 
 export class TriMesh {
@@ -255,6 +274,38 @@ export class TriMesh {
       }
     });
     return bestT <= 1 ? out : null;
+  }
+
+  /** 선분(a→b, 반경 r) 형상과 분리 거리 ≤ reach 인 삼각형별 최근접 접촉. 순서 = BVH 탐색 순서. */
+  segmentContacts(ax: number, ay: number, az: number, bx: number, by: number, bz: number, r: number, reach: number,
+    filter: TriFilter | null, out: BodyContact[]): BodyContact[] {
+    out.length = 0;
+    const p = this.pos, ix = this.idx;
+    const c = CL;
+    const e = r + reach;
+    this.query(Math.min(ax, bx) - e, Math.min(ay, by) - e, Math.min(az, bz) - e, Math.max(ax, bx) + e, Math.max(ay, by) + e, Math.max(az, bz) + e, (tri) => {
+      if (filter && !filter(tri)) return;
+      const ia = ix[tri * 3] * 3, ib = ix[tri * 3 + 1] * 3, ic = ix[tri * 3 + 2] * 3;
+      closestSegmentTriangle(ax, ay, az, bx, by, bz, p[ia], p[ia + 1], p[ia + 2], p[ib], p[ib + 1], p[ib + 2], p[ic], p[ic + 1], p[ic + 2], c);
+      if (c.d2 > e * e) return;
+      const dist = Math.sqrt(c.d2);
+      const e1x = p[ib] - p[ia], e1y = p[ib + 1] - p[ia + 1], e1z = p[ib + 2] - p[ia + 2];
+      const e2x = p[ic] - p[ia], e2y = p[ic + 1] - p[ia + 1], e2z = p[ic + 2] - p[ia + 2];
+      let fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x;
+      const fl = Math.hypot(fx, fy, fz);
+      if (fl > 0) { fx /= fl; fy /= fl; fz /= fl; }
+      let nx = c.px - c.tx, ny = c.py - c.ty, nz = c.pz - c.tz;
+      if (dist < 1e-9) {
+        // 선분이 면을 관통: 면 법선 중 선분 중점 쪽
+        const mx = (ax + bx) * 0.5 - p[ia], my = (ay + by) * 0.5 - p[ia + 1], mz = (az + bz) * 0.5 - p[ia + 2];
+        const s = mx * fx + my * fy + mz * fz >= 0 ? 1 : -1;
+        nx = fx * s; ny = fy * s; nz = fz * s;
+      } else {
+        nx /= dist; ny /= dist; nz /= dist;
+      }
+      out.push({ tri, d: dist - r, nx, ny, nz, px: c.tx, py: c.ty, pz: c.tz, fx, fy, fz });
+    });
+    return out;
   }
 
   /** 선분 형상과 겹친 삼각형들(깊이 > 0). */

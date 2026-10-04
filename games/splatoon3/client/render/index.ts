@@ -12,16 +12,14 @@ import { applyCommonShadowReceivers } from "./forward.ts";
 import { PlayerView } from "./player.ts";
 import type { MuzzlePose } from "../fx/muzzle.ts";
 import { readPlayer } from "./shared.ts";
-import { buildTeamSets, FALLBACK_ROW, materialTeamParams, type TeamColorRow, type TeamSet } from "./teamcolor.ts";
+import { buildTeamSets, lobbyTeamRow, lobbyTeamSeed, materialTeamParams, type TeamColorRow, type TeamSet } from "./teamcolor.ts";
 
-/** 연습장에서 쓰는 TeamColorDataSet 행. 로비 시험 사격장이 어느 행을 쓰는지는 [미확정] */
-const TEAM_ROW = "OrangeBlue";
 /** 무기 분류 → 애니 약어(_Nrml 치환). 슈터 = Shtr (anim_state_machine.md §3 기본값) */
 const WEAPON_ABBR = "Shtr";
 
+/** LobbyVersus selector 0: boot-time uniform VersusRegular row, swap 0 (model_character.md §3.1). Seed [미확정]. */
 function teamRow(w: World): TeamColorRow {
-  const t = w.data.tables["team_color"] as { dataSets?: (TeamColorRow & { name?: string })[] } | undefined;
-  return t?.dataSets?.find((r) => r.name === TEAM_ROW) ?? FALLBACK_ROW;
+  return lobbyTeamRow(w.data.tables["team_color"] as { dataSets?: (TeamColorRow & { name?: string })[] } | undefined, lobbyTeamSeed);
 }
 
 export function createRenderView(ctx: ClientContext): View {
@@ -61,6 +59,8 @@ export function createRenderView(ctx: ClientContext): View {
     const mapB = bundles.get(`map/${spec.map}`);
     const rawEnv = mapB?.has("env.json") ? mapB.json("env.json") : null;
     sets = buildTeamSets(teamRow(world), false, parseEnv(rawEnv).light);
+    // FX keeps its existing Original-colour consumer; it only receives the same boot row.
+    world.shared.set("teamColors", Object.fromEntries(sets.slice(0, 3).map((s, i) => [String(i), s.linear.slice(0, 3)])));
     map.load(scene, mapB, materialTeamParams(sets[0]), sets[0]);
     post.configure(rawEnv);
     const myTeam = Math.max(0, Math.min(2, p0?.team ?? 0));
@@ -84,7 +84,9 @@ export function createRenderView(ctx: ClientContext): View {
       const steps = lastFrame < 0 ? 1 : Math.min(w.frame - lastFrame, 5);
       if (steps > 0) {
         const snap = readPlayer(w) ?? { pos: [0, 0, 0], yaw: 0, speed: 0, state: null, sub: null, squid: false, team: 0, dead: false, formCounter: null, animSpeed: null, animRate: null, displayHidden: null };
-        for (let i = 0; i < steps; i++) player.step(snap);
+        // Only the last world step's events remain in the queue; earlier skipped steps lose their NoInk (web adapter).
+        const lack = w.events.list.some((e) => e.type === "NoInk");
+        for (let i = 0; i < steps; i++) player.step(i === steps - 1 ? { ...snap, lack } : snap);
         lastFrame = w.frame;
       }
       player.draw(alpha);
@@ -105,7 +107,7 @@ export function createRenderView(ctx: ClientContext): View {
     },
     dispose(): void {
       map.dispose(scene); player.dispose(); post.dispose(); fxDepth.dispose();
-      world.shared.delete("muzzle");
+      world.shared.delete("muzzle"); world.shared.delete("teamColors");
       ctx.renderScene = undefined; ctx.fxLighting = undefined; ctx.fxDepth = undefined; ctx.paintMap = undefined;
     },
   };

@@ -11,9 +11,9 @@ import type { System } from "./world.ts";
 export function createSystems(): System[] {
   return [
     createCollisionSystem(), // 지형 충돌 세계 구축(init), 동적 충돌체 갱신
-    createRangeSystem(), // 사격장 표적·구역(표적 이동은 플레이어보다 먼저: 추정)
-    createCameraSystem(), // 입력 → 조준 yaw/pitch, 카메라 리그
-    createPlayerSystem(), // 이동·점프·오징어·사격 입력 → 발사 요청
+    createRangeSystem(), // 사격장 표적·구역(표적 SplObj Before(2) 그룹이 플레이어 Default(3)보다 먼저 [판독] phive_controller.md §6.7)
+    createPlayerSystem(), // 슬롯18 이동 → 몸체 물리 → 접촉 → write-back → 슬롯19. 이동은 직전 프레임 카메라를 씀
+    createCameraSystem(), // 카메라 메인은 플레이어 슬롯19 안, 물리 뒤 [판독] phive_controller.md §6.7
     createWeaponSystem(), // 발사 → 탄 생성, 탄 갱신(나이·이동·적분·충돌 콜백)
     createPaintSystem(), // 도색 요청 처리(큐 → 텍스처/격자), 집계
   ];

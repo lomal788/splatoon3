@@ -38,14 +38,39 @@ export interface StepPaint {
 
 /** 벽 점프·오징어 롤 발사 구조체 L(본체+0x7b8) — movement_physics.md §6.8 */
 export interface LaunchState {
-  /** [0..2] 발사 속도 */
+  /** [0..2] 발사 속도, [3..5] 방향 */
   vel: Vec3;
-  /** +0x3c 활성, +0x40(=본체+0x7f8) 이번 프레임 적용, +0x41 벽 점프(롤 아님), +0x3f 오징어였음 */
+  dir: Vec3;
+  /** +0x3c(=본체+0x7f4) 활성, +0x3d(=본체+0x7f5), +0x40(=본체+0x7f8) 이번 프레임 적용, +0x41 벽 점프(롤 아님), +0x3f 오징어였음 */
   active: boolean;
+  active2: boolean;
   apply: boolean;
   wallJump: boolean;
   wasSquid: boolean;
-  /** +0x24 횟수 n */
+  /** +0x24 횟수 n (s32), +0x28 마지막 발사 프레임, +0x2c 롤 속력, +0x30 발사 때 높이 */
+  count: number;
+  frame: number;
+  speed: number;
+  height: number;
+  /** +0x54(=본체+0x80c) 덮어쓰기 스틱 남은 프레임, +0x58/+0x5c 덮어쓰기 스틱, +0x44..+0x4c 고정 입력 축, +0x50 */
+  lock: number;
+  lockStick: [number, number];
+  lockAxis: Vec3;
+  lockK: number;
+}
+
+/** 이동 이력 항목(0x14 B) — movement_physics.md §6.4.2 */
+export interface MoveHistoryEntry {
+  dir: Vec3;
+  speed: number;
+  squidInk: boolean;
+  wall: boolean;
+}
+
+/** 이동 이력 링 버퍼 본체+0x820(+0x828 capacity 24, +0x82c 시작, +0x830 개수) */
+export interface MoveHistory {
+  buf: MoveHistoryEntry[];
+  start: number;
   count: number;
 }
 
@@ -99,8 +124,26 @@ export interface PlayerState {
   // ---- 입력 ----
   /** [본체+0x474/+0x478] 이동 스틱 */
   stick: [number, number];
-  /** [본체+0x47c] 데드존 재매핑 크기 */
+  /** [본체+0x47c] 데드존 재매핑 크기, [+0x480] 내려갈 때만 0.2 추종하는 크기 */
   stickMag01: number;
+  stickMagSmooth: number;
+  /** 컨트롤러 왼쪽 스틱 원값(컨트롤러+0x120) */
+  stickSrc: [number, number];
+  /** [본체+0x484] 벽 입력 방향값, [+0x488] 벽 입력 계수 x (0x71024a7100) */
+  wallInputDir: number;
+  wallInput: number;
+  /** [본체+0x786] 오징어 입력 지속 프레임(min(+1,100)) */
+  squidHoldFrames: number;
+  /** [본체+0x790] 잠복·상승 연속 프레임(양수)/그 밖 연속 프레임(음수) */
+  squidInkFrames: number;
+  /** [본체+0xaec] 스틱 잠금 프레임 */
+  stickLock: number;
+  /** [본체+0xad8] 사격 자세 유지 타이머(입력 함수가 max(x−1, 조건값)) */
+  aimHold: number;
+  /** [본체+0xab0] 카메라 리셋 버튼 눌림 래치(입력 전방 축 보간 비율을 0으로) */
+  camResetLatch: boolean;
+  /** 이동 이력 */
+  history: MoveHistory;
   /** [본체+0x72c/+0x72d] 점프 버튼 누름/이번 프레임 눌림 */
   jumpHeld: boolean;
   jumpPressed: boolean;
@@ -114,6 +157,9 @@ export interface PlayerState {
   fireHeld: boolean;
   /** 입력 우선순위 목록(InputSender+0x30..): 새로 누른 버튼이 앞 */
   inputOrder: number[];
+  /** 컨트롤러 누름 비트 2(ZL) — 롤 gate, 우선순위 맨 앞 종류(Sender+0x54/+0x55/+0x56) */
+  squidButton: boolean;
+  inputFirst: number;
 
   // ---- 이동 (movement_physics.md §4.1) ----
   /** [본체+0x114] 이동 속도(유닛/프레임) */
@@ -149,13 +195,16 @@ export interface PlayerState {
   vySum: number;
   /** [본체+0x745] 공중 수평 감쇠 0.96 선택 플래그 */
   airDampAlt: boolean;
-  /** [본체+0x750] 3D 점프 속도 X, [+0x780] 플래그(X+0x30) */
+  /** [본체+0x750] 3D 점프 속도 X, [+0x780] 벽 점프 진행 래치(X+0x30), [+0x782] 유지 가산 차단, [+0x75c] 래치 때 X 사본 */
   jump3d: Vec3;
   jump3dHold: boolean;
+  holdBlock: boolean;
+  jump3dLatch: Vec3;
   /** [본체+0x77c] 점프 직후 지속 프레임 */
   jumpKeep: number;
-  /** [본체+0x774] 벽 점프 차지 프레임 */
+  /** [본체+0x774] 벽 점프 차지 프레임, [+0x778] 차지 중 벽 밖 연속 프레임 */
   wallJumpCharge: number;
+  wallJumpOff: number;
   /** [본체+0xe4..] 최종 속도 F[0..2] */
   final: Vec3;
   /** [본체+0xfc] 이륙 관성 + 모서리 밀기 */
@@ -252,6 +301,16 @@ export function createPlayerState(id: number, team: Team): PlayerState {
     quadrant: 0,
     stick: [0, 0],
     stickMag01: 0,
+    stickMagSmooth: 0,
+    stickSrc: [0, 0],
+    wallInputDir: 0,
+    wallInput: 0,
+    squidHoldFrames: 0,
+    squidInkFrames: 0,
+    stickLock: 0,
+    aimHold: 0,
+    camResetLatch: false,
+    history: { buf: Array.from({ length: 24 }, () => ({ dir: v3(), speed: 0, squidInk: false, wall: false })), start: 0, count: 0 },
     jumpHeld: false,
     jumpPressed: false,
     squidRequest: false,
@@ -260,6 +319,8 @@ export function createPlayerState(id: number, team: Team): PlayerState {
     squidLock: 0,
     fireHeld: false,
     inputOrder: [],
+    squidButton: false,
+    inputFirst: 0,
     vel: v3(),
     desired: v3(),
     cap: 0,
@@ -276,15 +337,18 @@ export function createPlayerState(id: number, team: Team): PlayerState {
     groundFrames: 0,
     ground26c: 0,
     offFlatFrames: 0,
-    sinceJump: 0,
+    sinceJump: 9999, // 생성자 0x710245717c plVar12[0xe6] = 0x270f00000000
     riseFrames: 0,
     vy: 0,
     vySum: 0,
     airDampAlt: false,
     jump3d: v3(),
     jump3dHold: false,
+    holdBlock: false,
+    jump3dLatch: v3(),
     jumpKeep: 0,
     wallJumpCharge: 0,
+    wallJumpOff: 0,
     final: v3(),
     takeoff: v3(),
     landStiff: 0,
@@ -314,7 +378,10 @@ export function createPlayerState(id: number, team: Team): PlayerState {
       cls: 4, team: -1, own: 0, ownRaw: 0, ownThr: 0.65, enemy: 0, enemyRaw: 0, enemySlow: 0,
       enemyMove: 0, enemyMoveRate: 0, enemyThr: 0.35, lastOwn: 0, lastEnemy: 0, reused: false,
     },
-    launch: { vel: v3(), active: false, apply: false, wallJump: false, wasSquid: false, count: 0 },
+    launch: {
+      vel: v3(), dir: v3(0, 0, 1), active: false, active2: false, apply: false, wallJump: false, wasSquid: false,
+      count: 0, frame: 0, speed: 0, height: 0, lock: 0, lockStick: [0, 0], lockAxis: v3(), lockK: 0,
+    },
     ink: 1, // 본체 생성 0x71024575bc 가 1.0 으로 초기화 (network/04_player_state.md #15)
     inkRecoverStop: 0, inkRecoverStopNoInk: 0, inkRecoverStopSquid: 0, inkConsumeHold: 0, inkStealthFrames: 0, inkStealthBlend: 0,
     mainInputFrames: 0, clearMainLatches: false,

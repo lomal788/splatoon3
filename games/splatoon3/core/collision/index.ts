@@ -6,7 +6,7 @@ import { fallbackPlane, loadCollision, MeshCollisionWorld } from "./world.ts";
 export { MeshCollisionWorld, fallbackPlane, loadCollision, playerBodyFilter } from "./world.ts";
 export type { MaterialInfo, BodyFilter } from "./world.ts";
 export { TriMesh } from "./mesh.ts";
-export type { SweepResult, Penetration } from "./mesh.ts";
+export type { SweepResult, Penetration, BodyContact } from "./mesh.ts";
 export { LAYER_HIT_MASK, SUB_LAYER_HIT_MASK, PhiveLayer, PhiveSubLayer } from "./filter.ts";
 
 /** world.data.collision → 충돌 세계. 에셋이 없거나 읽기 실패면 y=0 평면(경고). */

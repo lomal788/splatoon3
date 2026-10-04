@@ -1,0 +1,91 @@
+{
+ "source": "romfs Model/Sky_Daytime00.bfres.zs mSky_Alb",
+ "format": "BC6H_UFLOAT",
+ "comp": [
+  2,
+  3,
+  4,
+  1
+ ],
+ "file": "sky/mSky_Alb.bc6h.bin",
+ "mips": [
+  {
+   "width": 4096,
+   "height": 1024,
+   "offset": 0,
+   "bytes": 4194304
+  },
+  {
+   "width": 2048,
+   "height": 512,
+   "offset": 4194304,
+   "bytes": 1048576
+  },
+  {
+   "width": 1024,
+   "height": 256,
+   "offset": 5242880,
+   "bytes": 262144
+  },
+  {
+   "width": 512,
+   "height": 128,
+   "offset": 5505024,
+   "bytes": 65536
+  },
+  {
+   "width": 256,
+   "height": 64,
+   "offset": 5570560,
+   "bytes": 16384
+  },
+  {
+   "width": 128,
+   "height": 32,
+   "offset": 5586944,
+   "bytes": 4096
+  },
+  {
+   "width": 64,
+   "height": 16,
+   "offset": 5591040,
+   "bytes": 1024
+  },
+  {
+   "width": 32,
+   "height": 8,
+   "offset": 5592064,
+   "bytes": 256
+  },
+  {
+   "width": 16,
+   "height": 4,
+   "offset": 5592320,
+   "bytes": 64
+  },
+  {
+   "width": 8,
+   "height": 2,
+   "offset": 5592384,
+   "bytes": 32
+  },
+  {
+   "width": 4,
+   "height": 1,
+   "offset": 5592416,
+   "bytes": 16
+  },
+  {
+   "width": 2,
+   "height": 1,
+   "offset": 5592432,
+   "bytes": 16
+  },
+  {
+   "width": 1,
+   "height": 1,
+   "offset": 5592448,
+   "bytes": 16
+  }
+ ]
+}

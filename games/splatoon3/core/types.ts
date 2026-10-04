@@ -78,6 +78,8 @@ export interface PaintWorld {
   sample(pos: Vec3, radius: number): InkSample;
   /** 팀별 칠한 텍셀 수, 플레이어별 새로 칠한 텍셀 수 */
   counts(): { team: [number, number, number]; total: number };
+  /** 발밑 Disk 1×1 모니터 4개의 스텐실 카운트 (paint_and_score.md §6.3) */
+  monitorCounts?(pos: ArrayLike<number>, n: ArrayLike<number>): [number, number, number, number];
 }
 
 // ---- 피격 (담당: core/combat 공용, 대상 구현은 각 영역) -------------------

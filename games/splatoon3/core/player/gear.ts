@@ -1,7 +1,7 @@
 // 담당: [physics] — 기어 능력 AP → 수치(spl::PlayerParam 캐시). 근거: docs/player/gear_skills.md §4.3·§5
 // (원본 함수 0x710265df40/0x710265fd48/0x7102665ee4 를 에뮬로 실행해 재구현과 731값 비트 일치한 식).
 import { f32 } from "../fmath.ts";
-import { fb } from "./consts.ts";
+import { ABILITY_SQUID_MOVE_SPATTER, fb, SQUID_K_NINJA } from "./consts.ts";
 
 const C_0001 = fb(0x3a83126f); // 0.001
 const C_0999 = fb(0x3f7fbe77); // 0.999
@@ -95,6 +95,8 @@ export interface PlayerParam {
   somersaultKd: number;
   /** +0x13c WallJumpChargeFrm, actual 45/18/5, same AP interpolation. */
   wallJumpChargeFrames: number;
+  /** +0xac 특수 능력 비트(능력 값 − 100 번째 비트, gear_skills.md §4.1) */
+  abilityBits: number;
   /** MainWeaponSetting WeaponSpeedType(0/1/2), WeaponAccType(0/1/2) */
   speedType: number;
   accType: number;
@@ -129,7 +131,17 @@ export function makePlayerParam(ap: GearAP = {}, weapon: { speedType?: number; a
     opMoveShot: L(GEAR.OpMoveShot, po),
     somersaultKd: L(GEAR.SomersaultKd, pa),
     wallJumpChargeFrames: L(GEAR.WallJumpChargeFrames, pa),
+    abilityBits: ap.ninja ? 1 << (ABILITY_SQUID_MOVE_SPATTER - 100) : 0,
     speedType: weapon.speedType ?? 1,
     accType: weapon.accType ?? 1,
   };
+}
+
+/** 오징어 목표 속도 배율 k 0x710266c6e4 (movement_physics.md §6.1.1). arg bit0 = 호출자의 특수 상태 == 0x16. */
+export function squidSpeedK(pp: PlayerParam, arg: number, table: readonly number[] = [ABILITY_SQUID_MOVE_SPATTER]): number {
+  if (arg & 1) return 1;
+  let idx = table.indexOf(ABILITY_SQUID_MOVE_SPATTER);
+  if (idx < 0 || idx >= table.length) idx = 0;
+  const bit = (table[idx] - 100) & 31;
+  return ((pp.abilityBits >>> bit) & 1) !== 0 ? SQUID_K_NINJA : 1;
 }

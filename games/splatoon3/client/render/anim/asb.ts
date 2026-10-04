@@ -2,6 +2,7 @@
 // 데이터: asb_data.json (gen/asb_gen.mjs 로 원본 SplPlayer.pack AS/*.root.asb 에서 생성), state_table.json (gen/state_table_gen.mjs).
 import asbJson from "./asb_data.json";
 import stateJson from "./state_table.json";
+import { ASSUMED_CLIP_KEYS, nativeClipName } from "./clip_name.ts";
 
 export type Slot =
   | { c: number | string }
@@ -113,6 +114,8 @@ export function resolveClipName(name: string, weaponAbbr = "Shtr", emote = "Win0
   return name.replace("Nrml", weaponAbbr).replace("@", emote);
 }
 
+
+
 /** 평가 결과 트리 */
 export type Inst =
   | { k: "leaf"; node: number; t: number; clip: string; ctrl: AsbNode | null }
@@ -124,7 +127,7 @@ export type Inst =
  * 커맨드 → 트리. 선택 노드(문자열·정수·bool)는 요청 시점 블랙보드로 한 번 고른다 [추정: 재평가 시점 미확정].
  * FloatBlend 는 자식을 모두 두고 가중치는 매 틱 계산한다(§4.4).
  */
-export function instantiate(asb: Asb, cmd: string, bb: Blackboard, fps: FloatParamState, weaponAbbr: string): Inst | null {
+export function instantiate(asb: Asb, cmd: string, bb: Blackboard, fps: FloatParamState, weaponAbbr: string, exists?: (clip: string, type: number) => boolean): Inst | null {
   const root = asb.commands[cmd];
   if (root === undefined) return null;
   const build = (i: number, depth: number): Inst | null => {
@@ -137,7 +140,9 @@ export function instantiate(asb: Asb, cmd: string, bb: Blackboard, fps: FloatPar
         const raw = slotValue(n.clip, asb, bb, fps);
         const name = typeof raw === "string" ? raw : "";
         const ctrlIdx = n.attach?.ctrls.find((c) => asb.nodes[c]?.t === 12);
-        return { k: "leaf", node: i, t: n.t, clip: resolveClipName(name, weaponAbbr), ctrl: ctrlIdx === undefined ? null : asb.nodes[ctrlIdx] };
+        const v = { detail: String(bb.str.get("WeaponDetail") ?? weaponAbbr), category: String(bb.str.get("WeaponCategory") ?? weaponAbbr), emote: "Win01" };
+        const clip = exists ? nativeClipName(name, ASSUMED_CLIP_KEYS, v, (c) => exists(c, n.t)).clip : resolveClipName(name, weaponAbbr);
+        return { k: "leaf", node: i, t: n.t, clip, ctrl: ctrlIdx === undefined ? null : asb.nodes[ctrlIdx] };
       }
       case 2: {
         // StringSelector: 일치하는 case, 없으면 その他(기본)

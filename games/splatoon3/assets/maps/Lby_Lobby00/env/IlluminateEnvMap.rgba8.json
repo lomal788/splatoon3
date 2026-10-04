@@ -1,0 +1,56 @@
+{
+ "source": "romfs Model/IlluminateEnvMap.bfres.zs IlluminateEnvMap",
+ "format": "BC1_SRGB",
+ "decoded": "RGBA8, sRGB-encoded bytes (decode with SRGBColorSpace)",
+ "comp": [
+  2,
+  3,
+  4,
+  5
+ ],
+ "file": "env/IlluminateEnvMap.rgba8.bin",
+ "mips": [
+  {
+   "width": 64,
+   "height": 64,
+   "offset": 0,
+   "bytes": 16384
+  },
+  {
+   "width": 32,
+   "height": 32,
+   "offset": 16384,
+   "bytes": 4096
+  },
+  {
+   "width": 16,
+   "height": 16,
+   "offset": 20480,
+   "bytes": 1024
+  },
+  {
+   "width": 8,
+   "height": 8,
+   "offset": 21504,
+   "bytes": 256
+  },
+  {
+   "width": 4,
+   "height": 4,
+   "offset": 21760,
+   "bytes": 64
+  },
+  {
+   "width": 2,
+   "height": 2,
+   "offset": 21824,
+   "bytes": 16
+  },
+  {
+   "width": 1,
+   "height": 1,
+   "offset": 21840,
+   "bytes": 4
+  }
+ ]
+}

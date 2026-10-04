@@ -4,15 +4,17 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
 import { PlayerAnimator } from "./anim/animator.ts";
 import type { LeafWeight } from "./anim/slot.ts";
-import { applyHoian, type HoianUniforms, setTeam, setHoianMaterialTexSrt } from "./hoian.ts";
-import { type AttachOpt, attach, bindWorld, fresOf, textureResolver, playerModelFile } from "./model.ts";
+import { applyHoian, type HoianUniforms, setTeam, setHoianMaterialTexSrt, setHoianMaterialParam } from "./hoian.ts";
+import { type AttachOpt, attach, bindWorld, fresOf, textureResolver, playerModelFile, applyNativeTextureColorSpace, manualBindSrt } from "./model.ts";
 import type { PlayerSnap } from "./shared.ts";
 import { materialTeamParams, type MaterialTeamParams, type TeamSet } from "./teamcolor.ts";
 import type { LightingState } from "./lighting.ts";
 import { applyForward } from "./forward.ts";
 import { applyCharacterMaterial, type CharacterMaterialBinding } from "./character_material.ts";
 import { bindMaterialChannels, type MaterialChannelBinding, type MaterialChannelTarget, type MaterialParameterConsumer } from "./anim/material_binding.ts";
-import { materialClipInfo, patchTexSrt, type NativeTexSrt, type MaterialAnimationBank } from "./anim/material_channels.ts";
+import { materialClipInfo, patchTexSrt, nativeHolderClipFrame, sampleMaterialClip, sampleNativeMaterialCurve, writeNativeMaterialParam, type NativeTexSrt, type MaterialAnimationBank, type MaterialAnimationGroup, type MaterialCurve, type MaterialPatch } from "./anim/material_channels.ts";
+import { TankGauge } from "./anim/tank_gauge.ts";
+import { hairArrangeLocal, hairArrangeParam } from "./anim/hair_cloth.ts";
 
 /** 파츠 결합 표(§6.3). 키 = 모델 이름 접두 */
 const PART_RULES: Record<string, AttachOpt> = {
@@ -22,7 +24,7 @@ const PART_RULES: Record<string, AttachOpt> = {
   Btm: { attachPart: "Skl_Root" },
   Shs: { attachPart: "Leg_2_L" },
   Tnk: { attachPart: "Spine_3" },
-  Hed: { map: { Root: "Head" }, attachPart: "Root", mode: "translate" },
+  Hed: { map: { Root: "Head" }, attachPart: "Root", mode: "head" },
 };
 const SHOE_MIRROR: AttachOpt = {
   attachPart: "Leg_2_L", attachBody: "Leg_2_L", mirrorX: true,
@@ -38,6 +40,25 @@ export interface Harness {
 }
 /** Clt_SHT000 의 GearInfoClothes 값 [데이터: HarnessType S, IsThinHarness false, IsHideHarness false] */
 const DEFAULT_HARNESS: Harness = { type: "S", thin: false, hide: false };
+
+/** Player info +0x844 skin / +0x848 eye index (holders 14522b0/145249c). 0/0 = save custom ctor 0x7102a66e28
+ * initial SkinColor/EyeColor (player_assembly.md §5.2). The actual Lby PlayerInfo copy path is [미확정]. */
+export interface Appearance {
+  skinColor: number;
+  eyeColor: number;
+}
+const DEFAULT_APPEARANCE: Appearance = { skinColor: 0, eyeColor: 0 };
+
+/** Hat +0x120 variation. Selected Hed_FST000 has GearInfoHead VariationNum 0; chosen-variation writer is [미확정]. */
+const HAT_VARIATION = 0;
+type SrtRow = Parameters<typeof manualBindSrt>[0];
+interface GearData {
+  parts?: {
+    clothes?: { row?: { HarnessType?: Harness["type"]; IsThinHarness?: boolean; IsHideHarness?: boolean } };
+    hair?: { row?: { Id?: number; __RowId?: string } };
+    head?: { headParamSet?: { ManualBindSRT?: Record<string, SrtRow> } };
+  };
+}
 
 function harnessBone(h: Harness): string {
   return h.hide ? "Harness_Hide" : `Harness_${h.type}${h.thin ? "F" : ""}`;
@@ -86,6 +107,16 @@ function applyLeaves(lib: ClipLib, leaves: LeafWeight[]): void {
   lib.mixer.update(0);
 }
 
+type BoneParamRow = Parameters<typeof hairArrangeParam>[0] & { BoneName: string };
+/** HairArrangeParam selected by key = HairInfo Id × 10000 + hat variation (data/hair_arrange.json). */
+interface HairArrangeData { maps: { key: number; param: { BoneParamArray?: BoneParamRow[] } }[] }
+
+/** PlayerTank Tnk_Simple FSKA/FMAA (raw keys, data/tank_anim_native.json). */
+interface TankAnimData {
+  skeletal: { Gauge: { frames: number; bones: { name: string; S: number[]; R: number[]; T: number[]; curves: MaterialCurve[] }[] } };
+  material: MaterialAnimationGroup;
+}
+
 /** Only the proven native Maya/zero-rotation SRT consumer is supplied here.
  * Color_Skin selection and live CompPaint/body ink stay unbound until their writers are confirmed.
  */
@@ -96,6 +127,9 @@ const materialParameter: MaterialParameterConsumer = (target,name,offsets) => {
   try { return setHoianMaterialTexSrt(target.material,name,patchTexSrt(raw,offsets)); }
   catch { return false; }
 };
+/** Tank FMAA also animates Mat scalars/vectors held as live Hoian uniforms. */
+const tankParameter: MaterialParameterConsumer = (target,name,offsets) =>
+  materialParameter(target,name,offsets) || setHoianMaterialParam(target.material,name,offsets);
 
 export interface PlayerViewInfo {
   placeholder: boolean;
@@ -120,7 +154,12 @@ export class PlayerView {
   readonly info: PlayerViewInfo = { placeholder: false, parts: [], missingClips: [], skipped: [] };
   readonly characterMaterials: CharacterMaterialBinding[] = [];
   readonly materialAnimations: MaterialChannelBinding[] = [];
+  /** Applied Color_Skin frame (holder +0x38 value as f32). */
+  skinFrame: number | null = null;
   private humanMaterials: MaterialChannelBinding | null = null;
+  /** PlayerTank display: gauge state, Gauge skeletal Scale bone and tank material channels. */
+  tank: { gauge: TankGauge; frame: number; scaleBone: THREE.Object3D | null; scale: { S: number[]; curves: MaterialCurve[] } | null;
+    binding: MaterialChannelBinding | null; group: MaterialAnimationGroup; unapplied: string[] } | null = null;
   private squidMaterials: MaterialChannelBinding | null = null;
   get materialReady(): Promise<void> { return Promise.all([...this.characterMaterials,...this.materialAnimations].map(b => b.ready)).then(() => {}); }
   private lighting: LightingState | undefined;
@@ -133,11 +172,18 @@ export class PlayerView {
     scene.add(this.root);
   }
 
-  load(charB: Bundle | undefined, weaponB: Bundle | undefined, team: MaterialTeamParams, weaponAbbr: string, harness: Harness = DEFAULT_HARNESS, lighting?: LightingState, teamSet?: TeamSet): void {
+  load(charB: Bundle | undefined, weaponB: Bundle | undefined, team: MaterialTeamParams, weaponAbbr: string, harness: Harness = DEFAULT_HARNESS, lighting?: LightingState, teamSet?: TeamSet, appearance: Appearance = DEFAULT_APPEARANCE): void {
     this.lighting = lighting; this.teamSet = teamSet;
+    let headSrt: number[] | undefined;
+    let hairId: number | undefined;
     if (charB?.has("data/gear.json")) {
-      const g = charB.json<{ parts?: { clothes?: { row?: { HarnessType?: Harness["type"]; IsThinHarness?: boolean; IsHideHarness?: boolean } } } }>("data/gear.json").parts?.clothes?.row;
+      const gear = charB.json<GearData>("data/gear.json").parts;
+      const g = gear?.clothes?.row;
       if (g?.HarnessType) harness = { type: g.HarnessType, thin: !!g.IsThinHarness, hide: !!g.IsHideHarness };
+      // 0x71026e4e80 key "V%d_%s": hat variation, hair row name without "Har_". Missing key = identity.
+      const hair = gear?.hair?.row?.__RowId?.replace(/^Har_/, "");
+      hairId = gear?.hair?.row?.Id;
+      if (hair !== undefined) headSrt = manualBindSrt(gear?.head?.headParamSet?.ManualBindSRT?.[`V${HAT_VARIATION}_${hair}`]);
     }
     const glbs = charB ? charB.names().filter((n) => /\.glb$/i.test(n)) : [];
     const find = (re: RegExp): string | undefined => playerModelFile(glbs,re);
@@ -163,18 +209,28 @@ export class PlayerView {
       }
     });
     this.hideMouthVariants(this.bodyMeshes);
-    this.teamMaterials(this.bodyMeshes, textureResolver(body, charB), team);
     const materialBank = charB.has("data/anim_material_native.json") ? charB.json<MaterialAnimationBank>("data/anim_material_native.json") : null;
+    // Color_Skin writes typed Mat values consumed at compile/bind time, so it precedes the material hooks.
+    this.applySkinColor(this.bodyMeshes, materialBank?.groups.Player00, appearance.skinColor);
+    const bodyTex = textureResolver(body, charB, base(bodyName), true);
+    this.teamMaterials(this.bodyMeshes, bodyTex, team);
     if (materialBank?.groups.Player00) {
-      this.humanMaterials = bindMaterialChannels(this.materialTargets(this.bodyMeshes, textureResolver(body, charB)), materialBank.groups.Player00,materialParameter);
+      this.humanMaterials = bindMaterialChannels(this.materialTargets(this.bodyMeshes, bodyTex), materialBank.groups.Player00,materialParameter);
       this.materialAnimations.push(this.humanMaterials);
+      this.applyEyeColor(this.humanMaterials, materialBank.groups.Player00, appearance.eyeColor);
     }
 
     // _Hlf: 같은 뼈 이름을 몸에서 복사(0x7101459154) → 몸 스켈레톤에 바로 묶는다
     if (hlfName) {
       const h = charB.gltf(hlfName);
       this.hlfMeshes = attach(body.scene, bodyBind, h.scene, { attachPart: "Skl_Root" });
-      this.teamMaterials(this.hlfMeshes, textureResolver(h, charB), team);
+      const hlfTex = textureResolver(h, charB, base(hlfName), true);
+      this.teamMaterials(this.hlfMeshes, hlfTex, team);
+      if (materialBank?.groups.Player00_Hlf) {
+        const binding = bindMaterialChannels(this.materialTargets(this.hlfMeshes, hlfTex), materialBank.groups.Player00_Hlf, materialParameter);
+        this.materialAnimations.push(binding);
+        this.applyEyeColor(binding, materialBank.groups.Player00_Hlf, appearance.eyeColor);
+      }
     }
     // The conversion manifest names the selected native resources. A bundle's
     // alphabetical file order must not decide hair/clothes/shoes.
@@ -186,15 +242,17 @@ export class PlayerView {
       if (!charB.has(n)) { this.info.skipped.push("selected part absent: "+n); continue; }
       const b = base(n);
       const kind = b.slice(0, 3);
-      const rule = PART_RULES[kind];
+      const rule = kind === "Hed" ? { ...PART_RULES.Hed, headSrt } : PART_RULES[kind];
       if (!rule || used.has(kind)) continue;
       used.add(kind);
       const g = charB.gltf(n);
-      const tex = textureResolver(g, charB, b);
+      const tex = textureResolver(g, charB, b, true);
       const ms = attach(body.scene, bodyBind, g.scene, rule);
       if (kind === "Shs") ms.push(...attach(body.scene, bodyBind, g.scene, SHOE_MIRROR));
       if (kind === "Tnk") this.selectHarness(ms, harness);
       this.teamMaterials(ms, tex, team);
+      if (kind === "Tnk" && charB.has("data/tank_anim_native.json")) this.bindTank(body.scene, ms, tex, charB.json<TankAnimData>("data/tank_anim_native.json"));
+      if (kind === "Har" && hairId !== undefined && charB.has("data/hair_arrange.json")) this.applyHairArrange(body.scene, charB.json<HairArrangeData>("data/hair_arrange.json"), hairId);
       this.gearMeshes.push(...ms);
       this.info.parts.push(b);
     }
@@ -208,7 +266,7 @@ export class PlayerView {
         if (sm.isSkinnedMesh) this.muzzleBone ??= sm.skeleton.bones.find(b => b.name === "part:Muzzle" || b.name === "Muzzle") ?? null;
       }
       if (!this.muzzleBone) this.info.skipped.push("weapon Muzzle bone absent: visual FX uses explicit fallback");
-      this.teamMaterials(ms, textureResolver(g, weaponB), team);
+      this.teamMaterials(ms, textureResolver(g, weaponB, undefined, true), team);
       this.gearMeshes.push(...ms);
       this.info.parts.push(base(wName));
     } else this.gearMeshes.push(this.placeholderWeapon(body.scene, team));
@@ -234,9 +292,10 @@ export class PlayerView {
           ms.push(o);
         }
       });
-      this.teamMaterials(ms, textureResolver(s, charB), team);
+      const squidTex = textureResolver(s, charB, base(squidName), true);
+      this.teamMaterials(ms, squidTex, team);
       if (materialBank?.groups.Player_Squid) {
-        this.squidMaterials = bindMaterialChannels(this.materialTargets(ms, textureResolver(s, charB)), materialBank.groups.Player_Squid,materialParameter);
+        this.squidMaterials = bindMaterialChannels(this.materialTargets(ms, squidTex), materialBank.groups.Player_Squid,materialParameter);
         this.materialAnimations.push(this.squidMaterials);
       }
       this.squidLib = { clips: squidClips, mixer: new THREE.AnimationMixer(s.scene), actions: new Map() };
@@ -260,6 +319,101 @@ export class PlayerView {
     }
   }
 
+  /** PlayerTank.root.asb slots: Gauge(0) skeletal+material and InkShortage(1) are applied. InkLock(3)/SubMarker(4)/
+   * InkShortageGauge(2) need body+0x69c and the sub-weapon cost, which have no producer here: [미확정], not substituted. */
+  private bindTank(root: THREE.Object3D, ms: THREE.Object3D[], tex: ReturnType<typeof textureResolver>, data: TankAnimData): void {
+    const bone = data.skeletal.Gauge.bones.find(b => b.name === "Scale");
+    const scaleBone = root.getObjectByName("part:Scale") ?? null;
+    if (!scaleBone) this.info.skipped.push("tank Gauge: part:Scale bone absent");
+    const binding = bindMaterialChannels(this.materialTargets(ms, tex), data.material, tankParameter);
+    this.materialAnimations.push(binding);
+    this.tank = { gauge: new TankGauge(), frame: 0, scaleBone, scale: bone ? { S: bone.S, curves: bone.curves } : null, binding, group: data.material,
+      unapplied: ["InkLock: body+0x69c producer absent", "SubMarker/InkShortageGauge: sub-weapon ink cost producer absent", "M_Glass multi_normal_weight: Hoian multi-normal consumer absent"] };
+  }
+
+  /** 0x7101454544 → 0x71026df354 → 0x71026df700: applied when the selected resource changes (load here).
+   * Hair+0x338/+0x348 transform swap source is [미확정] (false). Cloth/skeletal weight AnimReduceRt is stored only. */
+  private applyHairArrange(root: THREE.Object3D, data: HairArrangeData, hairId: number): void {
+    const map = data.maps.find(m => m.key === hairId * 10000 + HAT_VARIATION);
+    if (!map) return;
+    for (const row of map.param.BoneParamArray ?? []) {
+      const bone = root.getObjectByName("part:" + row.BoneName) ?? root.getObjectByName(row.BoneName);
+      if (!bone) { this.info.skipped.push("HairArrange bone absent: " + row.BoneName); continue; }
+      const e = new THREE.Matrix4().makeRotationFromQuaternion(bone.quaternion).elements;
+      const bind = [e[0], e[4], e[8], bone.position.x, e[1], e[5], e[9], bone.position.y, e[2], e[6], e[10], bone.position.z];
+      const p = hairArrangeParam(row);
+      const out = hairArrangeLocal(bind, [bone.scale.x, bone.scale.y, bone.scale.z], p);
+      const m = out.matrix;
+      bone.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(m[0], m[1], m[2], 0, m[4], m[5], m[6], 0, m[8], m[9], m[10], 0, 0, 0, 0, 1));
+      bone.position.set(m[3], m[7], m[11]);
+      bone.scale.set(out.scale[0], out.scale[1], out.scale[2]);
+      bone.userData.animReduceRt = p.animReduceRt;
+    }
+  }
+
+  /** One game frame of 0x71026fb6d0 → slot18 timer. Local-player argument w2 (shortage enable) taken as 1 [미확정]. */
+  private stepTank(snap: PlayerSnap): void {
+    const t = this.tank;
+    if (!t) return;
+    if (snap.lack) t.gauge.lack();
+    const remaining = snap.ink ?? 1;
+    const out = t.gauge.update({ subCost: 0, remaining, lock: remaining, shortageEnabled: true });
+    t.gauge.advanceShortage(materialClipInfo(t.group, "InkShortage")?.frames ?? 45);
+    t.gauge.tickTimers();
+    t.frame = out.gauge;
+  }
+
+  private drawTank(): void {
+    const t = this.tank;
+    if (!t) return;
+    if (t.scaleBone && t.scale) {
+      const z = t.scale.curves.find(c => c.target === "0x0C");
+      t.scaleBone.scale.set(t.scale.S[0], t.scale.S[1], z ? sampleNativeMaterialCurve(z, t.frame) : t.scale.S[2]);
+    }
+    if (!t.binding) return;
+    // Slots write different lanes of the same Mat value (tex_mtx1 X/Y): merge before the typed consumer.
+    const merged = new Map<string, MaterialPatch>();
+    const add = (clip: string, frame: number): void => {
+      const s = sampleMaterialClip(t.group, clip, frame);
+      if (!s.supported) return;
+      for (const p of s.patches) {
+        const m = merged.get(p.material) ?? { material: p.material, params: {}, patterns: {} };
+        for (const [k, v] of Object.entries(p.params)) m.params[k] = { ...(m.params[k] ?? {}), ...v };
+        merged.set(p.material, m);
+      }
+    };
+    add("Gauge", t.frame);
+    if (t.gauge.shortagePlaying) add("InkShortage", t.gauge.shortageFrame);
+    const clip = t.group.clips.find(c => c.name === "Gauge")!;
+    t.binding.applySample({ supported: true, clip, patches: [...merged.values()] });
+  }
+
+  /** 0x71014522b0: Color_Skin frame = skin index (inside FrameCount) on M_Body/M_Face typed params. */
+  private applySkinColor(ms: THREE.Object3D[], group: MaterialAnimationGroup | undefined, index: number): void {
+    const frame = nativeHolderClipFrame(group, "Color_Skin", index, 0);
+    if (!frame) { this.info.skipped.push("Color_Skin clip unavailable: static FRES skin values remain"); return; }
+    const sample = sampleMaterialClip(group, "Color_Skin", frame.frame);
+    if (!sample.supported) { this.info.skipped.push("Color_Skin: " + sample.reason); return; }
+    const done = new Set<THREE.Material>();
+    for (const o of ms) for (const mat of [(o as THREE.Mesh).material].flat()) {
+      const f = mat && !done.has(mat) ? fresOf(mat) : null;
+      if (!f) continue;
+      done.add(mat);
+      const patch = sample.patches.find(p => p.material === (f.name ?? mat.name));
+      if (!patch) continue;
+      for (const [name, offsets] of Object.entries(patch.params))
+        if (!writeNativeMaterialParam(f.params, name, offsets)) this.info.skipped.push(`Color_Skin ${patch.material}.${name}: typed parameter unavailable`);
+    }
+    this.skinFrame = frame.frame;
+  }
+
+  /** 0x710145249c: Color_Eye pattern frame = eye index (0..FrameCount-1). */
+  private applyEyeColor(binding: MaterialChannelBinding, group: MaterialAnimationGroup, index: number): void {
+    const frame = nativeHolderClipFrame(group, "Color_Eye", index, 0);
+    if (!frame) return;
+    void binding.ready.then(() => binding.applySample(sampleMaterialClip(group, "Color_Eye", frame.frame)));
+  }
+
   private selectHarness(ms: THREE.Object3D[], h: Harness): void {
     const want = harnessBone(h);
     for (const m of ms) {
@@ -278,6 +432,8 @@ export class PlayerView {
         mat.userData.__hoianDone = true;
         const f = fresOf(mat);
         if (!f || !(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) continue;
+        const std = mat as THREE.MeshStandardMaterial;
+        for (const t of [std.map, std.emissiveMap]) if (t) applyNativeTextureColorSpace(t, t.name);
         const u = applyHoian(mat as THREE.MeshStandardMaterial, f, this.teamSet ? materialTeamParams(this.teamSet, f.renderInfo) : team, tex, this.info.skipped, mesh.geometry);
         if (this.lighting) {
           applyForward(mat as THREE.MeshStandardMaterial, f, this.lighting, null);
@@ -370,6 +526,7 @@ export class PlayerView {
     const speed = snap.animSpeed ?? snap.speed ?? this.speedFromDelta();
     const state = snap.state ?? this.fallbackState(snap, speed);
     a.step({ state, speed, dead: snap.dead, formCounter: snap.formCounter, animRate: snap.animRate, displayHidden: snap.displayHidden });
+    this.stepTank(snap);
     const miss = new Set([...a.human.missing, ...a.squid.missing]);
     this.info.missingClips = [...miss];
   }
@@ -431,6 +588,7 @@ export class PlayerView {
     if (this.squidLib && squid) applyLeaves(this.squidLib, a.squidLeaves(alpha));
     // Wrapper channels retain their own frame counts even while B7a0 hides the model.
     this.humanMaterials?.apply(a.humanLeaves(alpha));
+    this.drawTank();
     this.squidMaterials?.apply(a.squidLeaves(alpha));
   }
 }

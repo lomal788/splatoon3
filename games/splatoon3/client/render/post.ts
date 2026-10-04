@@ -34,7 +34,7 @@ export class HDRCompose {
   private externalBloom: { texture: THREE.Texture; mode: 1 | 2 } | null = null;
   readonly size = new THREE.Vector2();
   exposure = 1;
-  /** Web-selected conditional branch, not a proven live +523c/+5239 flag. */
+  /** GAMMA 1 = native UNORM display path (+523c bit4 = SystemTask+0x464 bit0 = +0x422 sRGB-display flag, ctor 0). The canvas is UNORM. */
   gamma = 1;
   /** Exposed for actual GPU integration/reference verification. */
   ccPacket: ColorCorrectionPacket | null = null;
@@ -45,7 +45,7 @@ export class HDRCompose {
     bloom: "native default producer connected; live view gates and NVN sampler/format remain unverified",
     dof: "unbound: native shader and live Enable remain unverified",
     vignette: "inactive: live enable and uniforms remain unverified",
-    gamma: "web branch 1; native live scene bits unverified",
+    gamma: "native GAMMA 1 for UNORM display (0x71036c8c24/0x71037a46bc); Lby SystemTask+0x422 writer unverified (sRGB display would use GAMMA 0 + hardware encode)",
   };
 
   constructor() {

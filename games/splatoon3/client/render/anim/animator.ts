@@ -3,6 +3,7 @@
 // 이 파일은 표시만 결정한다. 상태 전이(ToSquid→0x84 등)는 core/player(physics)의 일이고, 여기서는 받은 상태 번호를 따른다.
 import { Blackboard, HUMAN_ASB, SQUID_ASB, stateRow } from "./asb.ts";
 import { type ClipInfo, type LeafWeight, Wrapper } from "./slot.ts";
+import { nativeJumpVarId } from "./jump_var.ts";
 import { nativeSmDisplay, nativeHolderDisplay, type DisplayResetTarget } from "../../../core/player/display.ts";
 
 export interface AnimInput {
@@ -44,6 +45,10 @@ export class PlayerAnimator {
   /** 몸 튀어나옴 스프링 0x71014586a0: x, v */
   spring = { x: 0, v: 0 };
   readonly rival: boolean;
+  /** Active wrapper +0x10 (blackboard JumpVarID). */
+  jumpVarId = 0;
+  /** Main weapon kind K in mask 0x0637b2ef (K-4 < 27). Shooter K = 1/2/8 [추정] is outside it. */
+  weaponKindMasked = false;
 
   constructor(humanClips: ClipInfo, squidClips: ClipInfo, weaponAbbr: string, rival = false) {
     this.rival = rival;
@@ -55,7 +60,7 @@ export class PlayerAnimator {
     // This practice view keeps its selected weapon; holder-null/reset source lifetimes remain separate.
     this.bb.str.set("WeaponCategory", weaponAbbr);
     this.bb.str.set("WeaponDetail", weaponAbbr);
-    this.bb.int.set("JumpVarID", 0); // 출처 [미확정]
+    this.bb.int.set("JumpVarID", 0); // 초기화 0x710243dcf8 가 0
     this.bb.float.set("StainFrm", 0); // 유일한 쓰기가 0.0
   }
 
@@ -91,6 +96,10 @@ export class PlayerAnimator {
       else if (s === 0x91) this.f0 = 90;
       else if (s === 0x96 && this.prevState === 0x86) this.f0 = 140;
       else if (s === 0xe9 || s === 0xea) this.f0 = 107;
+    }
+    if (s >= 0x99 && s <= 0xa9) {
+      this.jumpVarId = nativeJumpVarId(this.jumpVarId, this.prevState, s, inp.speed, this.weaponKindMasked);
+      this.bb.int.set("JumpVarID", this.jumpVarId);
     }
     target.request(s, row.cmd, row.blend, inp.animRate ?? requestRate(s, inp.speed));
     this.active = target;

@@ -4,7 +4,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
 import { applyHoian } from "./hoian.ts";
-import { fresOf, textureResolver } from "./model.ts";
+import { applyNativeTextureColorSpace, fresOf, textureResolver } from "./model.ts";
 import type { EnvLight, MaterialTeamParams, TeamSet } from "./teamcolor.ts";
 import { materialTeamParams } from "./teamcolor.ts";
 import { BakeBindings } from "./bake.ts";
@@ -12,6 +12,7 @@ import { applyForward } from "./forward.ts";
 import { LightingState } from "./lighting.ts";
 import { SkyView } from "./sky.ts";
 import { NativeShadowState } from "./shadows.ts";
+import { highlightTexture, type HighlightData } from "./env_prefilter.ts";
 
 /** 맵 루트 이름(다른 영역이 scene.getObjectByName 으로 찾는다 — paint 표시 등) */
 export const MAP_ROOT_NAME = "splatoon3.map";
@@ -119,6 +120,8 @@ export class MapView {
   readonly shadows = new NativeShadowState();
   bakes: BakeBindings | null = null;
   sky: SkyView | null = null;
+  /** Original mSky_Alb BC6H blocks; bound only if the GPU decodes BPTC float. */
+  private skyHdr: THREE.CompressedTexture | null = null;
   /** Paint owns its atlas/hooks; restore its replacements before disposing the stage. */
   disposePaint?: () => void;
   environmentReady = false;
@@ -158,7 +161,9 @@ export class MapView {
     if (bundle?.has("env.json")) this.env = parseEnv(bundle.json("env.json"));
     this.applyEnv(scene);
     const raw = bundle?.has("env.json") ? bundle.json("env.json") : null;
-    this.lighting.configure(raw, this.env.light.color, this.env.light.intensity, this.env.direction);
+    const highlight = bundle?.has("env/IlluminateEnvMap.rgba8.json") && bundle.has("env/IlluminateEnvMap.rgba8.bin")
+      ? highlightTexture(bundle.json<HighlightData>("env/IlluminateEnvMap.rgba8.json"), bundle.bytes("env/IlluminateEnvMap.rgba8.bin")) : null;
+    this.lighting.configure(raw, this.env.light.color, this.env.light.intensity, this.env.direction, highlight);
     this.shadows.configure(raw);
     if (bundle) this.bakes = new BakeBindings(bundle);
     const glbName = bundle?.names().find((n) => /(^|\/)visual\.glb$/i.test(n)) ?? bundle?.names().find((n) => /\.glb$/i.test(n));
@@ -168,13 +173,22 @@ export class MapView {
     } else this.addPlaceholder();
     if (bundle?.has("sky/Sky_Daytime00.glb")) {
       this.sky = new SkyView(bundle.gltf("sky/Sky_Daytime00.glb"), raw);
+      if (bundle.has("sky/mSky_Alb.bc6h.json") && bundle.has("sky/mSky_Alb.bc6h.bin")) {
+        const meta = bundle.json<HighlightData>("sky/mSky_Alb.bc6h.json"), bytes = bundle.bytes("sky/mSky_Alb.bc6h.bin");
+        const mips = meta.mips.map(m => ({ data: new Uint8Array(bytes, m.offset, m.bytes), width: m.width, height: m.height }));
+        const t = new THREE.CompressedTexture(mips as unknown as ImageData[], mips[0].width, mips[0].height, THREE.RGB_BPTC_UNSIGNED_Format);
+        t.colorSpace = THREE.NoColorSpace; t.flipY = false; t.generateMipmaps = false;
+        // Native mSky sampler via bfres2gltf: repeat/repeat, linear mag, linear min + point mip (9985).
+        t.minFilter = THREE.LinearMipmapNearestFilter; t.magFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.needsUpdate = true; this.skyHdr = t;
+      }
       scene.add(this.sky.root);
       scene.background = null;
     }
   }
 
   private addVisual(gltf: GLTF, bundle: Bundle, team: MaterialTeamParams, set?: TeamSet): void {
-    const tex = textureResolver(gltf, bundle);
+    const tex = textureResolver(gltf, bundle, undefined, true);
     gltf.scene.updateMatrixWorld(true);
     // Bone-bound rigs must be read before static geometry is merged.
     this.lighting.bindRigs(gltf.scene);
@@ -192,6 +206,8 @@ export class MapView {
         if (!mat) {
           mat = original.clone();
           clones.set(key, mat);
+          // GLTFLoader tags emissive/color slots sRGB; native *_Emm is BC4_UNORM (r11 scan: 13 map textures).
+          for (const t of [(mat as THREE.MeshStandardMaterial).map, (mat as THREE.MeshStandardMaterial).emissiveMap]) if (t) applyNativeTextureColorSpace(t, t.name);
           applyHoian(mat as THREE.MeshStandardMaterial, f, set ? materialTeamParams(set, f.renderInfo) : team, tex, this.skipped, m.geometry);
           applyForward(mat as THREE.MeshStandardMaterial, f, this.lighting, bake);
         }
@@ -204,6 +220,7 @@ export class MapView {
 
   async captureEnvironment(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Promise<void> {
     this.environmentReady=false;
+    if (this.sky && this.skyHdr && renderer.extensions.has("EXT_texture_compression_bptc")) this.sky.useHdr(this.skyHdr);
     try {await this.lighting.capture(renderer, scene, this.root, this.sky?.root ?? null, capture => this.sky?.setCapture(capture));}
     finally {this.environmentReady=true;}
   }
@@ -212,7 +229,7 @@ export class MapView {
     this.disposePaint?.();this.disposePaint=undefined;
     scene.remove(this.root);
     if (this.sky) scene.remove(this.sky.root);
-    this.sky?.dispose(); this.lighting.dispose(); this.shadows.dispose(); this.bakes?.dispose();
+    this.sky?.dispose(); this.skyHdr?.dispose(); this.lighting.dispose(); this.shadows.dispose(); this.bakes?.dispose();
     const materials = new Set<THREE.Material>();
     this.root.traverse(o => {
       if (!(o as THREE.Mesh).isMesh) return;

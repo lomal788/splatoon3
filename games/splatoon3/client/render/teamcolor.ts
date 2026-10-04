@@ -212,3 +212,62 @@ export const FALLBACK_ROW: TeamColorRow = {
   Tag: "VersusRegular",
   __RowId: "Work/Gyml/OrangeBlue.game__gfx__parameter__TeamColorDataSet.gyml",
 };
+
+/** sead::Random (xorshift128). getU32 = 0x7101179d78..0x7101179d94 inline copy in 0x7101179c80. */
+export class SeadRandom {
+  s: [number, number, number, number];
+  constructor(state: [number, number, number, number]) {
+    this.s = state.map((v) => v >>> 0) as [number, number, number, number];
+  }
+  /** sead::Random::init(u32) library form. Which seed the global *0x7105997950 receives is [미확정]. */
+  static fromSeed(seed: number): SeadRandom {
+    const s: number[] = [];
+    let p = seed >>> 0;
+    for (let i = 1; i <= 4; i++) {
+      p = (Math.imul(1812433253, (p ^ (p >>> 30)) >>> 0) + i) >>> 0;
+      s.push(p);
+    }
+    return new SeadRandom(s as [number, number, number, number]);
+  }
+  nextU32(): number {
+    const [x, y, z, w] = this.s;
+    const t = (x ^ (x << 11)) >>> 0;
+    const n = (t ^ (t >>> 8) ^ w ^ (w >>> 19)) >>> 0;
+    this.s = [y, z, w, n];
+    return n;
+  }
+}
+
+/** 0x7101179c80(table, column 0xc Tag, value 0 = VersusRegular): n matching rows, index = (r·n)>>32 by umull/lsr. */
+export function seadRandomIndex(r: number, n: number): number {
+  return Number((BigInt(r >>> 0) * BigInt(n >>> 0)) >> 32n);
+}
+
+/** Lobby selector 0 (0x7101179fd0) after boot init 0x7101179448: one uniformly drawn VersusRegular row, swap 0.
+ * Row order is the RSDB TeamColorDataSet table order [데이터]. No matching row → YellowPurple (model_character.md §3.1). */
+export function selectLobbyTeamRow(rows: (TeamColorRow & { name?: string })[], rng: SeadRandom): TeamColorRow {
+  const regular = rows.filter((r) => r.Tag === "VersusRegular");
+  if (!regular.length) return rows.find((r) => r.name === "YellowPurple") ?? FALLBACK_ROW;
+  return regular[seadRandomIndex(rng.nextU32(), regular.length)];
+}
+
+const lobbyRows = new WeakMap<object, TeamColorRow>();
+/** One boot-time choice shared by the player/stage material and paint views of the same table object. */
+export function lobbyTeamRow(table: { dataSets?: (TeamColorRow & { name?: string })[] } | undefined, seed: () => number): TeamColorRow {
+  if (!table?.dataSets?.length) return FALLBACK_ROW;
+  let row = lobbyRows.get(table);
+  if (!row) {
+    row = selectLobbyTeamRow(table.dataSets, SeadRandom.fromSeed(seed()));
+    lobbyRows.set(table, row);
+  }
+  return row;
+}
+
+/** Web seed for the boot draw: `?teamSeed=<u32>` for reproducible captures, otherwise a fresh random u32. */
+export function lobbyTeamSeed(): number {
+  const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("teamSeed") : null;
+  if (q !== null && /^\d+$/.test(q)) return Number(q) >>> 0;
+  const a = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(a);
+  return a[0];
+}
