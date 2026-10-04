@@ -33,7 +33,6 @@ uniform vec2 hCharFilm;
 uniform vec3 hCharScatter,hCharManualColor;
 uniform float hCharManualFresnel,hCharReady,hCharCPIntensity,hCharCPOffset,hCharCPNormal,hCharCPTeam,hCharFilmEnabled,hCharCheap,hCharEdgeEnabled;
 uniform float hLightAlpha;
-uniform sampler2D hCharThcTex,hCharMaskTex,hCharCPTex,hCharAOTex;
 varying vec3 hCharNv,hCharTangent;
 float hCharScatterLobe(float voL) {
   float q=(hCharRates.y-1.)*(hCharRates.y-1.);
@@ -89,9 +88,14 @@ export function applyCharacterMaterial(mat:THREE.MeshStandardMaterial,f:FresMate
     hCharCPNormal:{value:parameter(f,"comp_paint_norm_intens",NaN)},hCharCPTeam:{value:parameter(f,"two_comp_paint_team",NaN)},
     hCharFilmEnabled:{value:film?1:0},hCharCheap:{value:cheap?1:0},hCharEdgeEnabled:{value:profile.edge?1:0}};
   const loads:Promise<void>[]=[];
+  // Fragment texture units are limited (16 on d3d11/most GPUs). A slot holding the same FRES texture on the same
+  // UV as Hoian's bound _re0 reads that sampler: identical texels, one unit (body/face _fm0=_re0 MAi, hair/squid _re2=_re0 Thc).
+  const glslName:Record<string,string>={};
+  const re0=textureForSlot(f,"_re0"),re0Uv=textureUvSelector(f,"texcoord_select_res0","texcoord_select_resource0");
   const slot=(key:string,s:string,selector:string,required=true,legacy?:string):void=>{
     const name=textureForSlot(f,s),i=textureUvSelector(f,selector,legacy);
     if(!name||i!==0){if(required)stats.missing.push(!name?s+" texture missing":selector+" UV"+i+" unsupported");return;}
+    glslName[key]=name===re0&&re0Uv===0&&s!=="_re0"?"hResource0Tex":key;
     loads.push(tex(name).then(t=>{textures[key].value=t;if(!t)stats.missing.push(name+" unavailable");}));
   };
   const hasAO=profile.ao;
@@ -117,7 +121,8 @@ export function applyCharacterMaterial(mat:THREE.MeshStandardMaterial,f:FresMate
     Object.assign(sh.uniforms,uniforms);
     sh.vertexShader="varying vec3 hCharNv,hCharTangent;\n"+sh.vertexShader.replace("#include <defaultnormal_vertex>",
       "#include <defaultnormal_vertex>\nhCharNv=inverseTransformDirection(transformedNormal,viewMatrix);\nhCharTangent=inverseTransformDirection(transformedTangent,viewMatrix);\n");
-    const declarations=CHARACTER_MATERIAL_GLSL.replace("uniform float hLightAlpha;",sh.fragmentShader.includes("uniform float hLightAlpha;")?"":"uniform float hLightAlpha;");
+    const own=Object.entries(glslName).filter(([k,v])=>k===v).map(([k])=>k);
+    const declarations=(own.length?"uniform sampler2D "+own.join(",")+";\n":"")+CHARACTER_MATERIAL_GLSL.replace("uniform float hLightAlpha;",sh.fragmentShader.includes("uniform float hLightAlpha;")?"":"uniform float hLightAlpha;");
     const main=sh.fragmentShader.match(/void\s+main\s*\(\s*\)\s*\{/);
     if(!main||main.index===undefined)throw new Error("Character fragment entry missing");
     sh.fragmentShader=sh.fragmentShader.slice(0,main.index)+declarations+sh.fragmentShader.slice(main.index);
@@ -125,10 +130,10 @@ export function applyCharacterMaterial(mat:THREE.MeshStandardMaterial,f:FresMate
       float hCMask=0.,hCFilmMask=1.,hCTMask=1.,hCK=1.,hCAO=1.,hCPaintSigned=0.;vec3 hCNc=normalize(hCharNv);
       vec3 hCTransmission=hCalcTransmission.rgb,hCUnderFilm=hCalcUnderFilm.rgb;
       if(hCharReady>.5){
-        `+(profile.thickness?"hCK=1.-texture2D(hCharThcTex,hUV0).r;\n":"")+
-          (cheap?"hCMask=texture2D(hCharMaskTex,hUV0).r;\n":"")+
-          (profile.kind==="sfxFilm"?"hCFilmMask=texture2D(hCharMaskTex,hUV0).r;hCTMask=hCFilmMask;\n":"")+
-          (hasAO?"hCAO=clamp(texture2D(hCharAOTex,hUV0).r,0.,1.);\n":"")+
+        `+(profile.thickness?"hCK=1.-texture2D("+glslName.hCharThcTex+",hUV0).r;\n":"")+
+          (cheap?"hCMask=texture2D("+glslName.hCharMaskTex+",hUV0).r;\n":"")+
+          (profile.kind==="sfxFilm"?"hCFilmMask=texture2D("+glslName.hCharMaskTex+",hUV0).r;hCTMask=hCFilmMask;\n":"")+
+          (hasAO?"hCAO=clamp(texture2D("+glslName.hCharAOTex+",hUV0).r,0.,1.);\n":"")+
           (profile.paint?String.raw`
         float cp=texture2D(hCharCPTex,hUV0).r;
         float gradient=texture2D(hCharCPTex,hUV0+vec2(hCharCPOffset)).r-texture2D(hCharCPTex,hUV0-vec2(hCharCPOffset)).r;
@@ -155,7 +160,8 @@ export function applyCharacterMaterial(mat:THREE.MeshStandardMaterial,f:FresMate
     const native=String.raw`
       if(hCharReady>.5){
         float hCShadow=clamp(1.-((1.-hDynamicShadow(hWorldPosition,hViewDepth))+hProjectionOcclusion(hWorldPosition)),0.,1.);
-        float hCAoLight=clamp(1.-(1.-hDynamicShadow(hWorldPosition,hViewDepth))*hAOMain,0.,1.);
+        // body5549 l.589-591/697/800: AoLight = sat(1-(1-SPP.y)*clamp(viewZ+UBO36.z)*UBO36.w) — static prepass channel only.
+        float hCAoLight=clamp(1.-(1.-hShadowPrePass(hWorldPosition,hViewDepth).y)*clamp(hShadowFarDepthTest-hViewDepth,0.,1.)*hAOMain,0.,1.);
         vec3 hCd=hCharDirect(dot(hN,hL),hLightColor,hCMask);
         float hCEdge=(hCharEdgeEnabled>.5?hCharEdge(dot(hN,hV),dot(hN,hL),dot(hV,hL),hCK):hCharScatterLobe(dot(hV,hL))*hCK);
         reflectedLight.indirectDiffuse=hDiffuse*(1.-hF0)*hEvaluateSH(hIrradianceNormal)*hCAO+
@@ -163,15 +169,15 @@ export function applyCharacterMaterial(mat:THREE.MeshStandardMaterial,f:FresMate
         reflectedLight.directDiffuse=(hDiffuse*.318309873)*hCd*hCShadow*clamp(1.-hCTau,0.,1.)*hCNormalCorrection+
           hCAoLight*hCEdge*hCTransmission*hLightAlpha*hCTau;
         reflectedLight.directSpecular=hSpecular(hF0,hR,hN,hV,hL)*hCd*hCShadow*clamp(1.-hCTau,0.,1.)*hCNormalCorrection;
-        #ifdef USE_ENVMAP
-        reflectedLight.indirectSpecular=getIBLRadiance(normalize(vViewPosition),normal,hR)*EnvironmentBRDF(normal,normalize(vViewPosition),hF0,1.,hR)*hCAO;
-        #endif
+        // body5549 l.624-642: cPrefilEnvMapArray[roundEven(5.5-5.5cos(pi r))](reflect) x (F0*BRDF.x+BRDF.y), x AO —
+        // the same native lookup forward.ts uses (no three PMREM sampler).
+        reflectedLight.indirectSpecular=hNativeEnvSpecular(hN,hV,hF0,hR)*hCAO;
       }else{
       `+old+"\n}\n";
     sh.fragmentShader=sh.fragmentShader.slice(0,begin+FORWARD_LIGHTING_BEGIN.length)+native+sh.fragmentShader.slice(end);
     stats.hookCompiled++;stats.ordinaryConsumer=stats.textureReady;stats.nativeUvMatrices=uvVerified();
   };
-  const cacheKey=()=>key.call(mat)+":nativeCharacter:"+cheap+":"+film+":"+hasAO+":"+profile.kind+":"+profile.edge+":"+profile.manualFresnel;
+  const cacheKey=()=>key.call(mat)+":nativeCharacter:"+cheap+":"+film+":"+hasAO+":"+profile.kind+":"+profile.edge+":"+profile.manualFresnel+":"+JSON.stringify(glslName);
   mat.onBeforeCompile=hook;mat.customProgramCacheKey=cacheKey;
   mat.userData.nativeCharacterMaterial=true;mat.userData.characterMaterialStats=stats;mat.needsUpdate=true;
   const ready=Promise.all(loads).then(()=>{

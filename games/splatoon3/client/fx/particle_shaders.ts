@@ -24,7 +24,19 @@ uniform int uBill;      // 0 카메라 빌보드, 2 Y 빌보드, 5 VelLook(카�
 uniform int uRotOrder;  // 4 YZX, 6 ZXY, 그 밖 XYZ
 uniform float uLoopRate;
 uniform float uLoopRandom;
+uniform vec4 uUvAnim[15];
+uniform ivec3 uUvAnimOn;
+uniform int uRandMode1;
+uniform int uNearFadeOn,uDepthOffsetOn,uShaderAnimOn;
+uniform vec2 uNearFade;
+uniform float uDepthOffset,uFade;
+uniform vec4 uParamK[8];
+uniform int uParamN;
+uniform float uParamMode;
+uniform sampler2D uMap;
 varying vec2 vUv;
+varying vec2 vUvT1,vUvT2;
+varying float vNearFade;
 varying vec4 vColor;
 varying vec4 vColor1;
 varying vec4 vPrimitive;
@@ -56,6 +68,13 @@ vec3 vatNormal(float a) {
   return vec3(sin(theta)*cos(phi),z,sin(theta)*sin(phi));
 }
 
+// nn::vfx texture shift animation (vertex 1940/1202 etc.): rows = ResEmitter 0x490 + 0x50*slot.
+vec2 uvShift(int s, vec2 uv, float age, float scrollU, float scrollV, float scaleU, float scaleV) {
+  vec4 a=uUvAnim[s*5], b=uUvAnim[s*5+1], c=uUvAnim[s*5+2], e=uUvAnim[s*5+4];
+  vec2 k=vec2(e.x/e.z, e.y/e.w);
+  float su=age*b.z+scaleU*c.z+c.x+c.z, sv=age*b.w+scaleV*c.w+c.w+c.y;
+  return vec2((k.x*uv.x-.5)*su-(age*a.x+b.x+a.z-2.*scrollU*b.x)+.5, (k.y*uv.y-.5)*sv-(age*a.y+b.y+a.w-2.*scrollV*b.y)+.5);
+}
 vec4 keyLerp(vec4 k[8], int cnt, float t, float mode) {
   if (cnt <= 1) return k[0];
   if (t < k[0].w) return k[0];
@@ -97,12 +116,26 @@ void main() {
   vec3 sc = keyLerp(uScaleK, uScaleN, tn,uScaleMode).xyz * aScale0;
   if (uPlane == 2) sc.y = sc.x;
   float r = uRotRegist;
-  float R = r == 1.0 ? t : (1.0 - pow(r, t)) / (1.0 - r);
+  float R = r == 1.0 ? t : r == 0.0 ? 0.0 : (1.0 - pow(r, t)) / (1.0 - r);
   vec3 rot = aRot0 + aRotAdd * R;
-  mat3 M = uRotOrder == 4 ? ry(rot.y) * rz(rot.z) * rx(rot.x)
-         : uRotOrder == 6 ? rz(rot.z) * rx(rot.x) * ry(rot.y)
+  mat3 M = uRotOrder == 4 ? rx(rot.x) * rz(rot.z) * ry(rot.y)
+         : uRotOrder == 6 ? ry(rot.y) * rx(rot.x) * rz(rot.z)
          : rx(rot.x) * ry(rot.y) * rz(rot.z);
+  vec4 rr=aRand;
+  vec4 rs1=uRandMode1==1?vec4(rr.y,rr.z,rr.y,rr.z):vec4(rr.x,rr.y,rr.x,rr.y);
+  vec4 rs2=uRandMode1==1?vec4(rr.z,rr.x,rr.x,rr.y):vec4(rr.x,rr.y,rr.x,rr.y);
+  vec2 uv0=uUvAnimOn.x==1?uvShift(0,uv,t,rr.x,rr.y,rr.x,rr.y):uv;
+  vUv=uv0;
+  vUvT1=uUvAnimOn.y==1?uvShift(1,uv,t,rs1.x,rs1.y,rs1.z,rs1.w):uv;
+  vUvT2=uUvAnimOn.z==1?uvShift(2,uv,t,rs2.x,rs2.y,rs2.z,rs2.w):uv;
   vec3 q = position,nLocal=normal;
+  if(uShaderAnimOn==1&&any(notEqual(q,vec3(0.)))){
+    float tp=t/aTime.y,sa=0.;
+    // Native STEP sum over all 8 file key rows (unused rows keep time 0): sum k_i*s_i*(1-s_(i+1)).
+    if(uParamMode==1.)for(int i=0;i<8;i++){float s0=tp>=uParamK[i].w?1.:0.,s1=i<7&&tp>=uParamK[min(i+1,7)].w?1.:0.;sa+=uParamK[i].x*s0*(1.-s1);}
+    else sa=keyLerp(uParamK,uParamN,tp,uParamMode).x;
+    q+=sa*normalize(q)*(2.*textureLod(uMap,uv0,0.).w-1.);
+  }
   if(uHasVat==1){
     int width=textureSize(uVat,0).x;
     float qt=clamp(min(t*uVatRate/(float(width)+.00001)+.00001,.99999),0.,1.);
@@ -114,8 +147,8 @@ void main() {
     nLocal=mix(vatNormal(p0.w),vatNormal(p1.w),fract(vf));
     if(any(notEqual(q,vec3(0.))))nLocal+=q*uVatNormalOffset;
   }
-  vec3 v = uPlane == 1 ? vec3(q.x, q.z, -q.y) : q;
-  v = (v + 0.5 * uPivot) * sc;
+  vec3 v = (q + 0.5 * uPivot) * sc;
+  if (uPlane == 1) v = vec3(v.x, v.z, -v.y);
   vec3 lv = M * v;
   vec3 center = aOrigin + aBx * P.x + aBy * P.y + aBz * P.z;
   mat3 basis=mat3(aBx,aBy,aBz);
@@ -137,6 +170,7 @@ void main() {
   } else {
     vec3 world = center + aBx * lv.x + aBy * lv.y + aBz * lv.z;
     gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
+    if(uDepthOffsetOn==1){vec4 ve=viewMatrix*vec4(world,1.);ve.z+=uDepthOffset;vec4 ce=projectionMatrix*ve;gl_Position.z=gl_Position.w*ce.z/ce.w;}
   }
   vec4 ct=vec4(channelTime(t,aTime.y,aRand.x,uPeriods.x,uPhases.x),channelTime(t,aTime.y,aRand.x,uPeriods.y,uPhases.y),channelTime(t,aTime.y,aRand.x,uPeriods.z,uPhases.z),channelTime(t,aTime.y,aRand.x,uPeriods.w,uPhases.w));
   float al=uAlphaType==2?keyLerp(uAlphaK,uAlphaN,ct.y,uKeyModes.y).x:uAlphaK[0].x;
@@ -145,13 +179,22 @@ void main() {
   vec3 c1=uColor1Type==2?keyLerp(uColor1K,uColor1N,ct.z,uKeyModes.z).xyz:uColor1K[0].xyz;
   // Existing team input is a named web bridge for native dynamic[0/1]; producer remains unknown.
   vColor=vec4(aColor*c0,al);vColor1=vec4(aColor*c1,a1);
+  float viewDepth=-(viewMatrix*vec4(center,1.)).z;
+  if(uDepthOffsetOn==1){
+    // Native 1885: near-fade depth uses d01' = d01 + off*(d01-1)/w of the particle center, then linearizes.
+    vec4 cc=projectionMatrix*viewMatrix*vec4(center,1.);float d01=(cc.z*.5+cc.w*.5)/cc.w;
+    d01+=uDepthOffset*(d01-1.)/cc.w;
+    viewDepth=projectionMatrix[3][2]/((2.*d01-1.)+projectionMatrix[2][2]);
+  }
+  vNearFade=uNearFadeOn==1?(uNearFade.y!=uNearFade.x?clamp((viewDepth-uNearFade.x)/(uNearFade.y-uNearFade.x),0.,1.):viewDepth>uNearFade.x?1.:0.)*uFade:uFade;
+  if(uNearFadeOn==1&&vNearFade<=0.)gl_Position=vec4(2.,2.,2.,1.);
 
 }
 `;
 
 export const FRAG = /* glsl */ `
 uniform sampler2D uMap,uMap1,uMap2;
-uniform int uProgram,uHasNormal,uLightingAvailable;
+uniform int uProgram,uHasNormal,uLightingAvailable,uAlphaCompare;
 uniform float uHasMap,uColorScale,uAlphaThreshold,uLinkedAlpha,uFade,uSoftDistance;
 uniform vec2 uAlphaRemap,uNearFade;
 uniform float uWebRoughness,uWebFresnel;
@@ -165,7 +208,8 @@ uniform vec3 hDepthRange,hGridOrigin,hInvCell;
 uniform vec2 hHeightRange;
 uniform highp usampler2D hGrid;
 uniform vec4 hDynColor[30],hDynAtt[30],hDynPos[30],hDynDir[30];
-varying vec2 vUv,vUv1;
+varying vec2 vUv,vUv1,vUvT1,vUvT2;
+varying float vNearFade;
 varying vec4 vColor,vColor1,vPrimitive,vTangent;
 varying vec3 vWorld,vNormal;
 vec3 fxSH(vec3 n){
@@ -194,10 +238,10 @@ void main(){
   vec4 t0=vec4(1.),t1=vec4(1.),t2=vec4(1.);
   if(uHasMap>.5)t0=texture2D(uMap,vUv);
   else {vec2 d=vUv*2.-1.;t0.a=clamp(1.-dot(d,d),0.,1.);}
-  if(uHasNormal==1)t1=texture2D(uMap1,vUv);
-  if(uProgram==1202)t2=texture2D(uMap2,vUv);
-  float nearFade=uNearFade.y>uNearFade.x?clamp((length(cameraPosition-vWorld)-uNearFade.x)/(uNearFade.y-uNearFade.x),0.,1.):1.;
-  float fade=nearFade*uFade,soft=1.;
+  if(uHasNormal==1)t1=texture2D(uMap1,vUvT1);
+  if(uProgram==1202)t2=texture2D(uMap2,vUvT2);
+  // Native near-distance alpha: per-particle center view depth in the vertex stage (programs with _NEAR_DIST_ALPHA).
+  float fade=vNearFade,soft=1.;
   if(uProgram==1897&&uDepthAvailable==1&&uSoftDistance>0.){
     float scene=texture2D(uSceneDepth,gl_FragCoord.xy/uDepthResolution).r;
     soft=clamp((linearDepth(scene)-linearDepth(gl_FragCoord.z))/uSoftDistance,0.,1.);
@@ -211,7 +255,7 @@ void main(){
   else if(uProgram==1886){rawA=clamp((t0.a*vPrimitive.a-vColor.a)*vColor1.a,0.,1.)*fade;base=(t0.rgb*c0+c1)*vPrimitive.rgb;}
   else if(uProgram==1940){rawA=clamp(t0.a*vPrimitive.a*vColor.a,0.,1.)*uFade;base=(t0.rgb*c0+c1)*vPrimitive.rgb;}
   else {rawA=clamp(t0.r*vColor.a,0.,1.);base=c0;} // Prior web fallback; no native claim for unknown programs.
-  if(rawA<=uAlphaThreshold)discard;
+  if(uAlphaCompare==1&&rawA<=uAlphaThreshold)discard;
   float mappedA=rawA*uAlphaRemap.x+uAlphaRemap.y;
   vec3 n=normalize(vNormal);
   if(uHasNormal==1){

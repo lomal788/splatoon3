@@ -15,6 +15,7 @@ import { XLinkInstance, type EmitContext, type XAsset, type XHandle, type XSink 
 import { InkActionState } from "./inkaction.ts";
 import { muzzlePoseMatrix } from "./muzzle.ts";
 import { EmitterInstance, ParticleBatch, identityMatrix, type EmitMatrix, type ParticleInputs } from "./particles.ts";
+import { predictShotGuide, shotGuideAsset, type ShotGuide } from "./shot_guide.ts";
 import { HIT_ESET, WATER_ESET, floorMatrix, identityFloor, normalMatrix, pickSplash, wallMatrix } from "./splash.ts";
 
 // 팀 색(선형): graphics/team_color.md §8 OrangeBlue Original(set0 Alpha, set1 Bravo, set2 Neutral).
@@ -69,6 +70,11 @@ export class FxSystem implements XSink {
   private readonly rnd = Math.random;
   private readonly shakes: CameraShakeMixer;
   private readonly particleInputs:ParticleInputs;
+  /** 조준 표시 핸들(0x7102677578 의 가운데·히트마커 쌍): 종류가 바뀌거나 핸들이 끝나면 다시 발생, 아니면 위치만 갱신 */
+  private readonly guide: Record<"Shooter_Center" | "Shooter_HitMarker", { kind: number; h: EsetHandle | null }> = {
+    Shooter_Center: { kind: -1, h: null }, Shooter_HitMarker: { kind: -1, h: null },
+  };
+  lastGuide: ShotGuide | null = null;
 
   constructor(w: World, cam: THREE.Camera, data: FxData,particleInputs:ParticleInputs={}) {
     this.particleInputs=particleInputs;
@@ -340,6 +346,7 @@ export class FxSystem implements XSink {
       }
     }
     this.updateBullets();
+    this.updateShotGuide();
     if (this.playerElink && this.local) {
       for (const [k, v] of Object.entries(playerProps(this.w, this.local))) this.playerElink.setProp(k, v);
       this.playerElink.props.set("SubjectiveType", "Focused");
@@ -402,6 +409,31 @@ export class FxSystem implements XSink {
       }
     }
     for (const b of this.bullets.values()) b.h?.setMatrix(identityMatrix(b.cur));
+  }
+
+  /** 슈터 조준 표시: 0x71025498d4 / 0x710258683c (가운데·히트마커). 바이어스(좌우)는 각도 공급원 미확정이라 그리지 않는다. */
+  private updateShotGuide(): void {
+    const supplied = this.w.shared.get("shotGuide") as ShotGuide | undefined;
+    let g: ShotGuide;
+    try { g = supplied ?? predictShotGuide(this.w); } catch { return; }
+    this.lastGuide = g;
+    const e = this.cam.matrixWorld.elements;
+    const basis = { x: [e[0], e[1], e[2]] as V3, y: [e[4], e[5], e[6]] as V3, z: [e[8], e[9], e[10]] as V3 };
+    for (const base of ["Shooter_Center", "Shooter_HitMarker"] as const) {
+      const slot = this.guide[base];
+      const asset = g.show ? shotGuideAsset(base, g.kind) : null;
+      const m: EmitMatrix = { o: base === "Shooter_Center" ? g.center : g.hit, ...basis };
+      if (!asset) {
+        if (slot.h) slot.h.fade();
+        slot.h = null; slot.kind = g.show ? g.kind : -1;
+        continue;
+      }
+      if (slot.kind !== g.kind || !slot.h || !slot.h.alive()) {
+        slot.h?.fade();
+        slot.h = this.spawnEset(asset, m, this.teamColor(this.local?.team ?? 0));
+        slot.kind = g.kind;
+      } else slot.h.setMatrix(m);
+    }
   }
 
   private hitEffect(): XLinkInstance | null {

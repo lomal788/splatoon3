@@ -41,7 +41,7 @@
 
 ## 3. 테스트·실행 결과
 
-- `npm run typecheck` 통과. `npm test` **422/422**(광원 담당 테스트 포함 시점)(신규 `r11_gfx_char.test.mjs` 8건, `r11_gfx_char_web.test.mjs` 9건 포함).
+- `npm run typecheck` 통과. `npm test` **451/451**(긴급 정정 후, 다른 담당 테스트 포함 시점)(신규 `r11_gfx_char.test.mjs` 8건, `r11_gfx_char_web.test.mjs` 9건 포함).
 - 화면(단일 캡처 실행, swiftshader): 기본 시점은 수정 전과 같은 입력·시점(OrangeBlue, `?teamSeed=1`), 근접은 플레이어 기준 카메라 덮어쓰기. 브라우저 page/console 오류 **0**(두 로드 모두), 캐릭터 재질 7개 texture ready, 탱크 Gauge frame0 Scale (1.4254897,1,2.1952798) 확인. 상세는 [char_shot_report.json](../../../analysis/gfx_r11/char_shot_report.json).
 
 | 수정 전 | 수정 후 |
@@ -86,3 +86,21 @@
 - 원인: native 발광 텍스처가 없을 때 `hCalcEmission` 초깃값을 three의 `totalEmissiveRadiance`로 잡는데, 이 값에는 이미 세기가 곱해져 있다(`setHoianMaterialParam`가 emissive = Emm 색 × 세기). 그 뒤 replace2 경로가 다시 세기를 곱했다(오징어 M_Body .01 → .0001).
 - 수정: 대체 경로 초깃값에서 세기를 나눠 뺐다. emission_color_type 1 경로는 결과가 이전과 같도록 대체 경로에서만 세기를 다시 곱한다. native 텍스처 경로는 변경 없음.
 - 검증: typecheck, `npm test` 422/422, build 통과.
+
+## 7. 프래그먼트 텍스처 유닛 16개 한도 정정(긴급) — 2026-10-04
+
+실제 GPU(Edge `--use-angle=d3d11`, MAX_TEXTURE_IMAGE_UNITS 16)에서 캐릭터 셰이더가 링크에 실패했다. swiftshader는 32개라 드러나지 않았다. 수정 전 실측(활성 sampler, swiftshader `getActiveUniform`, [sampler_probe_before.json](../../../analysis/gfx_r11/sampler_probe_before.json))은 M_Body·M_Face 19, 머리 M_TeamColor 18, 탱크 M_Body 20, M_Harness 17이다(정점용 boneTexture 제외). 공용으로 hGrid·그림자 4(hShadowMap0/1·hProjShadowMap·정적 hStaticShadowMap)·hPrefilAtlas·hEnvBRDF 7개가 들어간다.
+
+| 정리 | 근거(텍셀·식 불변) | 절약 |
+|---|---|---|
+| `_fm0`/`_re2`가 Hoian `_re0`과 **같은 FRES 텍스처·같은 UV**이면 `hResource0Tex`로 읽음 | 몸·얼굴 `_fm0=_re0=MAi`, 머리·오징어 `_re2=_re0=Thc`, 하네스 `_fm0=_re0=Fxm` | 1 |
+| glTF `Rgh__Mtl.mr`의 roughnessMap=metalnessMap(같은 텍스처·UV) → 한 번 읽어 `.g`/`.b` 사용. metallicFactor 0이면 metalnessMap 제거(0·텍셀=0) | three 청크 식과 같음. `metalnessFactor`는 metalnessmap_fragment 뒤에서 곱함 | 1 |
+| emissiveMap이 Hoian 바인딩(`_su0`·`_e0` calc22 등)과 같은 텍스처·UV0이면 그 sampler 재사용 | 오징어 Tcl, 탱크 Emi | 0~1 |
+| 재질 패턴 `_r0`가 있는 재질에만 `mCRgh` sampler 주입 | Player00·탱크 클립에는 `_r0` 패턴 없음(오징어 눈만) | 1 |
+| 캐릭터 환경 반사를 three PMREM(`envMap`)에서 forward와 같은 원본 `hNativeEnvSpecular`(cPrefilEnvMapArray 층 roundEven(5.5−5.5cos πr)×(F0·BRDF.x+BRDF.y))로 | body5549 l.624–642. 광원 담당이 맵에 넣은 원본 경로를 캐릭터도 사용(이 항목은 결과가 원본 쪽으로 바뀜) | 1 |
+
+그림자 담당 판독([r11 gfx-diff 그림자])에 따라 캐릭터 AoLight를 원본대로 **정적 채널만**(`1−(1−SPP.y)·clamp(60−깊이)·hAOMain`, body5549 l.589–591·697·800)으로 바꿨다. 직접광 그림자는 max(동적,정적) 그대로다.
+
+수정 후: 정적 검사 `tests/r11_sampler_budget.test.mjs`(include 전개·전처리·main 호출 그래프 도달 sampler 수, 캐릭터·오징어·_Hlf·장비·무기·맵 86재질+잉크 페이지 모두 ≤16, mr 공유 선언 순서 회귀)와 실제 GPU 1회 [sampler_probe_d3d11.json](../../../analysis/gfx_r11/sampler_probe_d3d11.json): 프로그램 373개 **전부 링크, 셰이더 오류 0**. 프래그먼트 sampler 최대 16(탱크 M_Body), 몸·얼굴·머리·오징어 15, 하네스 13, 맵 14. 첫 d3d11 실행에서 mr 공유를 roughness 청크 뒤에 넣어 `metalnessFactor` 미선언 컴파일 오류가 났고, metalness 청크 뒤로 옮긴 뒤 다시 실행했다.
+
+남은 여유: 탱크 M_Body는 16으로 한도에 붙어 있다. 공용 sampler를 하나 더 늘리면 다시 넘친다. 그림자 cascade 2장 아틀라스화나 BRDF LUT를 prefilter 아틀라스에 넣는 방식이 공용 쪽 다음 후보다(각 담당 파일).

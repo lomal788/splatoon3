@@ -5,7 +5,7 @@ import type { Bundle } from "../assets.ts";
 import { PlayerAnimator } from "./anim/animator.ts";
 import type { LeafWeight } from "./anim/slot.ts";
 import { applyHoian, type HoianUniforms, setTeam, setHoianMaterialTexSrt, setHoianMaterialParam } from "./hoian.ts";
-import { type AttachOpt, attach, bindWorld, fresOf, textureResolver, playerModelFile, applyNativeTextureColorSpace, manualBindSrt } from "./model.ts";
+import { type AttachOpt, attach, bindWorld, fresOf, textureResolver, playerModelFile, applyNativeTextureColorSpace, manualBindSrt, shareMaterialSamplers } from "./model.ts";
 import type { PlayerSnap } from "./shared.ts";
 import { materialTeamParams, type MaterialTeamParams, type TeamSet } from "./teamcolor.ts";
 import type { LightingState } from "./lighting.ts";
@@ -440,6 +440,7 @@ export class PlayerView {
           const b = applyCharacterMaterial(mat as THREE.MeshStandardMaterial, f, tex, this.info.skipped, mesh.geometry, this.lighting.uniforms.hLightAlpha);
           if (b) this.characterMaterials.push(b);
         }
+        if (u) for (const r of shareMaterialSamplers(std, f)) this.info.skipped.push(`${mat.name}: shared sampler ${r}`);
         if (u) this.teamUniforms.push(u);
       }
     }

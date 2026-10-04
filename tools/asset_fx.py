@@ -26,7 +26,9 @@ ESETS = ["WpShtrBullet1Emit", "WpShtrMzfNml", "WpCmnBulletSplash1Emit",
          "CmnNPFloorSplash1Emit", "CmnNPFloorSplashNear1Emit", "CmnNPFloorSplashDist1Emit",
          "CmnWallSplash1Emit", "CmnNpWallSplash1Emit",
          "WpCmnHit", "WpCmnHitEffective", "WpCmnHitCritical", "WpCmnHitInvalid", "WpCmnWaterSplash",
-         "WpShtrHitMarker"]
+         "WpShtrHitMarker",
+         # r11 gfx-diff 이펙트: 조준 표시(PlayerShotGuide)
+         "WpShtrSite", "WpShtrSiteHit", "WpShtrFieldHitMarker", "WpShtrSiteSide", "WpShtrHitMarkerSide"]
 CALC = {0: "CPU", 1: "GPU_TIME", 2: "GPU_SO"}
 FOLLOW = {0: "ALL", 1: "NONE", 2: "POS"}
 BILLBOARD = {3: "POLYGON_XY", 4: "POLYGON_XZ"}

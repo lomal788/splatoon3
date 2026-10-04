@@ -50,13 +50,26 @@ def repair(doc, v):
                         nearFade=list(struct.unpack_from('<2f', v.d, bo + 0x890)),
                         alphaThreshold=struct.unpack_from('<f', v.d, bo + 0x8a8)[0],
                         softDistance=struct.unpack_from('<f', v.d, bo + 0x8b4)[0],
-                        vatNormalOffset=rec['unknownE4'], keyInterpolation=list(v.d[bo + 0xc38:bo + 0xc3d]))
+                        vatNormalOffset=rec['unknownE4'], keyInterpolation=list(v.d[bo + 0xc38:bo + 0xc3d]),
+                        # r11 gfx-diff 이펙트: 정점 셰이더 텍스처 이동 애니(0x490 + 0x50·slot), 정적 플래그(0x70), 깊이 오프셋(0xFC),
+                        # 셰이더 애니 키 8행(0x940, 0x94 개수, 보간 0xC3D), 형상 원본 필드(0xB81/B94/B9C/BA0/BBC/BC8/BCC/BD0/BD4)
+                        uvShiftAnim=[list(struct.unpack_from('<4f', v.d, bo + 0x490 + i * 16)) for i in range(15)],
+                        staticFlags=list(struct.unpack_from('<4I', v.d, bo + 0x70)),
+                        depthOffset=struct.unpack_from('<f', v.d, bo + 0xfc)[0],
+                        paramKeys=[list(struct.unpack_from('<4f', v.d, bo + 0x940 + i * 16)) for i in range(8)],
+                        numParamKeys=struct.unpack_from('<I', v.d, bo + 0x94)[0],
+                        shaderAnimInterpolation=v.d[bo + 0xc3d],
+                        shapeRaw=dict(sweepStartRandom=v.d[bo + 0xb81], sweepRandom=struct.unpack_from('<f', v.d, bo + 0xb94)[0],
+                                      lineCenter=struct.unpack_from('<f', v.d, bo + 0xb9c)[0], lineLength=struct.unpack_from('<f', v.d, bo + 0xba0)[0],
+                                      divisionMode=struct.unpack_from('<I', v.d, bo + 0xbbc)[0], divisionCount=struct.unpack_from('<i', v.d, bo + 0xbc8)[0],
+                                      divisionRandom=struct.unpack_from('<I', v.d, bo + 0xbcc)[0], lineDivisionCount=struct.unpack_from('<i', v.d, bo + 0xbd0)[0],
+                                      lineDivisionRandom=struct.unpack_from('<I', v.d, bo + 0xbd4)[0]))
             em.update(data)
             em['fields'].update(data)
             em['pColor'] = pcolor
             em['fixedKeyPatch'] = '08190fc: PColor -> key0 for FIXED only'
             count += 1
-    assert count == 39, count
+    assert count == sum(len(rows) for rows in doc['emitterSets'].values()), count
     native_tex = {tex.name: tex for tex in G.parse(v.bntx)}
     vat = []
     for name, info in doc['textures'].items():

@@ -33,6 +33,12 @@ export function bloomPacket(setting?: BloomSetting, scale = 1) {
   const threshold = [F(inv * F(p.ClampedLuminance)), 0, F(p.Intensity), 10000];
   return { setting: p, weight, threshold };
 }
+export function bloomGameApply(next?: BloomSetting, prev: BloomSetting | undefined = next, t = 1): BloomSetting {
+  const d = { Enable: true, Threshold: 4, ThresholdRange: 1, Intensity: 1, EnableClampedLuminance: true, ClampedLuminance: 5 };
+  const a = { ...d, ...next }, b = { ...d, ...prev };
+  const lerp = (x: number, y: number) => F(F(x) + F(F(F(y) - F(x)) * F(t)));
+  return { ...a, Threshold: lerp(b.Threshold, a.Threshold), ThresholdRange: lerp(b.ThresholdRange, a.ThresholdRange), Intensity: lerp(b.Intensity, a.Intensity), ClampedLuminance: lerp(b.ClampedLuminance, a.Intensity) };
+}
 export function bloomExpand(value: number): number[] {
   const x = F(value); let a = F(x * 3), b = F(a - 1);
   if (x >= F(1 / 3)) { a = 1; } else { b = 0; }
@@ -96,7 +102,7 @@ export class NativeBloom {
     this.triangle.frustumCulled = false; this.scene.add(this.triangle);
   }
   configure(setting?: BloomSetting, sceneAvailable = true): void {
-    this.packet = bloomPacket(setting);
+    this.packet = bloomPacket(bloomGameApply(setting));
     const p = this.packet.setting;
     this.enabled = sceneAvailable && p.Enable && !p.EnableDepthScaling && !p.EnableDepthOffset && [...this.packet.weight, ...this.packet.threshold].every(Number.isFinite);
     this.maskMaterial.uniforms.weight.value.fromArray(this.packet.weight);

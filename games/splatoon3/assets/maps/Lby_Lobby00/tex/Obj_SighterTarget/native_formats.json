@@ -1,0 +1,65 @@
+{
+ "source": "romfs Model/Obj_SighterTarget.bfres.zs embedded BNTX",
+ "textures": {
+  "M_Body_2cl": {
+   "format": "BC4_UNORM",
+   "comp": "RRRR",
+   "srgb": false
+  },
+  "M_Body_Alb": {
+   "format": "BC1_SRGB",
+   "comp": "RGBA",
+   "srgb": true
+  },
+  "M_Body_Emm": {
+   "format": "BC1_SRGB",
+   "comp": "RGBA",
+   "srgb": true
+  },
+  "M_Body_Mtl": {
+   "format": "BC4_UNORM",
+   "comp": "RRRR",
+   "srgb": false
+  },
+  "M_Body_Nrm": {
+   "format": "BC5_SNORM",
+   "comp": "RG01",
+   "srgb": false
+  },
+  "M_Body_Rgh": {
+   "format": "BC1_SRGB",
+   "comp": "RGBA",
+   "srgb": true
+  },
+  "M_Body_Tcl": {
+   "format": "BC1_SRGB",
+   "comp": "RGBA",
+   "srgb": true
+  },
+  "M_Fragment00_2cl": {
+   "format": "BC4_UNORM",
+   "comp": "RRRR",
+   "srgb": false
+  },
+  "M_Fragment00_Alb": {
+   "format": "BC1_SRGB",
+   "comp": "RGBA",
+   "srgb": true
+  },
+  "M_Fragment00_Nrm": {
+   "format": "BC5_SNORM",
+   "comp": "RG01",
+   "srgb": false
+  },
+  "M_Fragment00_Opa": {
+   "format": "BC4_UNORM",
+   "comp": "RRR1",
+   "srgb": false
+  },
+  "M_Fragment00_Rgh": {
+   "format": "BC4_UNORM",
+   "comp": "RRRR",
+   "srgb": false
+  }
+ }
+}

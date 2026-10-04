@@ -203,7 +203,7 @@ CPU 구역:
 | 0xB88–0xBAC | f32 | sweepLongitude/Latitude/Start, caliberRatio, volumeRadius xyz | 형상 함수가 읽음 [판독-부분] |
 | 0xBB0 | f32×3 | volumeFormScale | × 이미터셋 스케일 → 이미터+0x7f0 [판독] |
 | 0xBE8 | u8 | infiniteLife | [판독] |
-| 0xBEA / 0xBEB | u8 | billboardType / rotType | 3 POLYGON_XY, 4 POLYGON_XZ / 4 YZX, 6 ZXY [셰이더옵션]. **5차 조사:** POLYGON_XZ 변형(1886, 옵션 `_PARTICLE_TYPE_POLYGON_XZ_CONVERTER = 1`)의 정점 셰이더는 `sysPosAttr.x/.y/.z`를 축 교환 없이 `(sx·(x+0.5·pivot.x), sy·(y+…), sz·(z+…))`로 쓰고(vert 621–639), 회전(rotType 6)과 이미터 행렬만 곱합니다(vert 876–899). 따라서 XZ 배치는 셰이더가 아니라 **입력 쿼드 정점 버퍼**에서 결정됩니다. 그 버퍼를 만드는 nn::vfx 코드는 읽지 않아 축은 [미확정]입니다 |
+| 0xBEA / 0xBEB | u8 | billboardType / rotType | 3 POLYGON_XY, 4 POLYGON_XZ / 4 YZX, 6 ZXY [셰이더옵션]. **5차 조사:** POLYGON_XZ 변형(1886, 옵션 `_PARTICLE_TYPE_POLYGON_XZ_CONVERTER = 1`)의 정점 셰이더는 `sysPosAttr.x/.y/.z`를 축 교환 없이 `(sx·(x+0.5·pivot.x), sy·(y+…), sz·(z+…))`로 쓰고(vert 621–639), 회전(rotType 6)과 이미터 행렬만 곱합니다(vert 876–899). 따라서 XZ 배치는 셰이더가 아니라 **입력 쿼드 정점 버퍼**에서 결정됩니다. 그 버퍼를 만드는 nn::vfx 코드는 읽지 않아 축은 [미확정]입니다. **r11 정정(2026-10-04) [실행: 역번역 GLSL 해석]:** p1886/1885 정점은 크기·피벗을 primitive 축에서 곱한 뒤 (x, z, −y)로 교환합니다(교환은 셰이더 안에 있음). rotType 4(YZX) = Rx·Rz·Ry, 6(ZXY) = Ry·Rx·Rz — [port/graphics_r11_diff_이펙트.md](../port/graphics_r11_diff_이펙트.md) |
 | 0xBF8 / 0xBFC | i32 | life(프레임) / lifeRandom(%) | [판독] |
 | 0xC00 | f32 | momentumRandom | m = 1 + r − 2·r·u [판독] |
 | 0xC4C | i32 | shaderIndex | VfxGeneralShader 프로그램 번호 [실행] |

@@ -131,7 +131,7 @@ PARAM_KEEP = re.compile(r"^(albedo_color|emission_color|emission_intensity|rough
                         r"const_color\d|const_value\d|transmission_rate|scattering_rate|blitz_.*|.*_team_.*)$")
 RI_KEEP = re.compile(r"^(gsys_render_state_.*|gsys_alpha_test_.*|gsys_color_blend_.*|gsys_depth_test_.*|my_team_color_.*|"
                      r"substitute_color_.*|enable_overlay_paint_on_emission|spl_model_type|paint_.*|gsys_priority_hint|"
-                     r"dynamic_alpha_fadeout|blitz_.*)$")
+                     r"dynamic_alpha_fadeout|blitz_.*|gsys_static_depth_shadow.*|gsys_dynamic_depth_shadow.*)$")
 
 
 def slim_material(m):

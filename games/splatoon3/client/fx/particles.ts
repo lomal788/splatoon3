@@ -5,7 +5,8 @@
 import * as THREE from "three";
 import { VERT, FRAG } from "./particle_shaders.ts";
 import { applyEmitterRender } from "./render_state.ts";
-import { FX_PROGRAMS, FX_WEB_DEFAULTS } from "./shader_contract.ts";
+import { nativeShape, shapeState, dirTable, lcgNext, divisionCount, type ShapeRes, type ShapeState } from "./shapes.ts";
+import { FX_PROGRAMS, FX_WEB_DEFAULTS, FX_UV_SHIFT_SLOTS, FX_NEAR_DIST_ALPHA, FX_DEPTH_OFFSET, FX_SHADER_ANIM_DISPLACE, FX_NO_ALPHA_COMPARE } from "./shader_contract.ts";
 
 export type Emitter = Record<string, unknown>;
 type V3 = [number, number, number];
@@ -49,8 +50,9 @@ function toLocal(m: EmitMatrix, v: V3): V3 {
   return [d(m.x), d(m.y), d(m.z)];
 }
 
-/** 이미터 회전 Rz·Ry·Rx. 원본 080e4cc 순서; 삼각함수/난수는 웹 경계 */
-function applyEmitterRotate(m: EmitMatrix, r: V3): EmitMatrix {
+/** 이미터 로컬 RT(0x710080e4cc): R = Rz·Ry·Rx, 원점 += 부모 기저 × T. 크기(AE0)는 입자 크기 쪽에 둔다(Lby 전 이미터 1). */
+function applyEmitterLocal(m: EmitMatrix, r: V3, t: V3 = [0, 0, 0]): EmitMatrix {
+  if (t[0] || t[1] || t[2]) m = { ...m, o: [m.o[0] + m.x[0] * t[0] + m.y[0] * t[1] + m.z[0] * t[2], m.o[1] + m.x[1] * t[0] + m.y[1] * t[1] + m.z[1] * t[2], m.o[2] + m.x[2] * t[0] + m.y[2] * t[1] + m.z[2] * t[2]] };
   if (!r[0] && !r[1] && !r[2]) return m;
   const e = new THREE.Euler(r[0], r[1], r[2], "ZYX");
   const q = new THREE.Matrix4().makeRotationFromEuler(e);
@@ -101,7 +103,7 @@ export class ParticleBatch {
   private readonly owner: (EmitterInstance | null)[];
   private readonly cap: number;
   private next = 0;
-  private readonly particleData: Float32Array;
+  readonly particleData: Float32Array;
   private readonly particleTexture: THREE.DataTexture;
   private readonly emptyGrid: THREE.DataTexture;
   private readonly attrColumns=new Map(ATTRS.map(([name],i)=>[name,i]));
@@ -211,6 +213,19 @@ export class ParticleBatch {
       uHasMap: { value: maps.has(0)||map ? 1 : 0 },
       uColorScale: { value: n(def, "colorScale", 1) },
     };
+    const uvRows=Array.isArray(def.uvShiftAnim)?def.uvShiftAnim as number[][]:null;
+    const uvSlots=known&&uvRows&&uvRows.length>=15?FX_UV_SHIFT_SLOTS.get(program)??[0,0,0]:[0,0,0];
+    const flags=Array.isArray(def.staticFlags)?def.staticFlags as number[]:[0,0,0,0];
+    const paramKeys=keys(def,"paramKeys");
+    Object.assign(this.uniforms,{
+      uUvAnim:{value:Array.from({length:15},(_,i)=>new THREE.Vector4(...((uvRows?.[i]??[0,0,1,1]) as [number,number,number,number])))},
+      uUvAnimOn:{value:new THREE.Vector3(...uvSlots)},uRandMode1:{value:(flags[2]&1)!==1?1:0},
+      uNearFadeOn:{value:known&&FX_NEAR_DIST_ALPHA.has(program)?1:0},
+      uDepthOffsetOn:{value:known&&FX_DEPTH_OFFSET.has(program)&&n(def,"depthOffset")!==0?1:0},uDepthOffset:{value:n(def,"depthOffset")},
+      uShaderAnimOn:{value:known&&FX_SHADER_ANIM_DISPLACE.has(program)&&paramKeys.length>0&&maps.has(0)?1:0},
+      uAlphaCompare:{value:known&&FX_NO_ALPHA_COMPARE.has(program)?0:1},
+      uParamK:{value:keyUniform(paramKeys)},uParamN:{value:n(def,"numParamKeys",Math.max(1,paramKeys.length))},uParamMode:{value:n(def,"shaderAnimInterpolation",modes[5]??0)},
+    });
     Object.assign(this.uniforms,inputs.lighting,inputs.depth);
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
@@ -250,25 +265,27 @@ export class ParticleBatch {
     this.set("aBz", i, m.z);
   }
 
-  /** 파티클 하나 생성(0x710081e3e4). rnd = 0..1 난수기. */
-  spawn(inst: EmitterInstance, now: number, rnd: () => number): void {
+  /** 파티클 하나 생성(0x710081e3e4). rnd = 0..1 난수기, s0 = 0x710081e070 의 방출당 LCG 값, index = 방출 묶음 안 번호. */
+  spawn(inst: EmitterInstance, now: number, rnd: () => number, s0 = 0, index = 0): void {
     const e = this.def;
+    // 형상(0x710540fea8 점프표): 위치·방향(× allDirectionVel). 거부되면 만들지 않는다.
+    const shape = nativeShape(shapeRes(e), inst.shape, s0, index, n(e, "allDirectionVel"), v3(e, "volumeFormScale", [1, 1, 1]));
+    if (!shape) return;
     const i = this.next;
     this.next = (this.next + 1) % this.cap;
     this.owner[i] = inst;
     const m = inst.matrix;
-    // 위치: 형상(volumeType) 식은 미판독 — 대상 이미터는 전부 0(점)으로 본다. + 난수 단위 벡터 × positionRandom
+    // positionRandom: 같은 방향표(DAT_71057d52f8)를 같은 카운터(E+0xBA)로 이어서 쓴다
     const pr = n(e, "positionRandom");
-    let p0: V3 = [0, 0, 0];
+    let p0: V3 = shape.pos;
     if (pr) {
-      const u = [rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1];
-      const l = Math.hypot(u[0], u[1], u[2]) || 1;
-      p0 = [(u[0] / l) * pr, (u[1] / l) * pr, (u[2] / l) * pr];
+      const d = dirTable(inst.shape);
+      p0 = [p0[0] + d[0] * pr, p0[1] + d[1] * pr, p0[2] + d[2] * pr];
     }
-    // 속도: 지정 방향 × 배율 (+ 확산 원뿔), velRandom
+    // 속도: 형상 방향 + 지정 방향 × 배율 (+ 확산 원뿔), velRandom
     const dd = v3(e, "designatedDir", [0, 1, 0]);
     const ds = n(e, "designatedDirScale");
-    let vel: V3 = [dd[0] * ds, dd[1] * ds, dd[2] * ds];
+    let vel: V3 = [shape.dir[0] + dd[0] * ds, shape.dir[1] + dd[1] * ds, shape.dir[2] + dd[2] * ds];
     const ang = n(e, "diffusionDirAngle");
     if (ang > 0 && ds) {
       const c = 1 - (ang / 90) * rnd();
@@ -280,7 +297,7 @@ export class ParticleBatch {
       const a1 = t1.clone().cross(d).normalize();
       const a2 = d.clone().cross(a1);
       const w = d.multiplyScalar(c).add(a1.multiplyScalar(s * Math.cos(ph))).add(a2.multiplyScalar(s * Math.sin(ph)));
-      vel = [w.x * ds, w.y * ds, w.z * ds];
+      vel = [shape.dir[0] + w.x * ds, shape.dir[1] + w.y * ds, shape.dir[2] + w.z * ds];
     }
     const vr = n(e, "velRandom");
     if (vr) {
@@ -355,8 +372,21 @@ export class ParticleBatch {
 }
 
 /** 이미터 인스턴스(이미터셋 안 이미터 하나의 방출 상태). */
+/** ResEmitter 형상 입력: 기존 필드 + asset shapeRaw(+0xB81/B94/B9C/BA0/BBC/BC8/BCC/BD0/BD4). */
+function shapeRes(e: Emitter): ShapeRes {
+  const raw = (e.shapeRaw ?? {}) as Record<string, number>;
+  return {
+    volumeType: n(e, "volumeType"), sweepStartRandom: raw.sweepStartRandom ?? 0, sweepLongitude: n(e, "sweepLongitude"), sweepStart: n(e, "sweepStart"),
+    sweepRandom: raw.sweepRandom ?? 0, lineCenter: raw.lineCenter ?? 0, lineLength: raw.lineLength ?? 0, volumeRadius: v3(e, "volumeRadius"),
+    divisionMode: raw.divisionMode ?? 0, divisionCount: raw.divisionCount ?? 1, divisionRandom: raw.divisionRandom ?? 0,
+    lineDivisionCount: raw.lineDivisionCount ?? 1, lineDivisionRandom: raw.lineDivisionRandom ?? 0,
+  };
+}
+
 export class EmitterInstance {
   readonly batch: ParticleBatch;
+  /** E+0xB8 시드 분해(0x7100828004). randomSeedType 2 = randomSeed·0xDFDC1C35(0x710080ca78), 그 밖은 전역 난수. */
+  readonly shape: ShapeState;
   matrix: EmitMatrix;
   color: V3;
   scale: number;
@@ -369,13 +399,24 @@ export class EmitterInstance {
   /** 매 프레임 이미터 행렬을 다시 얻는 함수(뼈 부착) */
   followFn: (() => EmitMatrix) | null = null;
 
-  constructor(batch: ParticleBatch, matrix: EmitMatrix, color: V3, now: number, delay: number, scale = 1) {
+  /** 0x710080e4cc 의 회전·이동(난수 반영). 같은 E+0xBC LCG 를 초기화 때 6번 소비(회전 XYZ → 이동 XYZ). */
+  readonly localRotate: V3;
+  readonly localTrans: V3;
+
+  constructor(batch: ParticleBatch, matrix: EmitMatrix, color: V3, now: number, delay: number, scale = 1, seed?: number) {
     this.batch = batch;
-    this.matrix = applyEmitterRotate(matrix, v3(batch.def, "emitterRotate"));
     this.color = color;
     this.scale = scale;
     this.born = now + delay;
     this.nextEmit = this.born + n(batch.def, "emitStart");
+    const seedType = n(batch.def, "randomSeedType");
+    this.shape = shapeState(seed ?? (seedType === 2 ? Math.imul(n(batch.def, "randomSeed"), 0xdfdc1c35 | 0) >>> 0 : Math.floor(Math.random() * 4294967296) >>> 0));
+    const f = Math.fround, d = batch.def, u = [0, 1, 2, 3, 4, 5].map(() => lcgNext(this.shape));
+    const signed = (x: number): number => f(f(x + x) - 1);
+    const rot = v3(d, "emitterRotate"), rotR = v3(d, "emitterRotateRand"), tr = v3(d, "emitterTrans"), trR = v3(d, "emitterTransRand");
+    this.localRotate = [0, 1, 2].map(i => f(rot[i] + f(rotR[i] * signed(u[i])))) as V3;
+    this.localTrans = [0, 1, 2].map(i => f(tr[i] + f(trR[i] * signed(u[i + 3])))) as V3;
+    this.matrix = applyEmitterLocal(matrix, this.localRotate, this.localTrans);
   }
 
   get followAll(): boolean {
@@ -383,7 +424,7 @@ export class EmitterInstance {
   }
 
   setMatrix(m: EmitMatrix): void {
-    this.matrix = applyEmitterRotate(m, v3(this.batch.def, "emitterRotate"));
+    this.matrix = applyEmitterLocal(m, this.localRotate, this.localTrans);
   }
 
   /** 정수 프레임 now 에서 방출(0x710081b784). 무한 방출(hasEmitEnd 0)은 stop() 까지. */
@@ -399,7 +440,12 @@ export class EmitterInstance {
     const rate = n(e, "emitRate", 1) * (1 - (n(e, "emitRateRandom") / 100) * rnd());
     this.emissionDebt+=rate;
     const cnt=Math.max(0,Math.floor(this.emissionDebt));this.emissionDebt-=cnt;
-    for (let k = 0; k < cnt; k++) this.batch.spawn(this, now, rnd);
+    if (cnt > 0) {
+      // 0x710081e070: 방출당 LCG 한 번(s0), 분할 형상(2·13, 모드 0)은 개수 × 분할 수
+      const s0 = lcgNext(this.shape);
+      const total = divisionCount(shapeRes(e), s0, cnt);
+      for (let k = 0; k < total; k++) this.batch.spawn(this, now, rnd, s0, k);
+    }
     // 다음 간격 = interval + 1 + floor(u·intervalRandom) (0x710080e9a4)
     this.nextEmit = now + n(e, "emitInterval") + 1 + Math.floor(rnd() * n(e, "emitIntervalRandom"));
   }

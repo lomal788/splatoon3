@@ -98,6 +98,8 @@ export function nativeEnvLayer(roughness: number): number {
 /** Web atlas: each layer is one row of six face tiles. */
 export const PREFILTER_TILES = Object.freeze([128, 128, 64, 64, 32, 32, 16, 16, 8, 8, 8, 8]);
 export const PREFILTER_ATLAS = Object.freeze({ width: 6 * 128, height: PREFILTER_TILES.reduce((a, b) => a + b, 0) });
+/** Web policy: layer 12 (ink) tile 64 sits in the unused right half of the layer-2 row, so no extra sampler is needed. */
+export const PREFILTER_INK_TILE = Object.freeze({ x: 6 * 64, y: PREFILTER_TILES[0] + PREFILTER_TILES[1], size: PREFILTER_TILES[2] });
 /** Web face convention shared by the generator and the material lookup (a,b ∈ [−1,1]). */
 export function faceDirection(face: number, a: number, b: number): V3 {
   switch (face) {
@@ -132,6 +134,27 @@ vec3 hNativeEnvSpecular(vec3 n,vec3 v,vec3 f0,float r){
   vec2 b=texture2D(hEnvBRDF,vec2(nov,r)).xy;
   int layer=int(clamp(roundEven(roundEven(cos(r*3.14159274)*-5.5+5.5)),0.,11.));
   return hPrefilSample(reflect(-v,n),layer)*(f0*b.x+b.y);
+}`;
+
+/** cPrefilEnvMapArray layer 12 (ink branch, explicit lod 0). 0x7101036d84: second capture (counter == 1) with the main
+ * DirectionalLight present draws "illuminate" (override r = BlitzUBO0[18].x) from the base cube; otherwise BlackCube.
+ * Stored in the shared atlas (PREFILTER_INK_TILE) — the lookup adds no sampler. */
+export const PREFILTER_INK_GLSL = /* glsl */`
+uniform float hPrefilInkAvailable;
+vec3 hPrefilInkSample(vec3 d){
+  if(hPrefilInkAvailable<.5)return vec3(0.);
+  vec3 m=abs(d);int f;vec2 ab;
+  if(m.x>=m.y&&m.x>=m.z){f=d.x>0.?0:1;ab=d.x>0.?vec2(-d.z,d.y)/m.x:vec2(d.z,d.y)/m.x;}
+  else if(m.y>=m.z){f=d.y>0.?2:3;ab=d.y>0.?vec2(d.x,-d.z)/m.y:vec2(d.x,d.z)/m.y;}
+  else{f=d.z>0.?4:5;ab=d.z>0.?vec2(d.x,d.y)/m.z:vec2(-d.x,d.y)/m.z;}
+  vec2 uv=clamp(ab*.5+.5,vec2(.5/${PREFILTER_INK_TILE.size}.),vec2(1.-.5/${PREFILTER_INK_TILE.size}.));
+  return textureLod(hPrefilAtlas,vec2((${PREFILTER_INK_TILE.x}.+(float(f)+uv.x)*${PREFILTER_INK_TILE.size}.)/${PREFILTER_ATLAS.width}.,(${PREFILTER_INK_TILE.y}.+uv.y*${PREFILTER_INK_TILE.size}.)/${PREFILTER_ATLAS.height}.),0.).rgb;
+}
+vec3 hNativeInkSpecular(vec3 n,vec3 v,vec3 f0,float r){
+  if(hPrefilAvailable<.5)return vec3(0.);
+  float nov=max(dot(n,v),1e-8);
+  vec2 b=texture2D(hEnvBRDF,vec2(nov,r)).xy;
+  return hPrefilInkSample(reflect(-v,n))*(f0*b.x+b.y);
 }`;
 
 /** GGXPrefilterEnvMap FILTER_TYPE 2 sampling loop (ILLUMINATE 0/1 share it). */
@@ -184,6 +207,10 @@ void main(){
   gl_FragColor=vec4(c,1.);
 }`;
 
+/** Same Illuminate equations, written per atlas face (layer 12 tile). */
+const ILLUMINATE_ATLAS_FRAGMENT = ILLUMINATE_FRAGMENT.replace("varying vec3 vDir;", "varying vec2 vUv;\n" + FACE_GLSL)
+  .replace("vec3 n=normalize(vDir)", "float fx=vUv.x*6.;int f=int(min(floor(fx),5.));vec3 n=normalize(hFaceDirection(f,vec2(fract(fx),vUv.y)*2.-1.))");
+
 const LAYER_FRAGMENT = /* glsl */`
 varying vec2 vUv;
 ${FACE_GLSL}
@@ -228,12 +255,15 @@ export class NativeEnvironment {
   readonly uniforms = {
     hPrefilAtlas: { value: this.atlas.texture as THREE.Texture }, hEnvBRDF: { value: this.brdf as THREE.Texture },
     hPrefilRows: { value: this.rows }, hPrefilAvailable: { value: 0 },
+    hPrefilInkAvailable: { value: 0 },
   };
   readonly stats: Record<string, unknown> = { illuminate: "unconfigured", prefilter: 0, brdf: "GGXEnvBRDF port 64²" };
   private ubo: IlluminateUBO | null = null;
   private highlight: THREE.Texture | null = null;
   private readonly illuminateMaterial: THREE.ShaderMaterial;
   private readonly layerMaterial: THREE.ShaderMaterial;
+  private readonly inkMaterial: THREE.ShaderMaterial;
+  private readonly inkScene = new THREE.Scene();
   private readonly illuminateScene = new THREE.Scene();
   private readonly quadScene = new THREE.Scene();
   private readonly quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -255,6 +285,12 @@ export class NativeEnvironment {
     });
     const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), this.illuminateMaterial); box.frustumCulled = false; this.illuminateScene.add(box);
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.layerMaterial); quad.frustumCulled = false; this.quadScene.add(quad);
+    this.inkMaterial = new THREE.ShaderMaterial({
+      uniforms: this.illuminateMaterial.uniforms,
+      vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}",
+      fragmentShader: ILLUMINATE_ATLAS_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false,
+    });
+    const inkQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.inkMaterial); inkQuad.frustumCulled = false; this.inkScene.add(inkQuad);
   }
   configure(env: unknown, mainDirection: readonly number[], mainColor: readonly number[], highlight: THREE.Texture | null): void {
     this.ubo = illuminateUBO(env, mainDirection, mainColor); this.highlight = highlight;
@@ -275,6 +311,21 @@ export class NativeEnvironment {
     cam.update(renderer, this.illuminateScene);
     return this.lit.texture;
   }
+  /** 0x7101036d84 layer 12: draw only when 1036A18 param_6 bit0 is set (capture counter == 1); BlackCube otherwise. */
+  inkLayer(renderer: THREE.WebGLRenderer, source: THREE.CubeTexture, draw: boolean): void {
+    if (!draw || !this.ubo || !this.highlight) { this.uniforms.hPrefilInkAvailable.value = 0; this.stats.inkLayer = "BlackCube"; return; }
+    const old = renderer.getRenderTarget(), auto = renderer.autoClear, t = PREFILTER_INK_TILE;
+    const vp = renderer.getViewport(new THREE.Vector4()), sc = renderer.getScissor(new THREE.Vector4()), st = renderer.getScissorTest();
+    try {
+      this.illuminateMaterial.uniforms.cBase.value = source; renderer.autoClear = false;
+      this.atlas.viewport.set(t.x, t.y, 6 * t.size, t.size); this.atlas.scissor.set(t.x, t.y, 6 * t.size, t.size); this.atlas.scissorTest = true;
+      renderer.setRenderTarget(this.atlas); renderer.render(this.inkScene, this.quadCamera);
+      this.atlas.viewport.set(0, 0, PREFILTER_ATLAS.width, PREFILTER_ATLAS.height); this.atlas.scissorTest = false;
+      this.uniforms.hPrefilInkAvailable.value = 1; this.stats.inkLayer = "illuminate r=BlitzUBO0[18].x (atlas tile)";
+    } finally {
+      renderer.setRenderTarget(old); renderer.setViewport(vp); renderer.setScissor(sc); renderer.setScissorTest(st); renderer.autoClear = auto;
+    }
+  }
   prefilter(renderer: THREE.WebGLRenderer, source: THREE.CubeTexture): void {
     const u = this.layerMaterial.uniforms, old = renderer.getRenderTarget(), auto = renderer.autoClear;
     const vp = renderer.getViewport(new THREE.Vector4()), sc = renderer.getScissor(new THREE.Vector4()), st = renderer.getScissorTest();
@@ -294,6 +345,6 @@ export class NativeEnvironment {
   }
   dispose(): void {
     this.vdc.dispose(); this.brdf.dispose(); this.atlas.dispose(); this.lit.dispose(); this.highlight?.dispose();
-    this.illuminateMaterial.dispose(); this.layerMaterial.dispose();
+    this.illuminateMaterial.dispose(); this.layerMaterial.dispose(); this.inkMaterial.dispose();
   }
 }

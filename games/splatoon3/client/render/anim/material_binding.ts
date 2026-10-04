@@ -21,6 +21,8 @@ export function bindMaterialChannels(targets:MaterialChannelTarget[],group:Mater
   const stats={applied:0,patternWrites:0,missing:[] as string[],unsupported:[] as string[],lastClip:null as string|null,rawSrtUnbound:false,hooks:0};
   const report=(list:string[],s:string):void=>{if(!list.includes(s))list.push(s);};
   let disposed=false;
+  // Only materials whose clips carry an _r0 pattern get the extra roughness sampler (texture-unit budget).
+  const roughPattern=new Set(group.clips.flatMap(c=>c.materials.filter(m=>m.patterns.some(p=>p.name==="_r0")).map(m=>m.material)));
   const records=unique.map(target=>{
     const mat=target.material,prev=mat.onBeforeCompile,key=mat.customProgramCacheKey;
     const original={map:mat.map,normalMap:mat.normalMap};
@@ -31,10 +33,11 @@ export function bindMaterialChannels(targets:MaterialChannelTarget[],group:Mater
       prev.call(mat,shader,renderer);Object.assign(shader.uniforms,uniforms);
       if(!shader.vertexShader.includes("varying vec2 hUV0;")||!shader.fragmentShader.includes("varying vec2 hUV0;"))
         throw new Error("Material pattern hook requires Hoian native UV0: "+mat.name);
-      shader.fragmentShader="uniform float mCActiveA,mCActiveN,mCActiveR;\nuniform sampler2D mCRgh;\n"+shader.fragmentShader
+      const rough=roughPattern.has(target.fres.name??mat.name);
+      shader.fragmentShader="uniform float mCActiveA,mCActiveN,mCActiveR;\n"+(rough?"uniform sampler2D mCRgh;\n":"")+shader.fragmentShader
         .replace("#include <map_fragment>",THREE.ShaderChunk.map_fragment.replaceAll("vMapUv","(mCActiveA>.5?hUV0:vMapUv)"))
-        .replace("#include <normal_fragment_maps>",THREE.ShaderChunk.normal_fragment_maps.replaceAll("vNormalMapUv","(mCActiveN>.5?hUV0:vNormalMapUv)"))
-        .replace("#include <roughnessmap_fragment>",
+        .replace("#include <normal_fragment_maps>",THREE.ShaderChunk.normal_fragment_maps.replaceAll("vNormalMapUv","(mCActiveN>.5?hUV0:vNormalMapUv)"));
+      if(rough)shader.fragmentShader=shader.fragmentShader.replace("#include <roughnessmap_fragment>",
         "#include <roughnessmap_fragment>\nif(mCActiveR>.5)roughnessFactor=roughness*texture2D(mCRgh,hUV0).r;\n");
       stats.hooks++;
     };
@@ -72,7 +75,7 @@ export function bindMaterialChannels(targets:MaterialChannelTarget[],group:Mater
           const f=r.target.fres,mat=r.target.material;
           if(slot==="_a0"&&!["False","0"].includes(option(f,"enable_albedo_tex","1"))){if(mat.map!==tex){mat.map=tex;mat.needsUpdate=true;}r.uniforms.mCActiveA.value=1;stats.patternWrites++;}
           else if(slot==="_n0"&&!["False","0"].includes(option(f,"enable_normal_map","1"))){if(mat.normalMap!==tex){mat.normalMap=tex;mat.needsUpdate=true;}r.uniforms.mCActiveN.value=1;stats.patternWrites++;}
-          else if(slot==="_r0"&&["True","1"].includes(option(f,"enable_roughness_map","False"))){r.uniforms.mCRgh.value=tex;r.uniforms.mCActiveR.value=1;stats.patternWrites++;}
+          else if(slot==="_r0"&&roughPattern.has(patch.material)&&["True","1"].includes(option(f,"enable_roughness_map","False"))){r.uniforms.mCRgh.value=tex;r.uniforms.mCActiveR.value=1;stats.patternWrites++;}
           else report(stats.unsupported,patch.material+": native pattern slot consumer unavailable: "+slot);
         }
         stats.applied++;

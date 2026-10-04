@@ -10,6 +10,10 @@ import type { RangeShared, RangeTargetView } from "../../core/range/index.ts";
 import type { World } from "../../core/world.ts";
 import type { ClientContext, View } from "../context.ts";
 import { DEV } from "../env.ts";
+import type { Bundle } from "../assets.ts";
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { applyPartMaterials, type NativeTextureFormats, type PartMaterialStats } from "../render/part_material.ts";
+import { buildTeamSets, lobbyTeamRow, lobbyTeamSeed, type TeamColorRow } from "../render/teamcolor.ts";
 
 /** 휨 표시의 최대 기울기(라디안) — DamageShotBend 클립이 없어서 쓰는 표시용 값, 원본 값 아님 */
 const PLACEHOLDER_MAX_TILT = 0.35;
@@ -36,6 +40,9 @@ export function createRangeView(ctx: ClientContext): View {
   ctx.scene.add(group);
   const entries = new Map<number, Entry>();
   const models = new Map<string, THREE.Object3D>();
+  // Hoian_UBER chain for the part materials (render/part_material.ts); needs the stage env light and the actor team.
+  const sources = new Map<string, { gltf: GLTF; bundle: Bundle }>();
+  let partMaterials: Record<string, PartMaterialStats> | null = null;
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.6 });
   const capsule = new THREE.CapsuleGeometry(0.35, 0.95, 6, 16);
   let lastFrame = -1;
@@ -51,7 +58,10 @@ export function createRangeView(ctx: ClientContext): View {
       if (!bundle) return;
       for (const name of ["Obj_SighterTarget", "Obj_SighterTargetMove"]) {
         const f = `parts/${name}.glb`;
-        if (bundle.has(f)) models.set(name, bundle.gltf(f).scene);
+        if (bundle.has(f)) {
+          models.set(name, bundle.gltf(f).scene);
+          sources.set(name, { gltf: bundle.gltf(f), bundle });
+        }
       }
       for (const e of entries.values()) upgrade(e);
     })
@@ -98,10 +108,27 @@ export function createRangeView(ctx: ClientContext): View {
     return e;
   };
 
+  // Team: core range teamOf() = the local player's opponent (0x71021ef388), all targets share it.
+  const materialize = (w: World, team: number): void => {
+    const map = ctx.paintMap;
+    if (partMaterials || !map || !map.env.source.startsWith("env.json") || sources.size === 0 || team < 0 || team > 2) return;
+    const table = w.data.tables["team_color"] as { dataSets?: (TeamColorRow & { name?: string })[] } | undefined;
+    const sets = buildTeamSets(lobbyTeamRow(table, lobbyTeamSeed), false, map.env.light);
+    partMaterials = {};
+    for (const [name, src] of sources) {
+      const owner = "Obj_SighterTarget", fp = `tex/${owner}/native_formats.json`;
+      const formats = src.bundle.has(fp) ? src.bundle.json<NativeTextureFormats>(fp) : null;
+      partMaterials[name] = applyPartMaterials(models.get(name)!, { gltf: src.gltf, bundle: src.bundle, owner, lighting: map.lighting, teamSet: sets[team], formats });
+    }
+    for (const e of entries.values()) if (e.real) { e.real = false; upgrade(e); }
+    if (DEV) (globalThis as Record<string, unknown>).__splatoon3_rangeMaterials = partMaterials;
+  };
+
   const view: View = {
     update(w: World, alpha: number): void {
       const range = w.shared.get("range") as RangeShared | undefined;
       if (!range) return;
+      if (!partMaterials && range.targets.length) materialize(w, range.targets[0].team);
       const stepped = w.frame !== lastFrame;
       lastFrame = w.frame;
       const rect = ctx.renderer.domElement.getBoundingClientRect();

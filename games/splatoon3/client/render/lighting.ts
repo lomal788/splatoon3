@@ -96,6 +96,7 @@ export class LightingState {
         const source=this.env.illuminate(renderer,this.cube.texture);
         const sh=await this.projection.project(renderer,source);this.setSH(sh);
         this.env.prefilter(renderer,source);
+        this.env.inkLayer(renderer,source,pass===1);
         this.prefilter?.dispose();this.prefilter=pmrem.fromCubemap(source);
         scene.environment=this.prefilter.texture;this.stats.captures++;
       }

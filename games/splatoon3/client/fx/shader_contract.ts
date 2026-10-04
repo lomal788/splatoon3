@@ -1,6 +1,13 @@
 // Confirmed shader consumers; runtime Custom1/dynamic inputs remain a web bridge.
 // docs/effect_sound/effect_resources.md §2.1.1/2.2.5.1, fx_shader_inputs_r2.md §6.
 export const FX_PROGRAMS = new Set([1383,1385,1202,1747,1897,1940,1885,1886]);
+// Vertex shader options of the confirmed programs (analysis/gfx_r11/fx_fixed/p*.options.txt, r11 gfx-diff).
+export const FX_UV_SHIFT_SLOTS = new Map<number,[number,number,number]>([[1940,[1,1,0]],[1897,[1,1,0]],[1886,[1,1,0]],[1885,[1,1,0]],[1747,[1,1,0]],[1202,[1,1,1]]]);
+export const FX_NEAR_DIST_ALPHA = new Set([1202,1385,1747,1885,1886]);
+export const FX_DEPTH_OFFSET = new Set([1885]);
+export const FX_SHADER_ANIM_DISPLACE = new Set([1202]);
+/** _ALPHA_COMPARE_GREATER: 1383/1385 have no alpha test. */
+export const FX_NO_ALPHA_COMPARE = new Set([1383,1385]);
 export const FX_WEB_DEFAULTS = Object.freeze({ vatRate:1, linkedAlpha:1, alphaRemap:[1,0], roughness:.25, fresnel:.04 });
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 export function vatColumns(width:number,age:number,rate:number): {x0:number;x1:number;blend:number} {

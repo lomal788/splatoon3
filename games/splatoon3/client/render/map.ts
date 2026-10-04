@@ -11,7 +11,7 @@ import { BakeBindings } from "./bake.ts";
 import { applyForward } from "./forward.ts";
 import { LightingState } from "./lighting.ts";
 import { SkyView } from "./sky.ts";
-import { NativeShadowState } from "./shadows.ts";
+import { NativeShadowState, applyNativeDepthShadowFlags, type DepthShadowTable } from "./shadows.ts";
 import { highlightTexture, type HighlightData } from "./env_prefilter.ts";
 
 /** 맵 루트 이름(다른 영역이 scene.getObjectByName 으로 찾는다 — paint 표시 등) */
@@ -215,6 +215,8 @@ export class MapView {
       });
       m.material = Array.isArray(m.material) ? updated : updated[0];
     });
+    // renderInfo gsys_static/dynamic_depth_shadow (visual.glb drops them; data/depth_shadow.json from romfs).
+    if (bundle.has("data/depth_shadow.json")) applyNativeDepthShadowFlags(gltf.scene, bundle.json<DepthShadowTable>("data/depth_shadow.json"));
     this.root.add(mergeStatic(gltf.scene, this.stats));
   }
 
@@ -262,7 +264,7 @@ const CELL = 40;
 function mergeStatic(src: THREE.Object3D, stats: MapView["stats"]): THREE.Object3D {
   const out = new THREE.Group();
   out.name = "visual";
-  const groups = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[]; names: string[] }>();
+  const groups = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[]; names: string[]; src: THREE.Mesh; spheres: number[][] }>();
   const keep: THREE.Object3D[] = [];
   const c = new THREE.Vector3();
   src.traverse((o) => {
@@ -288,7 +290,9 @@ function mergeStatic(src: THREE.Object3D, stats: MapView["stats"]): THREE.Object
     const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? ":i" : ":n");
     const key = `${m.material.uuid}|${sig}|${Math.floor(c.x / CELL)},${Math.floor(c.y / CELL)},${Math.floor(c.z / CELL)}`;
     let e = groups.get(key);
-    if (!e) groups.set(key, (e = { mat: m.material, geos: [], names: [] }));
+    if (!e) groups.set(key, (e = { mat: m.material, geos: [], names: [], src: m, spheres: [] }));
+    g.computeBoundingSphere();
+    e.spheres.push([g.boundingSphere!.center.x, g.boundingSphere!.center.y, g.boundingSphere!.center.z, g.boundingSphere!.radius]);
     e.geos.push(g);
     e.names.push(m.name);
   });
@@ -302,6 +306,8 @@ function mergeStatic(src: THREE.Object3D, stats: MapView["stats"]): THREE.Object
       mesh.receiveShadow = true;
       mesh.name = names.length === 1 ? names[0] : `merged(${names.length})`;
       mesh.userData.sources = names;
+      if (e.src.userData.staticDepthShadow) Object.assign(mesh.userData, { staticDepthShadow: true, staticDepthShadowSpheres: e.spheres });
+      mesh.castShadow = e.src.castShadow;
       mesh.matrixAutoUpdate = false;
       out.add(mesh);
       stats.meshesOut++;

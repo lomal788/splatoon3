@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Bundle } from "../assets.ts";
-import type { FresMaterial, TexResolver } from "./hoian.ts";
+import { option, textureForSlot, textureUvSelector, type FresMaterial, type TexResolver } from "./hoian.ts";
 import { fma32 } from "./anim/native_f32.ts";
 
 const F = Math.fround;
@@ -285,4 +285,42 @@ export function manualBindSrt(srt?: { Rotate?: { X?: number; Y?: number; Z?: num
     [F(-sny), F(snx * cy), F(cx * cy)],
   ];
   return [F(r[0][0] * sx), F(r[0][1] * sy), F(r[0][2] * sz), t[0], F(r[1][0] * sx), F(r[1][1] * sy), F(r[1][2] * sz), t[1], F(r[2][0] * sx), F(r[2][1] * sy), F(r[2][2] * sz), t[2]];
+}
+
+/** Hoian-bound sampler keys (applyHoian bind()) and their UV selector options. */
+const HOIAN_KEYS: [slot: string, key: string, select: string, legacy?: string][] = [
+  ["_su0", "hTcl", "texcoord_select_teamcolormap"], ["_re0", "hResource0Tex", "texcoord_select_res0", "texcoord_select_resource0"],
+  ["_re1", "hResource1Tex", "texcoord_select_res1", "texcoord_select_resource1"], ["_t0", "hTransmissionTex", "texcoord_select_trsmap", "texcoord_select_transmission"],
+];
+
+/** Fragment texture-unit budget (MAX_TEXTURE_IMAGE_UNITS 16 on d3d11/most GPUs) without changing any texel read:
+ * - glTF "Rgh__Mtl.mr": roughnessMap and metalnessMap are one texture on the same UV → read .g and .b from one fetch.
+ * - emissiveMap holding the same FRES texture as a Hoian-bound sampler on the same UV → reuse that sampler.
+ * Call after applyHoian/applyForward/applyCharacterMaterial (chains their onBeforeCompile). Returns the removed units. */
+export function shareMaterialSamplers(mat: THREE.MeshStandardMaterial, f: FresMaterial): string[] {
+  const removed: string[] = [];
+  let mergeMr = !!mat.metalnessMap && mat.metalnessMap === mat.roughnessMap &&
+    textureUvSelector(f, "texcoord_select_rghmap") === textureUvSelector(f, "texcoord_select_mtlmap");
+  if (mat.metalnessMap && mat.metalness === 0) { mat.metalnessMap = null; mergeMr = false; removed.push("metalnessMap(metalness 0)"); }
+  else if (mergeMr) { mat.metalnessMap = null; removed.push("metalnessMap→roughnessMap texel .b"); }
+  let emissiveKey: string | null = null, emissiveUv = 0;
+  const em = mat.emissiveMap?.name;
+  if (em) {
+    const emmUv = textureUvSelector(f, "texcoord_select_emmmap");
+    const calc22 = [0, 1, 2, 3].some(i => ["True", "1"].includes(option(f, "enable_calc_color" + i, "False")) && option(f, "blitz_calc_color" + i + "_calc_type", "0") === "22");
+    const keys = calc22 ? [...HOIAN_KEYS, ["_e0", "hNativeEmissionTex", "texcoord_select_emmmap"] as [string, string, string]] : HOIAN_KEYS;
+    for (const [slot, key, select, legacy] of keys)
+      if (textureForSlot(f, slot) === em && textureUvSelector(f, select, legacy) === emmUv && emmUv === 0) { emissiveKey = key; emissiveUv = emmUv; break; }
+    if (emissiveKey) { mat.emissiveMap = null; removed.push("emissiveMap→" + emissiveKey); }
+  }
+  if (!removed.length) return removed;
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey;
+  mat.onBeforeCompile = (sh, renderer) => {
+    prev.call(mat, sh, renderer);
+    if (mergeMr) sh.fragmentShader = sh.fragmentShader.replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\n#ifdef USE_ROUGHNESSMAP\nmetalnessFactor*=texelRoughness.b;\n#endif\n");
+    if (emissiveKey) sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>", "totalEmissiveRadiance*=texture2D(" + emissiveKey + ",hUV" + emissiveUv + ").rgb;\n");
+  };
+  mat.customProgramCacheKey = () => key.call(mat) + ":sharedSamplers:" + removed.join(",");
+  mat.needsUpdate = true;
+  return removed;
 }

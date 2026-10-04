@@ -1,0 +1,563 @@
+{
+ "source": "romfs renderInfo via asset_bfres2gltf dump (web/tools/asset_r11_static_shadow.py)",
+ "bfres": {
+  "FldBG_LobbyDV": "Model/Fld_VSLobby.bfres.zs",
+  "FldObj_DoorLobby": "Model/Fld_VSLobby.bfres.zs",
+  "FldObj_DoorVSLobbyLocker": "Model/FldObj_DoorVSLobbyLocker.bfres.zs",
+  "Fld_VSLobby": "Model/Fld_VSLobby.bfres.zs",
+  "Fld_VSLobbyScreen": "Model/Fld_VSLobby.bfres.zs",
+  "Obj_LobbyCapsuleMachine": "Model/Obj_LobbyCapsuleMachine.bfres.zs",
+  "Obj_LobbyMusicSelecter": "Model/Obj_LobbyMusicSelecter.bfres.zs",
+  "Obj_LobbyPlayerDevice": "Model/Obj_LobbyPlayerDevice.bfres.zs",
+  "Obj_LobbyPod": "Model/Obj_LobbyPod.bfres.zs",
+  "Obj_LobbyProjector": "Model/Obj_LobbyProjector.bfres.zs",
+  "Obj_Minigame": "Model/Obj_Minigame.bfres.zs",
+  "Obj_MinigameChairBlue": "Model/Obj_MinigameChair.bfres.zs",
+  "Obj_MinigameChairYellow": "Model/Obj_MinigameChair.bfres.zs"
+ },
+ "missing": [],
+ "models": {
+  "FldBG_LobbyDV": {
+   "CeillingEmi": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Glass": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "RampRubber": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "RepeatUV": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyCeiling": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyCeiling00": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "metalbeamsset": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "radioObj": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "FldObj_DoorLobby": {
+   "ExitDoor": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Glass": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "FldObj_DoorVSLobbyLocker": {
+   "Glass00": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "GlassFrosted": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyWindowFrame": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Fld_VSLobby": {
+   "BarUnique00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "BigScreen": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "ColorSampleDX": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "DustBoxPlants": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "ExitDoor": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "FieldSignYellow02": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Fluorescentlight": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Gear00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Gear01": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Glass": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbyFloorConcrete": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbyShopPaper00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbySign00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbySign01": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbySign02": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbyStep": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LockerLight00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LockerSet00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LockerSlope00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "PlantYucca": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "RampRubber": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "RampWoodSlope": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "RampWoodSlope01": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "SadowMtl00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 1,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "ScreenVendingMachine1": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Sofa": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "TableSetDrink": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "TrashBags": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "TrussYellow": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Wall02": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Water00": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "facility": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyCeiling00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyFloor": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyFloorBlack": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyFloorMat": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyFloorRubber": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyLockerRoomPanel": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyMetalNet": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyMetalPanelBlack": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyPartition": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyPollBench": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyShopFood": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyShopObj": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyShopObjLarge": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyShopWall": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyStepsBox": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "mLobbyWoodBox": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "radioObj": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "radioUnique": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Fld_VSLobbyScreen": {
+   "SignageFes00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "SignageLong00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "SignageMatching00": {
+    "gsys_static_depth_shadow": 1,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 1,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_LobbyCapsuleMachine": {
+   "Capsule00": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Capsule01": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Capsule02": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Capsule03": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_LobbyMusicSelecter": {
+   "ColorSample": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_LobbyPlayerDevice": {
+   "LobbyPlayerDevice": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Screen": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_LobbyPod": {
+   "Celling": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Grass": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbyPodanmMatch": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbypodMain": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbypodParts": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbypodPartsEdge": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "LobbypodPartsEdge1": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_LobbyProjector": {
+   "LobbyProjector": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_Minigame": {
+   "MiniGame": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "Screen": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   },
+   "glass": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_MinigameChairBlue": {
+   "MinigameChair": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  },
+  "Obj_MinigameChairYellow": {
+   "MinigameChair": {
+    "gsys_static_depth_shadow": 0,
+    "gsys_static_depth_shadow_only": 0,
+    "gsys_dynamic_depth_shadow": 0,
+    "gsys_dynamic_depth_shadow_only": 0
+   }
+  }
+ }
+}

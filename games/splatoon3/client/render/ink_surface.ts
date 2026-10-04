@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { INK_DAY_PARAMS, inkSurfaceFrame } from "./ink_surface_math.ts";
 import type { V3 } from "./graphics_math.ts";
 import { FORWARD_SURFACE_GLSL, FORWARD_SURFACE_END } from "./forward.ts";
+import { PREFILTER_LOOKUP_GLSL, PREFILTER_INK_GLSL } from "./env_prefilter.ts";
 
 export interface InkSurfaceBindings {
   texture:THREE.Texture;
@@ -63,6 +64,8 @@ HInkSurface hReadInk(vec2 uv,vec3 vertexNormal,vec3 materialNormal,vec3 paintTan
 `;
 
 const NORMAL_ANCHOR="#include <normal_fragment_maps>";
+/** p1714 ink branch: cPrefilEnvMapArray layer 12, explicit lod 0 (env_prefilter inkLayer). */
+const INK_ENV_ANCHOR="hNativeEnvSpecular(hN,hV,hF0,hR)";
 /** Apply after applyHoian + applyForward. Missing native forward anchors are an error, not a silently unlit paint fallback. */
 export function applyInkSurface(mat:THREE.MeshStandardMaterial,bindings:InkSurfaceBindings):InkSurfaceBinding {
   if(!mat.userData.nativeForward)throw new Error("Ink surface requires applyForward first");
@@ -77,7 +80,7 @@ export function applyInkSurface(mat:THREE.MeshStandardMaterial,bindings:InkSurfa
   const prior=mat.onBeforeCompile,priorKey=mat.customProgramCacheKey;
   const hook:THREE.MeshStandardMaterial["onBeforeCompile"]=(sh,renderer)=>{
     prior.call(mat,sh,renderer);
-    for(const anchor of [NORMAL_ANCHOR,FORWARD_SURFACE_GLSL,FORWARD_SURFACE_END,"hEvaluateSH(hIrradianceNormal)"])
+    for(const anchor of [NORMAL_ANCHOR,FORWARD_SURFACE_GLSL,FORWARD_SURFACE_END,"hEvaluateSH(hIrradianceNormal)",PREFILTER_LOOKUP_GLSL,INK_ENV_ANCHOR])
       if(!sh.fragmentShader.includes(anchor))throw new Error("Ink surface native forward anchor missing: "+anchor);
     if(!sh.vertexShader.includes("#include <defaultnormal_vertex>")||!sh.vertexShader.includes("#include <uv_vertex>"))throw new Error("Ink surface vertex anchor missing");
     Object.assign(sh.uniforms,uniforms);
@@ -96,11 +99,13 @@ export function applyInkSurface(mat:THREE.MeshStandardMaterial,bindings:InkSurfa
       .replace(FORWARD_SURFACE_END,String.raw`
       if(hInkSurface.isInk){hN=hInkSurface.normal;hR=.05000000074505806;hDiffuse=hInkSurface.albedo;
         hF0=vec3(.014999999664723873);hIrradianceNormal=hInkSurface.irradianceNormal;}
-      `+FORWARD_SURFACE_END);
+      `+FORWARD_SURFACE_END)
+      .replace(PREFILTER_LOOKUP_GLSL,PREFILTER_LOOKUP_GLSL+PREFILTER_INK_GLSL)
+      .replace(INK_ENV_ANCHOR,"(hInkSurface.isInk?hNativeInkSpecular(hN,hV,hF0,hR):hNativeEnvSpecular(hN,hV,hF0,hR))");
   };
-  const key=()=>priorKey.call(mat)+":nativeInk1714:atlas:"+bindings.texture.uuid+":"+JSON.stringify(attrs)+":"+!!bindings.uvAlreadyFlipped;
+  const key=()=>priorKey.call(mat)+":nativeInk1714:layer12:atlas:"+bindings.texture.uuid+":"+JSON.stringify(attrs)+":"+!!bindings.uvAlreadyFlipped;
   mat.onBeforeCompile=hook;mat.customProgramCacheKey=key;mat.userData.inkSurface=true;
-  mat.userData.inkSurfacePolicy="Hoian 1714/946 known consumer; web atlas/PMREM/BRDF inputs remain";
+  mat.userData.inkSurfacePolicy="Hoian 1714/946 known consumer; reflection = native layer 12 (illuminate r .05); web atlas input remains";
   mat.needsUpdate=true;
   return {uniforms,updateFrame(frame){uniforms.hInkFrame.value.fromArray(inkSurfaceFrame(frame));},setTexture(texture){uniforms.hInkTexture.value=texture;},
     dispose(){if(mat.onBeforeCompile===hook)mat.onBeforeCompile=prior;if(mat.customProgramCacheKey===key)mat.customProgramCacheKey=priorKey;

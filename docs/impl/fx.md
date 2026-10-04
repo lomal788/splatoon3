@@ -142,3 +142,7 @@
 5. **[assets] AGST 그룹 표** — `sfx.json` 에 `groups: { 그룹: { limiterType, limitCount } }`(GRP [0x16]/[0x17], `analysis/vfx/agst_grp_dump.txt`). 지금은 `audio/alto.ts DEFAULT_GROUPS` 의 일부 그룹만.
 6. **[조정] DESIGN.md §4 이벤트 표** — 실제로 쓰는 필드 등록: `Fire`(+team, vel, bullet), `FireImpact/FireOn/FireOff` = InkAction **변경 알림**(규칙 적용 뒤), `BulletSpawn`(+owner, team, vel), `BulletHit`(+owner, team, vel, row, target, damage, surface "Water"), `Damage`(+result, attacker), `Break`(target, pos, user), 플레이어 이벤트(+slot/action 선택). shared 키 `muzzle`(render), `teamColors`(render, 선택) 등록.
 7. **[render] 팀 색** — 이펙트가 쓰는 팀 색(선형 RGB, 팀 번호별)을 `world.shared.set("teamColors", { "0": [r,g,b], … })` 로 주면 render 와 같은 행을 쓴다(지금은 OrangeBlue Original 고정).
+
+## r11 gfx-diff 이펙트 (2026-10-04)
+
+원본 셰이더·CPU 차등 실행으로 정정한 내용과 남은 것은 [port/graphics_r11_diff_이펙트.md](../port/graphics_r11_diff_이펙트.md). 위 §1.4·§2 의 "형상 점(0)만", "빌보드·회전 순서", "근거리 페이드", "조준 표시 없음" 항목은 이 기록으로 대체한다(형상 0/1/2/12/13/14·방향표·emitterTrans·텍스처 이동 애니·깊이 오프셋·1202 셰이더 애니·조준 표시 `shot_guide.ts`).

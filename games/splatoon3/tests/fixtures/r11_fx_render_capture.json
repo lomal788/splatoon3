@@ -1,0 +1,599 @@
+{
+"source": "analysis/completion/r8/vfx_state_emu.json actual (0x710082804c original CPU, NVN setter args captured)",
+"cases": [
+{
+"key": "CmnFloorSplash1Emit/Splash",
+"render_hex": "00010301010400010000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnFloorSplash1Emit/Crown",
+"render_hex": "01010300010400010000000000000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+1,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+0,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnFloorSplashDist1Emit/Splash",
+"render_hex": "00010301010400010000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnFloorSplashDist1Emit/Crown",
+"render_hex": "01010300010400010000000000000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+1,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+0,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnFloorSplashNear1Emit/Splash",
+"render_hex": "00010301010400010000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnFloorSplashNear1Emit/Crown",
+"render_hex": "01010300010400010000000000000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+1,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+0,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnWallSplash1Emit/Splash",
+"render_hex": "00010301010400000000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+0,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "CmnWallSplash1Emit/Ripple",
+"render_hex": "01010300010400010000000000000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+1,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+0,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "WpShtrBullet1Emit/ball",
+"render_hex": "00010301000400010000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+2,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "WpShtrMzfNml/SplashCorn",
+"render_hex": "00010301010400000000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+0,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+},
+{
+"key": "WpShtrMzfNml/Flash",
+"render_hex": "00010301010400000000003f00000000",
+"nvn": {
+"nvnColorStateSetBlendEnable": [
+0,
+0,
+1,
+1
+],
+"nvnBlendStateSetBlendFunc": [
+5,
+6,
+2,
+6
+],
+"nvnBlendStateSetBlendEquation": [
+1,
+1,
+2,
+6
+],
+"nvnDepthStencilStateSetDepthTestEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthWriteEnable": [
+1,
+269418352,
+1,
+1
+],
+"nvnDepthStencilStateSetDepthFunc": [
+4,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetCullFace": [
+0,
+269418352,
+1,
+1
+],
+"nvnPolygonStateSetFrontFace": [
+1,
+269418352,
+1,
+1
+]
+}
+}
+]
+}
