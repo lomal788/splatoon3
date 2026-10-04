@@ -2,13 +2,21 @@
 // core 카메라(shared "camera") → three PerspectiveCamera. 마우스 yaw는 입력이 택한 회전 경로를 보존한다(웹 선택).
 // 카메라 쉐이크: fx 가 camera.userData.shakeOffset({x,y,z}, 월드)을 두면 위치에 더하고 원본 기저의 회전을 유지한다
 // (원본은 쉐이크 합을 포즈 위치(월드)에 더하고 회전은 그대로 — docs/camera/shake_rumble.md §3.2a).
-import { Matrix4, Quaternion, Vector3 } from "three";
+import { Matrix4, Quaternion, Vector2, Vector3 } from "three";
 import type { CameraShared } from "../../core/camera/index.ts";
+import { CameraProjectionState, projectionFovRadians } from "../../core/camera/projection.ts";
 import type { World } from "../../core/world.ts";
 import type { ClientContext, View } from "../context.ts";
 
 export function createCameraView(ctx: ClientContext): View {
   const cam = ctx.camera;
+  const projection = new CameraProjectionState(), size = new Vector2();
+  const logicalView = new Float32Array(12);
+  // Read the renderer's viewport size after matrix creation. Pixel ratio cancels
+  // in the aspect ratio; this is a web full-canvas Rect, not the native framebuffer.
+  // No invented gyro/alternate poser/device posture is supplied.
+  cam.userData.nativeProjection = { source: "logical", state: projection,
+    logicalView, cadence: "web-render-frame", trig: "JS-tanf-adapter" };
   const m = new Matrix4(), qPrev = new Quaternion(), qNow = new Quaternion();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
   const yawAxis = new Vector3(0, 1, 0), relative = new Vector3(), relativeEnd = new Vector3();
@@ -51,12 +59,24 @@ export function createCameraView(ctx: ClientContext): View {
         cam.quaternion.slerpQuaternions(qPrev, qNow, a);
       }
       const fov = lerp(c.prevFov, c.fov);
-      if (cam.fov !== fov || cam.near !== c.near || cam.far !== c.far) {
-        cam.fov = fov;
-        cam.near = c.near;
-        cam.far = c.far;
-        cam.updateProjectionMatrix();
-      }
+      // Keep the public Three fields for shadow/depth readers, but supply the
+      // logical native matrix directly rather than Three's algebraic 1/tan path.
+      const viewport = ctx.renderer ? ctx.renderer.getSize(size) : null;
+      projection.update({ near: c.near, far: c.far, fovRadians: projectionFovRadians(fov) },
+        viewport ? { left: 0, top: 0, right: viewport.x, bottom: viewport.y } : null);
+      cam.fov = fov;
+      cam.near = Math.fround(c.near);
+      cam.far = Math.fround(c.far);
+      cam.aspect = projection.matrixAspect;
+      // Native rows -> Three column storage; no X/Y sign or posture adjustment.
+      cam.projectionMatrix.fromArray(projection.logical).transpose();
+      cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+      // Existing native basis, world shake and complete-turn interpolation stay
+      // in Three's camera transform. Record the GPU float32 row layout for audits;
+      // this inverse/interpolation is a web adapter, not SDK LookAt bit identity.
+      cam.updateMatrixWorld();
+      const ve = cam.matrixWorldInverse.elements;
+      for (let row = 0; row < 3; row++) for (let col = 0; col < 4; col++) logicalView[row * 4 + col] = ve[col * 4 + row];
     },
   };
 }

@@ -1,6 +1,6 @@
 # 카메라 웹 반영 상태
 
-2026-10-03 · 현재 구현 기준. 사용자의 “카메라부분 web에 반영” 지시에 따라 코드와 문서를 수정했다.
+2026-10-04 · 현재 구현 기준. r10 입력/투영/상태/쉐이크 반영 상세는 [port/camera_r10.md](../port/camera_r10.md). 사용자의 “카메라부분 web에 반영” 지시에 따라 코드와 문서를 수정했다.
 아래 §1~§11이 현재 상태이며, 이전 설명은 §11에 원문 보존한다. 원본 분석 완료율은 변경하지 않았다.
 
 ## 1. 기능·범위
@@ -21,7 +21,7 @@ UI·다른 무기·장면·네트워크 구현은 변경하지 않았다.
 | [r9_reset_contexts.md §6](../camera/r9_reset_contexts.md) | reset 소비와 장면 공급자의 남은 경계 |
 | [shake_rumble.md §3.2](../camera/shake_rumble.md) | ELink 이름/frame·곡선·거리 15/25·월드 위치 합산 |
 
-이번 원본 호출은 이식 회귀 fixture 생성이다. 새 분석 확정 건수로 합산하지 않는다.
+r10 근거는 [입력](../camera/r10_input_response.md), [상태](../camera/r10_state_producers.md), [투영/렌더](../camera/r10_render_projection.md), [쉐이크](../camera/r10_shake_shooter.md)를 추가 소비했다. 이번 원본 호출은 이식 회귀 fixture 생성이다. 새 분석 확정 건수로 합산하지 않는다.
 
 ## 3. 구현 점검률
 
@@ -39,6 +39,8 @@ UI·다른 무기·장면·네트워크 구현은 변경하지 않았다.
 - 수직 속도 비율은 F(F(vy+jump3dY)/**0.11499999463558197**), 원본 분모 0x3deb851e이다. 보통 수직 추종·누산·FOV·근접 보정에 f32 연산을 적용한다.
 - 렌더 회전은 lookAt 재계산 대신 원본 기저로 만든 쿼터니언을 사용한다. 이전/현재 쿼터니언 보간은 웹 선택이다.
 - ELink CameraRumbleName/Frame, 거리 감쇠, Axis·곡선·Scale의 합을 실제 shakeOffset에 공급한다. 회전을 유지하고 월드 위치만 이동한다. 이름이 빈 슈터에 별도 발사 쉐이크를 만들지 않는다.
+
+r10 추가: 원본 f32 감도·pitchAngleToP, native 스틱 scalar 소비, whole blocked/별도 auto-pitch·WaterFall 법선, conditional normal normalize, 검증된 B7a0 공급, query1 separation 교정, logical Projection/inverse·후행 aspect, admission gain·owner/serial/finished 순서를 반영했다. 마우스 픽셀을 원본 스틱으로 취급하지 않는다.
 
 ## 5. 웹 갱신 순서
 
@@ -62,6 +64,10 @@ client/fx는 기존 고정 step 이벤트 배출에서 쉐이크를 계산하고
 | native.skipQueries/skipBoom/minimumQueryOffset/humanFov | 특수 게이트/offS/B6dc 소비 입력. 공급자가 없으면 기존 보통 경로 유지 |
 | SphereQueryFilter | query layer7/sub0, hitMask8/subMaskFFFFFFFF. 웹 Layer와 별개 |
 | Hit.nativeEntryFlags | native point normal일 때 bit0=1 그대로/0 반전. 일반 웹 outward normal은 카메라 inward로 한 번 변환 |
+| PadState.cameraStick | 명시적 gyro-off post-remap/delta·감도·cap/state 소비. 현재 브라우저는 mouse 공급이며 gamepad 추가 아님 |
+| cameraNative.control/autoPitch/waterFrames/Height | 원본 blocked/별도 피치 reader·s9 및 Bdf0/Bdf4 입력. 실제 player/event 생산자는 미연결 |
+| player.displayBinding/display.hidden | supported producer의 B7a0를 wall7a0에 연결. wallCling을 대입하지 않음 |
+| Hit.nativeSeparation | raw query1 point 교정에만 사용. 웹 surface point에는 생략 |
 | 지형 sweep | 원시 재질 mask의 camera 허용과 sub0을 검사. camera-only 장벽을 기존 bullet용 web Layer=0이라도 유지 |
 
 mesh 쪽은 현재 Ground 지형 컨테이너 전제를 사용한다. 실제 body LP의 레이어·Default/Same/Other 표·typed shape/태그·skip 목록 전체를 이식한 것이 아니다. 현재 Object 표적을 camera Ground query의 대상으로 확대하지 않았다.
@@ -70,7 +76,7 @@ mesh 쪽은 현재 Ground 지형 컨테이너 전제를 사용한다. 실제 bod
 
 마우스의 px→회전량·감도 설정과 PC 버튼 표현은 유지한다. yaw 회전은 sead 표를 쓴다.
 전체 원본 gyro/device posture·모듈 pose 공급은 미반영이다.
-60Hz와 렌더 alpha 보간, three 쿼터니언 정규화·투영은 웹 선택이다. 카메라의 native 기저를 이동·탄·렌더에 전달한 범위와 실제 GPU 화면의 동등성은 구분한다.
+60Hz·렌더 alpha·three 쿼터니언 정규화/역행렬은 웹 선택이다. 투영은 원본 logical f32 식·후행 aspect를 이식했고 SDK tanf는 JS adapter다. viewport 래치 호출 주기는 웹 render frame이다. 카메라의 native 기저를 이동·탄·렌더에 전달한 범위와 실제 GPU 화면의 동등성은 구분한다.
 
 ## 8. 원본 실행 fixture 회귀
 
@@ -91,18 +97,18 @@ mesh 쪽은 현재 Ground 지형 컨테이너 전제를 사용한다. 실제 bod
 
 합성 입력에서 원본 명령을 호출했다. whole 원본 카메라/actor·physics·query/frame은 실행하지 않았다.
 SDK logf/expf와 JS Math의 일반적인 마지막 비트 차이가 알려져 있으므로 이 128개 표본 일치를 모든 입력으로 확대하지 않는다.
-쉐이크는 판독 식/데이터 연결 및 웹 회귀 테스트이며 이번 원본 실행 수에 넣지 않았다.
+앞 표는 이전1,031건의 회귀 범위다. r10 추가 검증은 입력1,280사례/3,328필드, 기존 blocked2,175+WaterFall512, 투영421×16, 쉐이크162trace/6,318틱이다. 합성 pre-block/SDK boundary/전체scene 경계는 [현재 검증](../port/camera_r10.md#10-검증실제-명령실패)에 명시한다. 투영은 captured SDK tanf 공급 시0불일치, 실제 JS tanf는380/421완전일치·139필드차이·최대관측19ULP이다. 원본 분석 건수로 재계상하지 않는다.
 
 ## 9. 남은 차이·다음 지시
 
 | 항목 | 상태와 다음 작업 |
 |---|---|
 | spring 실제 생산 | 소비는 이식됐지만 player가 D/B210/e0c를 공급하지 않아 보통 실행은 0 입력이다. 원본 rig/head 차이 생산자와 B210 실제 컴포넌트를 physics 계약으로 연결해야 한다. |
-| formHeight/B6dc/상태 게이트 | formHeight는 아직 미공급(기존 기본0), humanFov는 미공급시 기존55. wall7a0/ad0/d9/blend1760/de0와 희귀 offS/장면 게이트도 원본 생산자 연결이 필요하다. |
+| formHeight/B6dc/상태 게이트 | formHeight는 아직 미공급(기존 기본0), humanFov는 미공급시 기존55. wall7a0는 supported B7a0 표시 producer를 연결했다. ad0/d9/blend1760/de0와 희귀 offS/장면 게이트 생산자, WaterFall live writer는 남는다. |
 | query 전체 | 웹 custom mesh sweep/다면체 근사·Ground 컨테이너 전제는 남는다. native LP·양방향 표·typed 태그·real stage TOI를 이식해야 한다. |
 | reset/모듈 | 첫 player·respawns 웹 매핑은 유지했다. 원본 First/Warp/Recorder 조건·module quaternion/상태 리그의 실제 장면 공급은 후속이다. |
-| 조준 scalar/libm | pitchAngleToP와 aimPitchDeg/aimDirection의 일부 double 계산 및 SDK libm 차이는 남는다. 전체 조준 함수를 모든 입력에서 비트 동일하다고 주장하지 않는다. |
-| 쉐이크 수명 | 비루프 종료 비교는 원본 미확정이라 MaxX 경계를 웹 정책으로 쓴다. 소유자 generation/follow·기존 XLink delay와 전체 이벤트 수명 동등성은 미검증이다. loop fade는 웹 종료 연결이다. |
+| 조준 scalar/libm | pitchAngleToP는 원본f32로 정정했다. aimPitchDeg/aimDirection의 일부 double 계산 및 SDK math 차이는 남는다. 전체 조준 함수를 모든 입력에서 비트 동일하다고 주장하지 않는다. |
+| 쉐이크 수명 | native MaxX/frame-limit 종료·generation/follow·serial·종료후합산 소비를 이식했다. 실제 pool capacity/초기serial·XLink delay·event-owner 공급은 미연결이고 visual handle fallback은 웹adapter다. |
 | 쉐이크 listener | 현재 unshaken shared camera.pos를 사용한다. 모듈 listener+1c8의 장면 공급 동등성은 별도 확인 필요. |
 | 실제 체감·화면 비교 | 현행 웹 실행은 확인했다. 원본 플레이 녹화/동일 입력의 전체 화면·조작감 대조는 하지 않았다. |
 
@@ -111,11 +117,13 @@ SDK logf/expf와 JS Math의 일반적인 마지막 비트 차이가 알려져 �
 
 ## 10. 실제 검증·명령
 
-최종 명령 및 로그는 [analysis/port_camera/commands.md](../../../analysis/port_camera/commands.md)에 기록한다.
+이전 포팅 명령은 [analysis/port_camera/commands.md](../../../analysis/port_camera/commands.md), 최신 r10은 [commands.md](../../../analysis/port_camera_r10/commands.md)에 기록한다. 전체359/359, typecheck/build PASS. 실제 화면/크기 변경은 확인했으나 자동화 pointer lock WrongDocumentError로 실제 마우스·오징어 조작은 미검증이다.
 기존 이식 선택 테스트의 .2 벽 기대값과 배정밀도 리그 기대값은 원본 .3/표 결과를 기대하도록 정정했다.
 float32의 미분 잡음을 원본 오차로 판정하던 C1 유한차분 검사는 원본 경계 fixture 직접 비교로 바꿨다.
 
 ## 11. 변경·정정 기록
+
+2026-10-04 r10: 이전 “pitchAngleToP 일부 double”, “비루프 종료 미확정/MaxX 웹정책”, “loop fade 웹종료” 설명은 원본 f32 매핑과 native 수명 이식으로 정정했다. 당시 표현을 여기 보존하며 현재 잔여는 실제 supplier/전체event·SDK/GPU 경계다. 일부 함수 회귀로 CAM03~07 전체를 완료로 승격하지 않았다.
 
 2026-10-03: 이전 본문의 “질의1/C14ec 생략”, “법선 선형”, “near=.2에서 반경 추정”, “normalize(at−pos)만 출력”,
 “쉐이크 producer 없음”은 이번 구현으로 변경됐다. 기존 분석 결론을 삭제하지 않고 아래 당시 구현 기록을 보존한다.

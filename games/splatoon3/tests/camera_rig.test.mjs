@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 const nativeRig = JSON.parse(readFileSync(new URL("./fixtures/camera_native.json", import.meta.url))).rig;
+const nativeInput = JSON.parse(readFileSync(new URL("./fixtures/camera_r10_input_native.json", import.meta.url)));
 const bits = a => Array.from(new Uint32Array(Float32Array.from(a).buffer));
 // 카메라 리그·피치 매핑·감도 — 기대값은 web/tools/camera_rig.py (selftest/table/altrig) 재구현 출력.
 import { test } from "node:test";
@@ -69,9 +70,11 @@ test("피치각→p (스틱, gk=0): -28→-1, 0→0, +44→1, 단조, 범위 밖
   near(pitchAngleToP(-28 - 75)[0], -1, 1e-9);
   near(pitchAngleToP(0 - 75)[0], 0, 1e-9);
   near(pitchAngleToP(44 - 75 - 1e-9)[0], 1, 1e-6);
-  near(pitchAngleToP(-14 - 75)[0], -0.45982142857142855, 1e-9);
-  near(pitchAngleToP(10 - 75)[0], 0.27625759852469095, 1e-9);
-  near(pitchAngleToP(22 - 75)[0], 0.5852272727272727, 1e-9);
+  // Replaces prior double reimplementation values with whole24e64f0 native bits.
+  for (const angle of [-89, -65, -53]) {
+    const row = nativeInput.pitchMap.find(row => row.input.angle === angle && !row.input.handheldFlag && row.input.stick && row.input.gyroK === 0);
+    assert.deepEqual(bits(pitchAngleToP(angle)), row.outputBits);
+  }
   assert.deepEqual(pitchAngleToP(-40 - 75), [-1, 12]);
   assert.deepEqual(pitchAngleToP(50 - 75), [1, -6]);
   let prev = -2;
@@ -85,10 +88,10 @@ test("피치각→p (스틱, gk=0): -28→-1, 0→0, +44→1, 단조, 범위 밖
 test("감도 → 회전 속도 (sens)", () => {
   assert.equal(sensK(10), 0);
   near(yawMaxDeg(sensK(10)), 4.0, 1e-9);
-  near(pitchMaxDeg(sensK(10)), 1.8, 1e-9);
+  assert.deepEqual(bits([pitchMaxDeg(sensK(10))]), [0x3fe66666]);
   near(yawMaxDeg(sensK(20)), 7.0, 1e-9);
-  near(pitchMaxDeg(sensK(20)), 2.8, 1e-9);
-  near(yawMaxDeg(sensK(0)), 2.4, 1e-9);
+  assert.deepEqual(bits([pitchMaxDeg(sensK(20))]), [0x40333333]);
+  assert.deepEqual(bits([yawMaxDeg(sensK(0))]), [0x4019999a]);
   near(pitchMaxDeg(sensK(0)), 1.0, 1e-9);
 });
 

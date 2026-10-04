@@ -158,6 +158,13 @@ shapeOK(X, keyX, 상대 O) = (F(X)+8 bit28 == 0) ? 1 :                          
 
 정정(2026-10-03, 7차): 이전 F+0x18 writer를 "EnableLayerHitMask 등으로 덮어쓰기 미확정"이라 기록했다. 실제 생성 writer의 전달 오프셋은 위 C4/C8이고, block 검사에서 쓰는 필드와 C0→F+0x10은 별개다. **BYML 이름→숫자 Q 필드까지 연결하지 않은 상태에서 Enable/Blockable 이름을 같은 필드로 간주하지 않는다.** 이전 "표비트가 쌍 허용이며 막음/통과 종류를 정하지 않는다"는 설명은 block 배열의 원본 변환으로 정정한다; 실제 접촉 bit1에는 몸체 마스크와 형상 행도 필요하다.
 
+
+#### 3.5.1a. Ragdoll 파라미터와 Entity 마스크의 오연결 정정 (2026-10-03 r10)
+
+[판독]+[데이터] 위 표의 “강체의 해석된 파라미터 Q→D,3b2ad14” 행은 전달되는 offset만으로 Entity 충돌 마스크에 연결한 잘못된 해석입니다. 새 실제 creator3ba35d8은 VT574f208을 쓰며 getName3ba7548은 `phive__RagdollBodyParam`을 반환합니다. visitor3ba38e0의 Q+74(flag85)는 **RestitutionScale**, Q+48(flag86)는 **BuoyancyScale**입니다.3b2ad14가 받는 compact param과 그 descriptor는 Ragdoll의 float 구조체이고, Entity descriptor의 같은 C4/C8 offset과 동일한 객체가 아닙니다. 옛 행은 당시 기록으로 보존하되 **Entity raw mask의 공급 근거로 사용하지 않습니다.**
+
+위 원본 BYML 표 변환174u32 및 actual Entity/character D→LayerPair1024사례는 이 Q 경로를 실행한 결과가 아니므로 유효합니다. 다만 그 성공을 raw authored 이름→Entity D 전체 공급 해소라고 확장하지 않습니다. 새 실제 raw Entity loader는3a403f4이며 상속 flag103..106과 이름을 PhiveConfig collections에서 조회하는 경로를 추적하고 있습니다. 원본 C `analysis/camera_100_r10/boom/ragdoll_param_correction.c`, `rigid_resolver.c`, `raw_entity_descriptor.c`; 실제 typed visitor/creator 및 raw 명령을 확인했습니다. [카메라 실제 지형/Fade 분석](../camera/r10_boom_stage_fade.md) §11의 최신 공급 경계를 함께 읽습니다.
+
 ### 3.5.2 원본 bphsh 정보 부착과 슈터 접촉 (7차 보강)
 
 writer `0x7103a715b4`: bphsh P+0x20(재질 바이트)>>4 와 P+0x24(필터 바이트)>>3 중 작은 N을 사용하고, hknpShape H.userData(+0x28)에 I=O+0x48을 단다. I+8=N, I+0x10=필터 행, I+0x18=N, I+0x20=재질 행, I+0x28=H. 4개 원본 형상 24필드 실행과 사격장 행을 포함한 476사례 탄 block 검증은 [../gimmick/collision_mesh.md](../gimmick/collision_mesh.md) §3.4.1~2. **정보 writer는 해소**, 16 B 재질 행 reader·실제 Havok 잎 태그 코덱은 7차 당시 미확정이었다. 8차 새근거 §3.5.3으로 정정한다.

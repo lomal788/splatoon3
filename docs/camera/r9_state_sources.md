@@ -57,3 +57,7 @@ web/tools/r9_camera_scene_ratio_emu.py → analysis/completion/r9/camera_scene_r
 - B9314 생산자는 MOV offset9314만 검색해서 찾지 못했습니다. 큰 필드의 분리된 주소 생성/구조체 복사 경로가 필요합니다. 다음 B9300 주변 구조를 설정하는24cb.. 또는23547bc/reset.
 - 수직 특수 비율 전체 상태 질문은 다른 분기 predicates의 정체를 포함하므로 이 비율 실행4096으로 전체를 승격하지 않습니다.
 - 2026-10-03 정정: 기존 수직 변수 의미 추정, 분모를 카메라 C+e8로 읽는 혼동 및 오징어 G143d0 의미를 위 새 writer/reader에 따라 정정하며 이전 문장은 보존했습니다.
+
+## r10 날짜정정: 2026-10-03 typed channel 연결
+
+이전§11의 callback24cb3ec/24cbca8와 typed token58bc348을 같은 구독으로 연결한 설명을 정정한다. 실제 B9210 nodeBaa18/key58963e8은 SplVersusBeforeGameSelector, B9212 nodeBab78/key5853238은 SplVersusGameEndSelector이다.58bc348은 다음nodeBabd0/다른callback24cbcb8의 SplVersusResultSelector다. 인접node ctor의 다음 key load를 현재callback에 연결한 오인이었다. 실제 getName/IsA/queue enqueue와 writer 표는 [r10_state_producers §6.7](r10_state_producers.md)에 있다 [판독]+[데이터]. queue→bus delivery는 미확정 유지다.

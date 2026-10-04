@@ -164,3 +164,35 @@ r7 종료 고정 inventory에서 신규147개를 원본 근거로 해소하여 �
 [현재 반영·검증·다음 지시](port/graphics_priority_r9.md): 탱크/하네스/병의 native 재질·owner texture, raw type11 눈 채널, [Maya0/rotation0 UV6lane](graphics/character_texsrt_r9.md), [실제 Muzzle 시각 행렬 및 내적 정정](effect_sound/muzzle_attachment_r9.md)을 웹과 MD에 반영했다. FMAA 원본1,212/피부 홀더67/SRT313/내적 격리블록2,048, 선택 GLSL↔웹GPU448건은 각각 범위가 다른 검증이며 원본 NVN/전체프레임 일치가 아니다.
 
 고정 원본556/986=56.39%·그래픽102/204=50.00%, port13/62=20.97%(일부37/차이9/원본미확정3)·GR0/10/일부7/10 유지. 신규 부분 근거를 기존 복합 질문 전체 확정으로 승격하지 않았다. 몸CP/skin idx·weighted type11/type18·다른 SRT mode/rotation·cube/BRDF/SPP·잠영 파문/Custom1/VAT·native 최종픽셀은 남는다. 최종 테스트·브라우저·보호 SHA와 실패는 r9 요약의 실행 기록을 따른다.
+
+
+## 카메라 100% 목표 원본 분석 r10 — 2026-10-03
+
+카메라 고정106행의 현재 검토 결과·신규 근거/기존 정정 구분·잔여 추적은 [camera/analysis_100.md](camera/analysis_100.md)와 [analysis_completion.md](analysis_completion.md)를 따른다. 이 작업은 원본 분석·MD 반영이며 웹 코드·에셋·impl 변경은 없다. 100% 목표는 아직 미달이다.
+
+- [스틱 입력·yaw/pitch 응답](camera/r10_input_response.md): 새12,288 native 구간·SDK libm 대조, 비트 불일치0.
+- [Module·시작·투영 연결](camera/r10_module_projection.md): whole Module·device 식·valid 래치와 viewport 갱신 시점; liveposture 미확정.
+- [상태 생산자·WaterFall](camera/r10_state_producers.md): affine·whole blocked predicate·contact 높이/타이머→normal 보정.
+- [쉐이크·슈터·Focused](camera/r10_shake_shooter.md): 원본 수명·gain 묶음·일반 발사/명중 admission·실제 Subjective 값 공급.
+- [실제 사격장 메시 붐·Fade](camera/r10_boom_stage_fade.md): 출하TAG0→native Entity/query8면·40float 일치, 별도 Fade helper supplier/material 관계와22,288 부분 실행. authored필터/wholeframe/GPU 잔여 유지.
+
+- [카메라 사격 자세 타이머 보강](camera/r10_posture_timer.md): 원본5632건, Bad0 writer/공중 감소/메인 drain; 모든 상태와 전체프레임 미확정 유지.
+
+- [카메라 렌더·UBO·출력 후속](camera/r10_render_projection.md): 논리 Projection 소비·Context34멤버/2336B·compiled submit/present·SDK1042/0bad. 최종Lby GPU/window는 미확정.
+
+**2026-10-03 r10 actual-source와 자세 타이머 최종 후속:** 상태검증6071,자세timer10752,렌더1042는각범위의원본구간불일치0이다. 지형source는최종16/128f32·RSDB889·Banc15f32·normal128/384f32·rawmask353/2118u32. 지형의slot68 dispatcher/초기posewriter 및최종GPU/window가남으며,고정카메라현재수치는 [analysis_100.md](camera/analysis_100.md)의직접집계를따른다.
+
+## 카메라 r10 사용자 지정 종료 시점 — 2026-10-03
+
+추가 분석을 멈추고 모든 담당 결과를 MD에 반영했다. 현재 고정 카메라 **93/106=87.74%**, 시작78/106 대비 **+15행/+14.15%p**다. 신규 원본 근거 해소13행과 기존 해소 정정2행을 구분한다. 전체는 **571/986=57.91%**이며 **카메라100%는 미달**이다. [최종 집계·근거·잔여13행](camera/analysis_100.md), [전체 감사 목록](analysis_completion.md).
+
+- [상태/탑승 상황 §6.11](camera/r10_state_producers.md): VehicleSpectacle cockpit→typedref/queue/FSM→C1918,새288/0bad;Pipeline/Dokan 기존근거와합쳐고정11/22의상황의미를해소. 전체Lby도달·배송·유효ref수명은별도미검증.
+- [지형 붐 §3.1.5](camera/r10_boom_stage_fade.md): 실제Actor→component.vt68 dispatcher와manager조건 판독;Banc→Actor최초pose→native초기적용의마지막동일성은잔여. 새native0,고정4/23/32/38미승격.
+- [타이머 §6.2](camera/r10_posture_timer.md): 선행가상대상은PlayerGrindRail,옛Weapon명칭정정. 새4096/0bad,누계14848는부분구간이며전체frame미확정.
+- [렌더 §3.4/3.5](camera/r10_render_projection.md): normalframework/worker·origin1/window image·actualHDRtriangle 공급,새64/0bad. 같은frameHDRtarget/window와GPU초기swizzle 미확정;누계1106는CPU계약.
+
+앞6071/10752/1042와slot68dispatcher잔여는후속이전검토시점이다. 이번최종값은상태6359/타이머14848/렌더1106이며서로다른구간을전체scene검증으로합산하지않는다. 웹코드·에셋·impl/original변경및commit/push는없다. 실제명령·실패·검증경계는각문서§10/11과analysis/camera_100_r10/commands.md에보존했다.
+
+## 카메라 웹 r10 반영 — 2026-10-04
+
+[카메라 웹 적용 기록](port/camera_r10.md): 원본 f32 입력/피치·logical투영/aspect래치·blocked/WaterFall/B7a0 소비·쉐이크owner/serial/종료순서를반영했다. 전체359/359·typecheck/build통과. 원본확정93/106·전체571/986은변경없으며실제공급자/GPU경계를유지한다.

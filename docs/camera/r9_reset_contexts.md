@@ -98,3 +98,5 @@ C168=.2; C14f8=C1504=C150c=0
 ## 11. 미확정 사항과 추가 분석에 필요한 근거
 
 고정 player_camera:L389 전체 질문은 **조사중** 유지합니다. 새로운 exact 함수경계·두 메시지 공급과 모듈 적용식은확정했지만 setup slot15의 상위 actor lifecycle 연결과 module140/150의 live 저장 시점이 남았습니다. 다음: Behavior slot15 실제dispatch→2353a18, module실제VT와140/150writer, 설정객체569e0a8의상위caller. 이미해소된reset재시작enum/사망snapshot은재분석하지 않습니다. 직접BL검색에caller가없다는것은virtual호출이없다는증명이아닙니다.
+
+**2026-10-03 r10 정정:** 위 남은 두 연결은 [r10_module_projection.md](r10_module_projection.md) §3~11의 실제Actor component lifecycle→bridgeVT553e788→Behavior slot15, 전체Module1010150의Pose/140/150 생산자로 해소했습니다. 고정질문16을확정으로변경하되 setup/reset의경계capture·전체Scene/GPU 미실행을명시했습니다. 이전r9본문은역사로보존하며원본재시작enum·기존모듈적용2048/64는재사용입니다.

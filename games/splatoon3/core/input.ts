@@ -1,5 +1,7 @@
 // 컨트롤러 입력의 결정적 표현. 클라이언트(client/input.ts)가 키보드·마우스로 채우고,
 // 코어는 이것만 본다. 원본 버튼 의미 대응은 DESIGN.md "입력" 절.
+import type { CameraStickFrame } from "./camera/controller.ts";
+
 export const Btn = {
   Fire: 1 << 0, // ZR 메인 사격
   Jump: 1 << 1, // B
@@ -19,6 +21,9 @@ export interface PadState {
   lookPitch: number;
   /** Web adapter policy. Absent retains the original controller pitch-follow path. */
   lookMode?: "mouse";
+  /** Explicit gyro-off original scalar inputs; never inferred from mouse px.
+   * The browser currently supplies mouse displacement instead. */
+  cameraStick?: CameraStickFrame;
   /** 누르고 있는 버튼 비트(Btn). */
   hold: number;
   /** 이번 프레임에 새로 눌린 버튼 비트. */

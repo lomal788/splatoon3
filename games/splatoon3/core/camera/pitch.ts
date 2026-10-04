@@ -3,6 +3,7 @@
 // 조준 방향 0x71024aff7c → 0x7102551640/0x7102551780(곡선) → 0x7102551fe0(회전) — docs/impl/camera.md "조준 방향".
 import { f32 } from "../fmath.ts";
 import { pieceBez } from "./curves.ts";
+import { add, sub, mul, div, floatBits as bits } from "./native_math.ts";
 
 /** 세이브 감도 정수(0..20) → k = clamp((v-10)/10, -1, 1). UI -5..+5 는 k = UI/5 [UI 대응 추정]. */
 export function sensK(saveValue: number): number {
@@ -12,11 +13,13 @@ export function sensK(saveValue: number): number {
 
 /** 0x71024d6598: 스틱 최대 회전 속도(도/프레임). */
 export function yawMaxDeg(k: number): number {
-  return 4.0 + k * (k >= 0 ? 3.0 : 1.6);
+  k = f32(k);
+  return add(mul(k, k < 0 ? bits(0x3fcccccc) : 3), 4);
 }
 
 export function pitchMaxDeg(k: number): number {
-  return 1.8 + (k >= 0 ? k : 0.8 * k);
+  k = f32(k);
+  return add(k < 0 ? mul(k, bits(0x3f4ccccc)) : k, bits(0x3fe66666));
 }
 
 /**
@@ -25,57 +28,59 @@ export function pitchMaxDeg(k: number): number {
  * 재구현 web/tools/camera_rig.py pitch_angle_to_p 를 그대로 옮김.
  */
 export function pitchAngleToP(angle: number, gk = 0, handheldFlag = false, offA = 0, offB = 0, stick = true): [number, number] {
-  const a = Math.max(angle, -180);
-  let f7 = (gk >= 0 ? 3 : 11) * gk - 103;
-  let f8 = 0 * gk - 75;
-  let f11 = (gk >= 0 ? -6 : -18) * gk - 31;
+  angle = f32(angle); gk = f32(gk); offA = f32(offA); offB = f32(offB);
+  // Raw24e6514 FMIN(+180) was removed as unreachable in cached decompilation.
+  const bounded = Math.min(angle, 180), a = angle < -180 ? -180 : bounded;
+  let f7 = add(mul(gk >= 0 ? 3 : 11, gk), -103);
+  let f8 = add(mul(gk >= 0 ? 0 : -0, gk), -75);
+  let f11 = add(mul(gk >= 0 ? -6 : -18, gk), -31);
   if (handheldFlag) {
-    f7 += 10;
-    f8 += 10;
-    f11 += 10;
+    f7 = add(f7, 10);
+    f8 = add(f8, 10);
+    f11 = add(f11, 10);
   }
   let t: number;
   let P0: number, P1: number, P2: number, P3: number;
   if (a >= -165) {
-    const lo = f7 + offA - offB;
-    if (a < lo) return [-1, (lo - 165) * 0.5 <= a ? lo - a : a + 165];
-    const mid = f8 - offB;
+    const lo = sub(add(f7, offA), offB);
+    if (a < lo) return [-1, mul(add(lo, -165), .5) <= a ? sub(lo, a) : add(a, 165)];
+    const mid = sub(f8, offB);
     if (a < mid) {
       const f4 = gk >= 0 ? 0 : -6;
       const f11b = gk >= 0 ? -2 : -4;
-      const f6 = gk >= 0 ? -gk : gk * -3;
-      const span = mid - lo;
-      let f9 = f11b * gk + 10;
-      let f11c = f4 * gk + 0;
+      const f6 = gk >= 0 ? f32(-gk) : mul(gk, -3);
+      const span = sub(mid, lo);
+      let f9 = add(mul(f11b, gk), 10);
+      let f11c = add(mul(f4, gk), 0);
       if (stick) {
-        f9 = f6 + 7;
-        f11c = f11b * gk + 10;
+        f9 = add(f6, 7);
+        f11c = add(mul(f11b, gk), 10);
       }
-      t = span !== 0 ? (a - lo) / span : 0;
+      t = span !== 0 ? div(sub(a, lo), span) : 0;
       P0 = -1;
-      P1 = f11c / span - 1;
-      P2 = -f9 / span;
+      P1 = add(div(f11c, span), -1);
+      P2 = div(f32(-f9), span);
       P3 = 0;
     } else {
-      const hi = f11 + offA - offB;
+      const hi = sub(add(f11, offA), offB);
       if (a < hi) {
-        let f7b = (gk >= 0 ? -4 : -8) * gk + 26;
+        let f7b = add(mul(gk >= 0 ? -4 : -8, gk), 26);
         const f11d = gk >= 0 ? -4 : -6;
-        let f11e = 0 * gk;
+        let f11e = add(mul(gk >= 0 ? 0 : -0, gk), 0);
         if (stick) {
-          f7b = f11d * gk + 18;
-          f11e = 8 - (gk + gk);
+          f7b = add(mul(f11d, gk), 18);
+          f11e = sub(8, add(gk, gk));
         }
-        const span = hi - mid;
-        t = span !== 0 ? (a - mid) / span : 0;
+        const span = sub(hi, mid);
+        t = span !== 0 ? div(sub(a, mid), span) : 0;
         P0 = 0;
-        P1 = f7b / span;
-        P2 = 1 - f11e / span;
+        P1 = div(f7b, span);
+        P2 = sub(1, div(f11e, span));
         P3 = 1;
       } else if (a < 60) {
-        return [1, !((hi + 60) * 0.5 <= a) ? hi - a : a - 60];
+        return [1, !(mul(add(hi, 60), .5) <= a) ? sub(hi, a) : add(a, -60)];
       } else {
-        t = (a - 60) / 135;
+        t = div(add(a, -60), 135);
         P0 = 1;
         P1 = 1;
         P2 = -1;
@@ -83,14 +88,18 @@ export function pitchAngleToP(angle: number, gk = 0, handheldFlag = false, offA 
       }
     }
   } else {
-    t = (a + 300) / 135;
+    t = div(add(a, 300), 135);
     P0 = 1;
     P1 = 1;
     P2 = -1;
     P3 = -1;
   }
-  const u = 1 - t;
-  return [P3 * t * t * t + P2 * 3 * t * t * u + P1 * 3 * t * u * u + P0 * u * u * u, 0];
+  const u = sub(1, t), q = mul(mul(t, 3), u);
+  const term3 = mul(P3, mul(t, mul(t, t)));
+  const term2 = mul(P2, mul(t, q));
+  const term1 = mul(mul(u, q), P1);
+  const term0 = mul(mul(mul(u, u), u), P0);
+  return [add(term3, add(term2, add(term1, term0))), 0];
 }
 
 /** 조준 피치 곡선(도). 기본값 = 0x7102551640 이 0x71058bdeb0+0x14..+0x28 에서 채우는 임시 파라미터 [판독 + 실행(정적 초기화 에뮬)]. */

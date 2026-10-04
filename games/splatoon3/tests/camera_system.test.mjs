@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { PlayerCamera } from "../core/camera/camera.ts";
 import { emptyPad } from "../core/input.ts";
 import { mouseToLook, defaultCameraSettings, MOUSE_BASE_DEG_PER_PX } from "../client/input.ts";
+import { floatBits } from "../core/camera/native_math.ts";
 
 const near = (a, b, eps, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg ?? ""} ${a} vs ${b}`);
 const player = (extra = {}) => ({ pos: [0, 0, 0], forward: [0, 0, 1], floorNormal: [0, 1, 0], ...extra });
@@ -109,12 +110,12 @@ test("마우스 대응식: 감도 0 기준 0.15°/px, 감도 비율·피치 비�
   const s = defaultCameraSettings();
   const [y0, p0] = mouseToLook(100, 100, s);
   near(y0, (-100 * MOUSE_BASE_DEG_PER_PX * Math.PI) / 180, 1e-12);
-  near(p0, y0 * (1.8 / 4), 1e-12);
+  near(p0, y0 * (floatBits(0x3fe66666) / 4), 1e-12);
   const [y5, p5] = mouseToLook(100, 100, { ...s, sens: 5 });
   near(y5 / y0, 7 / 4, 1e-12);
-  near(p5 / y0, 2.8 / 4, 1e-12);
+  near(p5 / y0, floatBits(0x40333333) / 4, 1e-12);
   const [ym, pm] = mouseToLook(100, 100, { ...s, sens: -5 });
-  near(ym / y0, 2.4 / 4, 1e-12);
+  near(ym / y0, floatBits(0x4019999a) / 4, 1e-12);
   near(pm / y0, 1.0 / 4, 1e-12);
   const [yi, pi] = mouseToLook(100, 100, { ...s, invertX: true, invertY: true });
   near(yi, -y0, 1e-12);

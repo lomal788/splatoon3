@@ -173,3 +173,30 @@ sin = T[i].s + T[i].ds * fr ;  cos = T[i].c + fr * T[i].dc
 
 ### 2026-10-03 정지 마우스 시점 보완
 [mouse_view_jumps.md](mouse_view_jumps.md)에 large delta·최단 quaternion 역방향 보간과 mouse stop 뒤 pitch 후행을 실제 웹 실행으로 기록했다. 사용자 실제 사건의 input trace는 미수집이므로 직접 원인은 미확정이다. [원본 자동 제어](mouse_original_controls.md)와 [입력 수명](mouse_input_lifecycle.md)을 분리했다.
+
+### 2026-10-03 r10 — 카메라 100% 목표의 최신 판정
+
+최신 고정106행 집계·신규 근거·기존 해소 정정·잔여는 [analysis_100.md](analysis_100.md)를 따른다. 위 과거 목차/§1 표의 “포저 연결 미확정”, “사망 받는 쪽 미확정”, “흔들림 표는 전부 재구현”은 각각 r8/r9 및 r10의 원본 근거로 정정한다. 과거 표현을 당시 기록으로 보존하며 최신 결론은 아래와 같다.
+
+| 체감 경로 | 최신 원본 근거 | 남는 경계 |
+|---|---|---|
+| 스틱 입력·감도·yaw/pitch | [r10 입력](r10_input_response.md) 네 구간12,288 비트 대조·SDK 실제 libm | whole input/gyro 후단·마우스 정책·최종 화면 부호 |
+| 활성 포저·Module·화면 행렬 | 기존 r8 poser와 [r10 Module](r10_module_projection.md) whole 갱신·device 변환·valid/viewport 시점 | liveposture/플랫폼 출력/GPU |
+| 카메라 흔들림 | [r10 수명](r10_shake_shooter.md) 현재 frame→owner→counter→finished 필터, curve*(gain*Scale), 월드 위치 가산 | 실제 event scheduler·SDK 최종 출력 |
+| 발사·명중의 손맛 | ID40 일반 선택 ELink 이름 공백/admission; 실제 Focused producer→receiver→5 user | 다른 무기·실제 벽 event 전체는 확장하지 않음 |
+| 수직·상태 | [r10 생산자](r10_state_producers.md) blocked predicate·S affine·Water contact/타이머→normal 목표 | 요청 이벤트·전체 상태 공급/리그 조합 |
+| 벽 접근·물체 Fade | [r10 실제 메시/Fade](r10_boom_stage_fade.md) TAG0→Entity query8면 및 actual helper→material sink | authored필터 공급/wholeframe·모든 Fade variant/GPU |
+
+**2026-10-03 후속 갱신:** 위 표의 “authored필터 공급” 중 rawEntity 이름→수치 mask는 원본3a403f4 실행으로 해소했다. 실제Ground/Ground와Default 마스크를 nativeEntity/TAG0에 연결했으며 비마스크/base descriptor·closest 경쟁도 보강 중이다. 실제Actor의ShapeTag bit28 예약·world/frame 연결은 남았다. 상태 표에는 GateManhole/MissionGateway 요청768건과 BeforeGame/GameEnd typed 의미를 추가했고, 별도 [사격 자세 타이머](r10_posture_timer.md)는5632건 원본대조했다. 이 부분 보강을 전체질문확정으로 올리지 않는다.
+
+사망 메시지 수신/대체 pose 선택은 [r9_lifecycle.md](r9_lifecycle.md)의 기존 해소를 재사용한다. 일반 스플래시슈터 명중에 임의의 카메라 흔들림을 추가하지 않는다. 현재 최종 화면/전체 붐·상태 공급 잔여가 있으므로 카메라100%로 표시하지 않는다. 이번 요청은 MD 분석이며 웹 코드는 변경하지 않았다.
+
+**2026-10-03 r10 조건부 분류·활성 술어 후속:** 실제19타입의 번호표/unknown0/null·같은primary skip을 원본110건으로 닫았다. 입력 활성 술어4096·메인 감소 후 하한1024를 추가한 Bad0 신규10752건은부분 실행이며 q33 전체확정으로 올리지 않는다. 현재 확정수는 [analysis_100.md](analysis_100.md)의 고정106행 집계를 따른다.
+
+**2026-10-03 r10 렌더 소비자 후속:** [r10_render_projection.md](r10_render_projection.md)에서 logical Projection→Context34멤버2336B→로비 셰이더, compiled draw/submit/present와 native SDK viewport를 새1042건 불일치0으로 연결했다. 이 구간의 XScale 양수는 GPU 초기swizzle·실제 HDR/window 최종화면 부호 전체의 증명이 아니다.12/29/31 조사중 유지.
+
+**2026-10-03 r10 Demo·피치 조건 후속:** [r10_state_producers §6.9/6.10](r10_state_producers.md)의새922건을더해총6071건,0bad이다. CanControlCamera/Time 공급자와Ready/Result 필드명을연결하고입력차단≠피치자동복귀를정정했다. Coop raw12의typed enum명을추측으로채우지않아9/37조사중이다. 이전전체queue/runtime잔여를이필드의미질문에추가완료조건으로쓰지않는다.
+
+**2026-10-03 r10 actual-source 붐 최종 보강:** [r10_boom_stage_fade.md](r10_boom_stage_fade.md)의 실제Default helper·비마스크·Banc·RSDB→Entity/LP→actualTAG0 최근접16/128f32와normal128/384f32는불일치0. source/world등록·frame소비를판독으로좁혔으며,남는slot68 dispatcher/초기pose writer 때문에4/23/32/38조사중유지. 초기8면 및mask만의fixture기록을 최종source 전체완료로승격하지않는다.
+
+**2026-10-03 r10 사용자 지정 종료 집계:** 카메라93/106=87.74%,기준78대비+15행/+14.15%p(새근거13/기존정정2),잔여13. [analysis_100.md](analysis_100.md)의직접집계와원문질문경계를따른다. Vehicle상황/GrindRail선행가상조건/normalrender공급자/Actor등록dispatcher를문서화했다. 지형초기pose의마지막동일성·최종texture/window 및GPU부호·상태별전체frame은미확정. 사용자의종료요청으로여기까지정리했으며100%달성주장과웹변경은없다.

@@ -771,3 +771,88 @@ S는0xc8바이트 별도 객체로 front(S18)/back(S6c) 두 상태, 상태+8에P
 ### 6.12 9차 붐 활성 필터 생산자·법선 정정(2026-10-03)
 
 [판독]+[실행] reset24d6598의24d6d94..6dc8가C2e0의layer를7(SplCamera),C2e4mask를8(Ground)로씁니다. 기존factory-only마스크0은reset전값이라활성writer미확정을정정합니다. 원본producer→actualEntityfilter/provider/codec→nativebroadSpherecast→SphereCapsule→pointiterator에서hit1,frac3e8ccccc/dist3f8ccccc비트일치,null/auto/fault0. 기존r5의world21c=.01사슬은재사용(.3반경). 원본법선선택은entrybit0=1이면pointN,0이면−pointN으로항상반전이아닙니다. [r9_boom_query.md](r9_boom_query.md) §3.1·6.1·10.1·11.1에전체필터계약과FieldRigidBody/TAG0whole잔여를구분했습니다. L352/implL114는형상·반경·질의필터질문을해소하고,실제stage전체가포함된큰묶음은계속조사중입니다.
+
+### 6.13 스틱 스냅·yaw·피치 누적 추가 실행 (2026-10-03 r10)
+
+[판독]+[실행] 새 원본 주축 스냅4096/bias2048/yaw4096/pitch속도·누적2048, 총12,288건을 독립 f32 식과 대조해 비트 불일치0입니다. SDK powf/logf/expf도 원본 명령이며 null/자동페이지/fault/미지원 PLT0. 전체24e0178이 아니라 네 입력 구간 실행입니다. 별도0874..1cd0 연결 probe16건은 실제predicate/사인표/24e64f0까지 실행한 관측이며 위 독립식 사례에 더하지 않습니다. 전체식·비트상수·실행 경계는 [r10_input_response.md](r10_input_response.md) §3~11.
+
+**정정 이유와 이전 결론(2026-10-03):** §6.4의 “a,b,c 의미 미확정”에서 a,b는 Baa4/aa8의.2 delta 필터(C180/184), c는 `abs(x)*abs(y)`에 product>.001일 때 `1-abs(abs(x)-abs(y))/(abs(x)+abs(y))`를 곱한 값입니다. 저장C188은 두 차감 뒤 각각 max(-1)이며 **pow 지수만 max(C188,0)**입니다. 기존 요약의 “e=max(e,0)”을 저장값 제한으로 구현하면 원본과 달라집니다. 작은 축 억제 뒤 원래 입력 벡터 길이로 정규화합니다. 약1.6/1.8/.96/.8 계수의 원본 비트는 새 문서 §4에 기록했습니다. 기존 소수 약칭과 이전 문장은 역사로 남깁니다.
+
+수직 deadzone 조건은 C15d8에 따른0/.15 또는 `(B4cc!=0 && global58bbb80==0)`이며 B4cc=현재 IsEnableGyro입니다. 4ce/4cf는 꺼짐/켜짐 전환 펄스입니다(기존 writer 재사용). 의도적으로 불일치한 gyro flag로 얻은 피치 누적을 실제 일반 프레임의 gyro 동작이라고 해석하지 않습니다. 스틱 누적식은 확정했지만 마우스 px 매핑·live device posture의 최종 화면 부호는 별도입니다.
+
+### 6.14 전체 모듈·장치 행렬·유효 래치 (2026-10-03 r10)
+
+[판독]+[실행] 실제 Spectator VT56467f8 callbacks→전체1010150→1017434→원본 LookAt/Perspective/device transform을 1024건 실행했고 논리16+장치16+view12+aspect1,46,080 f32 필드 비트 불일치0입니다. 별도 전체3589b48을 임의 유한 행렬·posture0..5와unsupported값4096건 실행해65,536 필드 비트 불일치0입니다. device posture는 **합성 입력**이며 원본 Lby live 값 확인이 아닙니다. 실제raw BSS5997898=0과 전이미지 포인터1개만으로 런타임0이라고 단정하지 않습니다.
+
+포즈 복사/쉐이크 후 행렬을 만든 **뒤에** M10 viewport/M18 context가 새 화면비를 씁니다. 추가context256건과viewport존재→소실128시퀀스가 모두 원본과 일치했습니다. M140은viewport가 있으면1, 없어져도 유지하며context만으로1이 되지 않습니다. M150..15c는현재 모듈 포즈의 quaternion입니다. contexttype3·height0은+Inf 화면비를 저장하는 원본 동작을 보존합니다. Pose padding 제외 복사와 모든 device x/y변환·z행 곱 순서 및 초기 harness 실패는 [r10_module_projection.md](r10_module_projection.md) §3~11.
+
+### 7.11 시작 리셋 상위 lifecycle·WaterFall·특수 번호 정정 (2026-10-03 r10)
+
+[판독]+[실행] 7.10의 남은 setup slot15 상위 연결은Actor0f73ecc/0f746b4→0f7400c(component mask/RTTI)→실제componentVT553e788+d0=0f57018→0ffd64c→PlayerBehaviorVT5632b08+78=2353a18→2472c4c로 해소했습니다. 실제bridge/Behavior dispatch1024건에서13포인터·bool·초기화 순서·래치가일치하며setup/reset자체는capture경계입니다. M140/150의생산자는§6.14입니다. 기존r8/r9 reset enum/receiver는재사용했고전체scene spawn을실행했다고확대하지않습니다.
+
+**WaterFall 정정:** §7의“df4와카메라y의차로주시점방향을위로기울임,수몰·낙하추정”은 정확하지 않았습니다. 원본24da0b0..24da160은PC의선택Water contact높이→Bdf4래치→Bdf0 WaterFall 타이머가활성일때 `max(0,Bdf4-C124)*.4`를 **B180 surface-normal 목표의y**에 가산하고정규화합니다. C124는followpointY이며camera positionY가 아닙니다. 새contact512/height432/timer110/normal512 원본비트0, WaterFall이름은기존damage_hit근거를재사용했습니다. 이전문장을보존하며생산·소비·시도실패는[r10_state_producers.md](r10_state_producers.md) §3~11.
+
+§6.2의IkuraShoot/Gachihoko 번호는249257c의실제typedactor binding writer로0x13/0x16을직접확정했습니다. 기존“10+특수열거인덱스”의**보편식**까지확정하지는않습니다. fallback0 및NoSpecial/FullGauge의0xa/0xb 생산자전체는미확정입니다. B9314의별도연출변환writer도원본512건으로연결했지만외부request/actor공급자는남았습니다. Dokan의t<=.4 branch는기존§7.2 원본448+12 근거로해소된것을정정하며새실행으로다시세지않습니다.
+
+### 11.7 r10 고정 카메라 목록의 현재 판정
+
+진행률·분모·신규/기존 근거 구분은 [analysis_100.md](analysis_100.md)를 우선합니다. 입력/포즈/쉐이크의 계산 검증과 실제지형/프레임/장치의공급검증을 구분합니다. 부분성공으로복합질문을완료처리하지않았습니다. 남은핵심은실제FieldRigidBody authoredfilter→native TAG0 wholeframe,5997898/M2ac live posture, 상태별외부event writer입니다. 웹code/assets/impl은이번요청에서수정하지않았습니다.
+
+
+### 6.15. 실제 사격장 메시 질의와 Fade helper 소유타입 정정 (2026-10-03 r10)
+
+[판독]+[실행]+[데이터] 실제 Fld_VSLobby TAG0→원본 Entity/native userdata→카메라7/8 질의→mesh/filter/TOI/listener의8수평면/40float 비트가일치했습니다. authored raw Default→numericQ→D와 전체stage/frame은 미확정입니다. 구체 Entity VT5749368/vt90→B180 LayerPair와 querywrapper VT5756560을 연결했고 초기backend 오삽입8nohit도보존했습니다.
+
+**2026-10-03 후속 정정:** 바로 위 `raw Default→numericQ→D`는 다른 Ragdoll 구조체의float 필드를 Entitymask로오인한 연결이다. 이전 문장을 기록으로 보존하고 실제경로 `PhiveConfig named collections→rawEntity3bb5c5c→3a403f4→D→LayerPair`로 바로잡는다. Ground/Ground와 Default의 실제마스크1fffffff/07ffffff를 연결한8면/40f32는 비트일치 [실행]+[판독]+[데이터]이다. 실제Actor 활성화의ShapeTag 필터/transform/world/frame과closest 적중은 별도 후속분석으로 유지한다. 상세 [r10_boom_stage_fade §3.1.1/8.1](r10_boom_stage_fade.md).
+
+별도 Fade helper는 actual1233928이 공급한 game__gfx__FadeOutCameraXluParam과model list를 소비합니다. FadeType enum index/value→variant→fade_dither_alpha materialwriter 또는modelalpha까지 [판독]으로연결했습니다. temporal/type1/type2/cache22,288건 비트일치0입니다. 기존 “잉크레일1/.1/.5/30이 common helper에입력”이라는관계는정정합니다. 해당param actualgetName은 spl__GrindRailParam이며 별도owner입니다. CPU cache시험은modelnull이므로materialwrite/GPU 실행주장없습니다. 자세한수식·실패·모든variant/live입력잔여는 [r10_boom_stage_fade.md](r10_boom_stage_fade.md) §3~11입니다.
+
+### 6.16 2026-10-03 q21 필드 의미·Bad0 생산자 실행 보강
+
+[r10_state_producers §6.7](r10_state_producers.md)의 새 typed key/원본 enqueue/구독 callback으로 B9210=BeforeGameSelector latched flag, B9212=GameEndSelector latched flag를 확정했다 [판독]+[데이터]. 이전58bc348 연결은 인접 ResultSelector node를 같은 구독으로 오인한 것이며 날짜정정을 보존한다. Bf34=RespawnLand phase, B754=B750 3D jump의Y, Bcf0=Bcd0+Bce4 spring 출력, Ba9c/Baa0=reverse 옵션 후 stick은 기존 근거를 재사용한다. 모든 상태의 queue delivery는 별도 미확정이다.
+
+[r10_posture_timer](r10_posture_timer.md)에서 새 원본5632건으로 Bad0 발사 후 하한82, 입력 단계공중4부터 감소우회, 메인 단계−4를 실행 대조했다 [실행:부분]. getter 이후 n=4 및active 술어/진입 조건은 공급 입력이다. 이를 정확82프레임 유지나 전체writer/frame 확정으로 승격하지 않는다. 고정 질문33은조사중 유지다.
+
+### 6.17 2026-10-03 번호식 추정 정정·자세 유지 술어 보강
+
+**[판독]+[데이터]+[실행:분류구간]**: [상태 생산자 §6.8](r10_state_producers.md)의 실제19 WeaponSp 타입/RTTI·literal MOV→B65c store100건과 null/same-primary skip10건으로 기존 보편 `10+special enum` 추정을 정정했다.19종 성공일 때만 문자열index2..20의10+index와 일치하고 unknown은0이다. null/동일 선택은 이 분류 store를 건너뛰며, 전체249257c 이후 값 보존을 증명한 것은 아니다. 이전 추정 문구를 보존하고 이 조건부 규칙으로 대체한다. 다른 무기/특수 실제 동작은 분석하지 않았다.
+
+**[실행:부분]**: [Bad0 자세 타이머 §6.1/10](r10_posture_timer.md)의 입력 활성 술어4096건과 메인 감소 후 하한1024건을 추가해 총10752건 불일치0이다. 정지/발사 후82에도 조건에 따라90하한을 적용한다. 메인도 감소 후stackbyte×4 하한이 있어 정확82프레임 유지나 항상−4라는 해석은 성립하지 않는다. 선행반환/stack 생산자와 전체frame이 남으므로 q33은조사중이다.
+
+### 6.18 2026-10-03 실제 렌더 소비 행렬과 제출 경로 정정
+
+**[판독]+[실행]+[데이터]**: [렌더 연결 §3~6](r10_render_projection.md)의 실제 Env78/80→36c9198→36b2350→3624cd0→36ceec4→36b2574는 논리 Projection+0c를 Context7..10에 전달한다. 장치 Projection+4c/M26c 계산이 뒤에 있다는 이유로 일반 로비 GPU 입력도 장치 행렬이라고 가정하지 않는다. 실제 Context 생산자는34멤버·2336B, View0..2/Projection7..10이다. 과거 §6.7/11의 계산 기록을 삭제하지 않고 소비자 연결을 이 날짜에 정정한다.
+
+새1042건(bridge696/UBO97/viewport·present152/SDK97)은 불일치0이다. actual framework VT의 draw→submit→base/derived present도 판독했다. allocator/capture·합성 boot profile 경계와 최종GPU 미실행을 구분했으며, 실제 Lby HDR texture→window/index 및 GPU 초기swizzle이 남아 고정12/29/31은 조사중이다. 마우스X 임의반전으로 잔여를 채우지 않는다.
+
+### 6.19 2026-10-03 Demo 카메라 제어·피치 자동복귀 조건 정정
+
+**[판독]+[데이터]+[실행]**: [상태 생산자 §6.9/6.10](r10_state_producers.md)의 실제 PlayerDemo control 파라미터CanControlCamera+41→receiver23613ec→D34와 Time+50→Dbf4→tick250b8f0를922건 불일치0으로 연결했다. 메시지 기본값CanControlCamera0과component초기D34=1은 다르다. Time 음수만FLT_MAX로 바꾸며−0/NaN은 원본비트를 보존한다. 남은양수tick은Bad0 하한2를 쓰고만료시21B를 clear한다.
+
+**피치 자동복귀와 입력 차단은 다른 조건이다 [판독].** 원본24e2d80..24e2ea8/24e407c..24e4390의 피치reader에 whole24c99f0을 복사하면 원본과 달라진다. Demo34는 첫OR에있고BF4/Dokan30/S1c/후반Coopmask가 그reader에 직접 추가되는 것은 아니다. 실제B9211은SplVersusReady, B9213은SplVersusResultSelector다. Scene_Versus와LobbyVersus tagfalse는기존근거를재사용하여rate.2guard에 연결했다. 이를 신규데이터/실행수로 재계상하지 않는다. Coop1348의raw12→typed enum명과일부mode 상태명이남아q9/37전체는조사중이다. 제자리 마우스뒤돌기 원인으로이연출을 단정하지 않는다.
+
+### 6.20 2026-10-03 실제 사격장 물리 공급·법선 부호 보강
+
+**[판독]+[데이터]+[실행:부분]**: [지형 붐 §3.1.2~4/6.1.1](r10_boom_stage_fade.md)의 실제9자원참조·Default registry/delegate/helper factory·FieldParent Ground/Default mask와 비마스크값·Banc Actors35 생략SRT 기본값·RSDB row833/태그functor를 actualEntityVT5749368/vt90/LP/nativeuserdata에 연결했다. 최종 actual-source query16건/128f32,태그889건,마스크353건/2118u32,Banc15f32가비트일치했다. 각결과는adapter/fixture 경계를따로기록하며 전체scene 실행결과로 합치지 않는다.
+
+**법선 정정 [판독]+[실행]:** 두번째query 소비24dddd0..24dde08은entrybit0=1에서point normal을그대로쓰고0일때만FNEG한다.128건/384f32 signedzero포함일치;실제지형entry1이면camera+Y다. 이전native+Y 경고를항상반전으로해석하지않는다. 첫query의bit0=0 접촉점separation보정과구분한다.
+
+world-add packet→같은EntitynativeWorld는판독으로좁혔지만,실제engine slot68 dispatcher와Banc/context→초기body matrix 마지막writer 동일성이남아고정4/23/32/38은모두조사중이다. 전체Scene Unicorn 미실행만을새완료조건으로삼지않고, 실제로연결하지못한두경계를남겼다.
+
+### 6.21 2026-10-03 Bad0 선행 가상 조건의 대상 정정
+
+**[판독]+[실행:구간]**: [r10_posture_timer §6.2](r10_posture_timer.md)의 새4096건 불일치0. 앞 timer하네스의key `weapon`은 실제 `[B+a670]` PlayerGrindRail의compound predicate였다. actualVT5635660 slot100/148/120/108/1c8을 원본 실행하여 대상과순서를확인했다. 사격자세 타이머 검증누계14848는부분구간이며 q33은조사중이다. 전체frame/메인selector를추측으로채우지않는다.
+
+### 6.22 2026-10-03 지형 등록 dispatcher 후속·종료 시점
+
+**[판독]+[데이터]**: [r10_boom_stage_fade §3.1.5](r10_boom_stage_fade.md)의 actualActorVT+d0=3cc7628→component.vt68/enginePhysics3db22f8 및관리자3c7fda0/da8의상태·flag조건을연결했다. 이전dispatcher미연결설명은당시경계이며현재는해소했다. Actor.vt80 reset의currentpose48B→3a11d40→Main→3ae14b0호출도판독했다. **Banc→Actor최초posewriter와native초기적용의마지막동일성은미확정**이라 고정4/23/32/38은조사중이다.새native사례0;기존검증을반복계상하지않았다.
+
+### 6.23 2026-10-03 정상 렌더 공급자 후속·종료 시점
+
+**[판독]+[데이터]+[실행:CPU 계약]**: [r10_render_projection §3.4/3.5/10/11](r10_render_projection.md)의새ctor/target64건 불일치0,이전1042와구분한다. nnMain의최종frameworkVT·초기async/submit flags·worker,normalorigin1 공급자,display windowtexture/image 및HDR 실제triangle 정점/UV/index 생산자를연결했다. 같은프레임HDRtarget→동일window image와GPU초기A18 swizzle은남아12/29/31전체는조사중이다. clock/textureTransition/NVNcapture·합성manager경계를0stubs표시와별도로기록했다.
+
+### 6.24 2026-10-03 Vehicle·Pipeline·Dokan 상황 의미 해소
+
+**[판독]+[데이터]+[실행:선택구간]**: [r10_state_producers §6.11/10/11](r10_state_producers.md)의actualVehicleSpectacle Cockpit→Controlled→typedowner ActorRef와start/stop메시지→queue/FSM→기존C1918writer를연결했다. 새288건 불일치0,SDKmemset192회를원본실행했다. 함수/SDK/PLT-return/mathstub0이며유효refthread/retain·물리callback/bus/liveLby도달은별도미검증이다.
+
+기존Pipeline과Dokan수명근거를합쳐고정11/22의원문“무엇을타는상황/필드가켜지는상황”을해소했다. 전체scene/runtime검증으로승격하지않고,동결질문이나분모를바꾸지않았다. 옛§6.2/§11의상황미확정설명은이새근거로정정한다. 광범위한대체리그복합질문35는조사중이다.

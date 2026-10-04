@@ -27,6 +27,8 @@ interface PlayerLike {
   vel?: ArrayLike<number>;
   final?: ArrayLike<number>;
   cameraNative?: CameraNativeInput;
+  displayBinding?: { supported: boolean } | null;
+  display?: { hidden: boolean };
   airFrames?: number;
   airRatio?: number;
   state?: number;
@@ -48,7 +50,11 @@ export function readPlayer(w: World): CameraPlayerInput | null {
   view.jumpVel3dY = p.jump3d ? p.jump3d[1] : undefined;
   view.moveVel = p.vel;
   view.finalVel = p.final;
-  view.native = p.cameraNative;
+  // B7a0 is the verified display producer, also true in ordinary ally ink.
+  // wallCling is a different field and cannot substitute for it.
+  view.native = p.displayBinding?.supported && p.display
+    ? { ...p.cameraNative, wall7a0: p.cameraNative?.wall7a0 ?? p.display.hidden }
+    : p.cameraNative;
   view.airFrames = p.airFrames;
   view.airRatio = p.airRatio;
   view.squid = typeof p.state === "number" ? isCameraSquidState(p.state) : !!p.squid;

@@ -50,8 +50,7 @@ export async function boot(root: HTMLElement, spec: MatchSpec = PRACTICE): Promi
   const resize = (): void => {
     const w = root.clientWidth, h = root.clientHeight;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    // CameraView builds logical projection then latches the next viewport aspect.
   };
   addEventListener("resize", resize);
   resize();

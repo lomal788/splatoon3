@@ -1,7 +1,7 @@
 // 담당: [fx] — docs/impl/fx.md 에 구현 상태·미확정을 기록한다.
 // 코어 이벤트 → 탄 파티클(OneEmitter), 머즐 플래시(InkAction → ELink State[0]), 착탄·피격 이펙트(HitEffectConfig E1/E2),
 // 플레이어 ELink(SplPlayer 액션 슬롯). 근거 docs/effect_sound/effect_sound.md §3, effect_resources.md §2.2~3.
-import { CameraShakeMixer, type ShakeParam } from "../../core/camera/shake.ts";
+import { CameraShakeMixer, admitCameraShake, type ShakeOwner, type ShakeParam } from "../../core/camera/shake.ts";
 import * as THREE from "three";
 import type { ClientContext, View } from "../context.ts";
 import { DEV } from "../env.ts";
@@ -183,17 +183,24 @@ export class FxSystem implements XSink {
     const h = this.spawnEset(a.name, m, color, delay, scale);
     // 뼈(Bone) 붙은 에셋은 이미터 행렬이 뼈를 따라간다. 파티클 follow 는 이미터 followType 대로.
     if (h && getM) for (const i of h.instances) i.followFn = getM;
-    const shakeName = typeof p.CameraRumbleName === "string" ? p.CameraRumbleName : "";
-    const shake = shakeName ? this.shakes.start(shakeName, () => getM ? getM().o : shakeEmitterOrigin,
-      typeof p.DistanceAttenuate === "number" ? p.DistanceAttenuate : 1,
-      typeof p.CameraRumbleFrame === "number" ? p.CameraRumbleFrame : -1) : null;
+    const cameraState = this.w.shared.get("camera") as { pos?: ArrayLike<number> } | undefined;
+    // The existing shared-camera listener remains a web adapter. Native Module+1c8
+    // producer identity is not established by copying a previous render offset here.
+    const suppliedOwner=ctx.cameraShakeOwner as (()=>ShakeOwner|null) | undefined;
+    const visualOwner:ShakeOwner={generation:0};
+    // XHandle lifetime is an explicit fallback, not a recovered native event owner ID.
+    const owner=suppliedOwner ?? (()=>h?.alive() ? visualOwner : null);
+    const shake=admitCameraShake(this.shakes,p,cameraState?.pos ?? [0,0,0],
+      ()=>getM ? getM().o : shakeEmitterOrigin,owner);
     if (!shake) return h;
     // A finite shake continues after its visual emitter ends. Keep the existing
     // ELink handle lifetime; a shake is not an extra particle/asset owner.
     if (!h) return null;
     return {
       alive: () => h.alive(),
-      fade: () => { h.fade(); if (this.shakes.parameters[shakeName]?.IsLooped) shake.stop(); },
+      // Fade itself does not invalidate a native camera slot. Loop owner loss is
+      // checked during the next update; a finite shake ignores owner loss.
+      fade: () => h.fade(),
       onEnd: cb => h.onEnd?.(cb),
     };
   }

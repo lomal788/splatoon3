@@ -157,6 +157,46 @@ sh web/tools/quick_decomp.sh C:/dev/splatoon3/analysis/decomp/<영역>/<이름>.
 
 raw 명령·stage header검사는 `dotnet analysis/visual_gap_r2/fx/build/bin/Release/net7.0/shader_raw_audit.dll <bfsha> <model> <program> <outprefix>`와 `... ops <outprefix.vert.bin>`를사용한다. shader raw/역번역은[판독]이며원본GPU[실행]으로표기하지않는다.
 
+## 카메라 r10 원본 검증 도구 (2026-10-03)
+
+실행 위치는 `C:/dev/splatoon3`이며 `python -X utf8`을 사용한다. ELink/zstandard를 읽는 도구는 `.venv/Scripts/python.exe -X utf8`을 사용한다. 도구의 원본 실행 구간과 합성 입력·capture 경계를 해당 문서 §10에서 먼저 읽는다.
+
+| 도구 (`web/tools/`) | 원본 검증 범위 | 근거 |
+|---|---|---|
+| `r10_camera_input_emu.py` | 스냅/bias/yaw/pitch 네 구간·SDK libm, 12,288 독립 비트 대조 | [입력 응답](camera/r10_input_response.md) |
+| `r10_camera_input_chain_probe.py` | raw stick→실제 blocked predicate→yaw/pitch 연결 관측16건 | [입력 응답](camera/r10_input_response.md) |
+| `r10_camera_module_emu.py` | 실제 poser callbacks→whole Module/view/projection, 모든 device posture 식·aspect/valid | [모듈·투영](camera/r10_module_projection.md) |
+| `r10_camera_start_dispatch_emu.py` | 실제 component VT→Behavior slot15, startup 전후 순서/래치 | [모듈·투영](camera/r10_module_projection.md) |
+| `r10_camera_state_emu.py`, `r10_camera_state_water_emu.py` | affine 생산자·whole blocked predicate·Water 높이/타이머/법선 | [상태 생산자](camera/r10_state_producers.md) |
+| `r10_camera_shake_data.py`, `r10_camera_shake_emu.py`, `r10_camera_shake_focused_emu.py` | 원본 ELink·쉐이크 수명·admission·실제 Subjective 값 공급 | [쉐이크·슈터](camera/r10_shake_shooter.md) |
+| `r10_camera_boom_tag0_probe.py`, `r10_camera_boom_mesh_query.py`, `r10_camera_boom_mesh_verify.py` | 출하TAG0→native Entity/world mesh query8면·40float | [지형 붐](camera/r10_boom_stage_fade.md) |
+| `r10_camera_boom_fade_emu.py` | 시간·type1/type2·cache, 22,288; material-null cache는 upload 실행 아님 | [물체 Fade](camera/r10_boom_stage_fade.md) |
+
+추가 함정: SDK libm hook을 기존 Python hook 뒤에서 다시 실행하면 삼각함수가 중복 적용된다. single PLT bridge를 사용한다. `user+B8` property index와 `user+80`의 현재값, FadeType index와 enum value, Entity query wrapper와 body-pair backend를 구분한다. Ghidra가 제거한 조건이라도 raw FMIN/FCMP는 실제 원본과 대조한다. BSS0·포인터 참조 없음·유한 fixture의 비트 일치는 live 상태값이나 모든 동적 writer의 부재 증명이 아니다.
+
 ## Negate 괄호 출력 함정 — 2026-10-03
 
 bundled Ryujinx InstGen.Negate의 `zero - expr`는 Special/unary precedence 때문에 곱 안에서 괄호 없이 출력된다. 원시 p1714 `eyeX*(-invLen)`이 GLSL `eyeX*0-invLen`로 바뀐다. 원본 이상 동작이 아닌 분석도구 오류다. [표면 raw·paired 보완 CLI](graphics/reference_ink_surface.md), [캐릭터](graphics/reference_character_lighting.md), [FX](effect_sound/reference_shooter_visuals.md). 표준 CLI/번들DLL은 이번에 바꾸지 않았다. 분석 전용 source copy에서 반환식 전체 괄호 한 곳을 보완한 CLI를 analysis/reference_graphics_r3/surface/dump에 저장했다. 분석용 새source adapter의 인터페이스 차이도 commands.md에 기록했다. CB1 분기표 보완과 별개이므로 legacy GLSL SHA동일/생성성공을 수식 동등성 증명으로 삼지 않는다.
+
+- `r10_camera_posture_timer_scan.py`: direct ad0 u32 store·ADD alias 후보 검색. 같은offset은 타입 근거가 아니며 passed-pointer/register-offset 누락 가능.
+- `r10_camera_posture_timer_emu.py`: writer2048·countdown3072·main drain512 원본 정수대조. getter이후 n4/active 술어/진입조건 공급과 실제wholeframe 미검증을 구분한다.
+
+- `r10_camera_state_classifier_data.py`/`r10_camera_state_classifier_emu.py`: 원본19타입 getName/VT/RTTI/literalMOV→store 및 unknown0 대조100·null/same-primary skip10. typeguard-ready byte24개는 합성 초기화후 입력이다.
+- `r10_camera_posture_active_emu.py`: active 술어→countdown4096 대조.245aa00/Jetpack/weapon predicate 선행반환 입력과 ARM NaN분기를 명시한다.
+- `r10_camera_posture_main_floor_emu.py`: main drain→stack3cd/3ce/3cf×4 하한1024 대조. stack 생산자는 미확정이며 감소만의 앞512건을 최종값으로 확대하지 않는다.
+
+- `r10_camera_shake_posture_emu.py`/`r10_camera_shake_ubo_emu.py`/`r10_camera_shake_viewport_emu.py`/`r10_camera_shake_sdk_nvn_emu.py`: bridge696/UBO97/viewport·base/derived present152/SDK97, 합계1042. 실제SDK RAM 재배치 후 strcmp/math/packet 명령 실행. UBO allocation/copy·API capture와 합성 boot profile 경계를 따로 기록한다. API fallback 검사와 explicit swizzle packet은 실제 Lby GPU 초기값의 증명이 아니다.
+- `func_lookup.py`는 떨어진 함수 body 크기 때문에 앞 함수 시작을 반환할 수 있다.117230c/35036b4는 실제 prologue/RET로 경계를 재검증했다. `r10_render_projection.md` §10의 실패·정정 참고.
+
+- `r10_camera_state_demo_emu.py`: parameter defaults2/parser128/selectedwhole receiver408/emptyqueuewholetick384=922 대조,actualIsA282calls/스텁0. 메시지/owner/global 입력과readyguard3은합성경계. Time<0의FCMP/FCSEL MI와NaNraw비트,component 초기값과message 기본값을구분한다. 피치 reader에는wholeblocked를그대로이식하지않는다.
+
+- `r10_camera_boom_actor_source.py`/`r10_camera_boom_banc_source.py`/`r10_camera_boom_source_contract.py`: actualRSDB membership889·Banc originaldefault/parser/matrix15f32·Default registry/factory와entrybitnormal128/384f32 대조. 원본SDK sinf/cosf와호스트hook을중복적용하지않는다.
+- `r10_camera_boom_mesh_query.py --actor-source`와`r10_camera_boom_mesh_verify.py --actor-source`: 실제helper/config/비마스크/태그/Banc→actualTAG0 최근접16/128f32. create-info→body matrix·runtimeholder·worldbootstrap adapter와미연결slot68 dispatcher를명시한다. 이표본을임의경사/모서리/전체Scene 독립검증이라고확대하지않는다.
+
+- `r10_camera_posture_grind_gate_emu.py`: original24a0038..00f4/actualPlayerGrindRailVT의 선행bool4096건 독립참조식 대조,스텁0. active하네스의옛key `weapon`은GrindRail합성결과이며Weapon인터페이스가아니다. func_lookup가2531020/25310d0을선행2530fe0으로돌려도실제leaf RET/VT슬롯으로시작을확인한다.
+
+- `analysis/camera_100_r10/boom/next_record.py`: 종료후속기록28/28PASS(원문/포인터/고정4행SHA/5열TSV/11절). native실행검사가아니다. 짧은offset을bl_callers.py에넣어0건이면함수부재로해석하지말고0x710...fullVA로조회한다.
+
+- `r10_camera_shake_next_frame_emu.py`: wholeframework3501dbc32+target35a83f432=64/0bad. clock96/SetRenderTargets32/colorTransition78/depthTransition16은공급/capture 경계다. SDK_stubs빈사전만보고wholeGPU/NVNhelper를실행했다고해석하지않는다.
+
+- `r10_camera_state_next_vehicle_emu.py`: selectedwhole receiver192+queue/FSM→Controlledcallback직전96=288/0bad. 실제SDKmemset offset581ba8을mainPLT/GOT에RAM으로연결,새함수반환스텁0. invalid/emptyref만실행했으므로validref retain/thread·실제scene도달을증명하지않는다.

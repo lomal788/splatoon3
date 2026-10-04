@@ -7,6 +7,7 @@ import { PlayerCamera } from "../core/camera/camera.ts";
 import { emptyPad, Btn } from "../core/input.ts";
 import { defaultCameraSettings, InputDevice, mouseToLook } from "../client/input.ts";
 import { createCameraView } from "../client/camera/index.ts";
+import { floatBits } from "../core/camera/native_math.ts";
 const deg=180/Math.PI;
 const near=(a,b,e=1e-4)=>assert.ok(Math.abs(a-b)<=e,`${a} vs ${b}`);
 const angle=(a,b)=>Math.atan2(a[2]*b[0]-a[0]*b[2],a[0]*b[0]+a[2]*b[2])*deg;
@@ -78,7 +79,8 @@ test("reset, FOV and floor-normal changes preserve basis endpoints and world sha
 });
 test("catch-up partitions all pending displacement without magnitude clamping",()=>{
   const e=env();try {e.move(1400,-200);const pads=[5,4,3,2,1].map(n=>e.input.sample(n));
-    near(pads.reduce((s,p)=>s+p.lookYaw,0)*deg,-210,1e-10);near(pads.reduce((s,p)=>s+p.lookPitch,0)*deg,13.5,1e-10);
+    // px policy is unchanged; native pitchMax(0)=bits3FE66666 replaces double1.8.
+    near(pads.reduce((s,p)=>s+p.lookYaw,0)*deg,-210,1e-10);near(pads.reduce((s,p)=>s+p.lookPitch,0)*deg,200*.15*floatBits(0x3fe66666)/4,1e-10);
     for(const p of pads){near(p.lookYaw*deg,-42,1e-10);assert.equal(p.lookMode,"mouse");}
     near(e.input.sample().lookYaw,0,1e-12);
     const h=build(),start=h.render(1);for(const p of pads)h.c.step(h.pl,p,null);
@@ -110,7 +112,7 @@ test("blur and hidden tab discard pending mouse input and recover on focus",()=>
   }finally{e.dispose();}
 });
 test("nonfinite axes cannot poison queued valid input; settings boundaries stay consistent",()=>{
-  const e=env();try{e.move(10,20);e.move(Infinity,NaN);const p=e.input.sample();near(p.lookYaw*deg,-1.5,1e-10);near(p.lookPitch*deg,-1.35,1e-10);
+  const e=env();try{e.move(10,20);e.move(Infinity,NaN);const p=e.input.sample();near(p.lookYaw*deg,-1.5,1e-10);near(p.lookPitch*deg,-20*.15*floatBits(0x3fe66666)/4,1e-10);
     e.input.setSettings({...defaultCameraSettings(),sens:Infinity,mouseScale:NaN});assert.equal(e.input.settings.sens,0);assert.equal(e.input.settings.mouseScale,1);
     e.input.setSettings({...defaultCameraSettings(),sens:99,mouseScale:99});assert.equal(e.input.settings.sens,5);assert.equal(e.input.settings.mouseScale,20);
   }finally{e.dispose();}

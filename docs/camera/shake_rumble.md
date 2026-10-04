@@ -110,7 +110,7 @@ A ≤ B: gain = clamp01((d − A)/(B − A))
 ELink 처리 함수는 시스템 파라미터 인덱스 표(`*x28 + 0x3b0..`)로 값을 읽습니다. 코드 쪽 열거 문자열은 `ForceTeam , ShaderGraphParam , DistanceAttenuate , CameraRumbleName , CameraRumbleFrame , CtrlRumbleName , CtrlRumbleGain , CtrlRumblePitch , CtrlRumbleStretch , CtrlRumbleExtra , CullingDistance`(main_strings 37224행) 11개이고, 읽는 칸이 +0x3b8(정수, ≥1 검사) / +0x3bc(문자열) / +0x3c0(정수, ≥1이면 +0x2c) / +0x3c4(문자열) / +0x3d0(실수) / +0x3d4(정수) 이므로 표 시작 +0x3b0 = ForceTeam으로 맞추면 각각 **DistanceAttenuate / CameraRumbleName / CameraRumbleFrame / CtrlRumbleName / CtrlRumbleStretch / CtrlRumbleExtra** 입니다 [판독+데이터 대응].
 
 - 앞 판본에서 "범위/세기 단계"로 추정한 ELink 파일 파라미터 `CameraRumble`(정수, 기본 −1, ParamDefine 33번)은 이 코드 열거에 **없습니다**. 쉐이크 시작 함수는 이 값을 읽지 않습니다 [판독].
-- (3차, [effect_sound]) **`CameraRumble`(33)과 `CtrlRumblePattern`(36)은 런타임이 읽지 않는 파라미터입니다** [판독]. 근거: ① 게임이 ParamDefine을 이름으로 찾는 목록은 위 11개 열거 문자열 하나뿐이고 두 이름은 없습니다. ② main 전체에 `CameraRumble `, `CtrlRumblePattern ` 문자열이 없습니다(접미사 병합으로도 못 만듦 — 둘 다 다른 이름의 접두사). ③ xlink 파라미터 비트마스크로 번호를 직접 고르는 코드(33번 = `and #0x1ffffffff`, 36번 = `#0xfffffffff`)가 0x7101300000–0x7103a00000에 없습니다. 데이터의 0~5 값(11건)과 `CtrlRumblePattern` 10002~10057은 툴 쪽 정보로 보고, 웹은 무시합니다. 거리 감쇠를 켜는 값은 `DistanceAttenuate`(ParamDefine 34번, 기본 1 — 대부분 에셋이 감쇠 켜짐) [정정].
+- (3차, [effect_sound]) **`CameraRumble`(33)과 `CtrlRumblePattern`(36)은 런타임이 읽지 않는 파라미터입니다** [판독]. 근거: ① 게임이 ParamDefine을 이름으로 찾는 목록은 위 11개 열거 문자열 하나뿐이고 두 이름은 없습니다. ② main 전체에 `CameraRumble\0`, `CtrlRumblePattern\0` 문자열이 없습니다(접미사 병합으로도 못 만듦 — 둘 다 다른 이름의 접두사). ③ xlink 파라미터 비트마스크로 번호를 직접 고르는 코드(33번 = `and #0x1ffffffff`, 36번 = `#0xfffffffff`)가 0x7101300000–0x7103a00000에 없습니다. 데이터의 0~5 값(11건)과 `CtrlRumblePattern` 10002~10057은 툴 쪽 정보로 보고, 웹은 무시합니다. 거리 감쇠를 켜는 값은 `DistanceAttenuate`(ParamDefine 34번, 기본 1 — 대부분 에셋이 감쇠 켜짐) [정정].
 - `CameraRumbleFrame` ≥ 1 = 지속 프레임 상한(곡선 길이와 무관하게 그 프레임 수가 지나면 종료) [판독]. 데이터 값 5/50(11건).
 - 진동(컨트롤러) 쪽도 같은 함수 뒷부분이 `DistanceAttenuate ≥ 1`이면 0x710130d764(같은 모듈 +0x1c8, 이미터)로 거리 판정을 합니다. 진동 감쇠 식(RumbleMax/MinPowerDist 4/30, RumbleDistFactor)은 판독하지 않았습니다 [미확정].
 
@@ -333,3 +333,19 @@ latch는 선택 플레이어의 본체 B+0xc0<`*(0x71058bbc1c+4)`, B+0x73c≤0.0
 실제 명령·실패·스텁 경계: [camera_commands.md](../../../analysis/completion/r8/camera_commands.md), [camera_emu.json](../../../analysis/completion/r8/camera_emu.json). 최초 gyro 실행은 input manager 전역 누락으로 UC_ERR_READ_UNMAPPED, Limiter 최초 실행은 mutex 해제주소 오인으로 UC_ERR_FETCH_UNMAPPED였고, 원본 주소에 맞춰 수정한 뒤 위 검사 전부 일치했습니다. Agent 전체는 [판독]이며 실행으로 분기 선택·실제 컨트롤러 진동을 검증한 것은 아닙니다. 남은 별도 범위: device posture·최종 화면 부호, 자기 탄 명중 ELink, SDK mixer 압축 적용. Focused는 기존 effect_sound.md §3.5·27b5430의 조작 플레이어 기준을 재사용하며 새 확정 수에 넣지 않습니다. 웹 반영: 원본 거리식·Limiter·범주 계수 전달·Agent 주소 조건을 근사치와 대조할 필요가 있습니다.
 
 8차 추가 실행: 포저복사512/512를 포함하여 camera_emu.json 합계3,451건, mismatch0. 3.2e·7.3의 합성 실행 경계를 유지합니다.
+
+### 11.1 r10 수명·명중 ELink 정정 (2026-10-03)
+
+새 원본검증4,424건·불일치0 및원본ELink전수는[r10_shake_shooter.md](r10_shake_shooter.md) §3~11입니다. BNVIB/포저/r8Limiter근거는재사용했습니다. **1018998은isLooped이고finished는1018b4c**입니다. 곱셈은`curve*(gain*Scale)`이며Module은tick후finished를검사하므로비루프MaxX마지막계산샘플은합산에서탈락합니다. 루프owner만료는즉시무효화이고start는이전serial저장후증가합니다. XYZ는quaternion회전없이포즈의world position에직접가산합니다. 기존곱순서/함수명/마지막프레임표현은새판독·실행으로정정하며이전본문을보존합니다.
+
+기존“자기 탄 명중 ELink 못찾음”은ID40→Shooter17셀→HitEffect15leaf 전수로해소했습니다. critical4leaf에PresetDoka는있지만ID40가고르는일반E1키의rumble/shake이름은공백입니다. 일반발사5leaf·표적10+10leaf도공백이며원본admission40입력에서start하지않았습니다. 이결과를총구/히트이펙트·사운드·탄 spread부재로확대하지않습니다. 간접동적주소전체부재·최종컨트롤러SDK mixer출력은여전히별도미확정입니다.
+
+
+### 11.2. Focused 실제 값 공급 해소 (2026-10-03 r10)
+
+기존 §4의 “자기 플레이어 시점 전용으로보임 [추정]”을 실제 값 경로로 정정합니다.275df84의 선택시점 번호→275e99c payload44 분류→234f518 message6c2b6a01 body1058/root2f0→251589c fiveuser property로연결됩니다. 유효번호/팀조건에서 선택번호동일은Focused0,동팀은Friend1,그외Enemy2입니다. 이름접미사는gate가아니며 ancestorSwitch의SubjectiveType 조건이gate입니다. user+B8 packedpropertyIndex는현재값이아닙니다.972연결+24경계=996원본검사0bad;profile virtual입력합성/queue지연·전체scene제외. [r10_shake_shooter.md](r10_shake_shooter.md) §4.2/7/10/11.
+
+
+### 11.3. 실제 rumble voice 가상 슬롯 정정 (2026-10-03 r10)
+
+[판독]+[실행] 실제voice VT5759658의+38은 IsLoop이며 IsPlaying/유효성 검사라는 이전 해석을 정정합니다. SDK 심벌3e9ddd0을 확인했고 +58이 별도 IsPlaying입니다. 원본full130fffc576+arm70/speed20=666건에서 루프 조건의 category mute/owner 만료·비루프 보존·별도gain/pitch 갱신을 확인했습니다. SDK IsLoop/Play/Stop은 입력/호출capture 경계입니다. 기존r8 유한gain/pitch 원본 대조는 유효하며 당시vt38 true가 loop=true라는 경계를 보강합니다. 실제manager/handle/voice 가상 경로와 ordinaryShooter name gate는 [r10_shake_shooter.md](r10_shake_shooter.md) §8.3/8.4/10/11에 기록합니다.

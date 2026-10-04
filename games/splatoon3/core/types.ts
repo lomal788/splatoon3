@@ -25,6 +25,9 @@ export interface Hit {
   actor: number;
   /** Raw native point normal when present; entry bit0 chooses camera normal sign. */
   nativeEntryFlags?: number;
+  /** Native raw point separation; bit0=0 adjusts query1 point by normal*separation.
+   * Omit when the collision adapter already returns a surface contact point. */
+  nativeSeparation?: number;
 }
 
 /** Native query layer/masks, separate from the web layer selection. */

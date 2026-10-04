@@ -3,13 +3,15 @@
 // analysis/decomp/camera/batch1.c(리셋 0x71024d6598, 리그 0x71024d6e84, 붐 0x71024d8f94).
 // 구현 범위·생략·이식 차이는 docs/impl/camera.md.
 import { Layer, type CollisionWorld, type SphereQueryFilter } from "../types.ts";
-import { F, add, sub, mul, div, mix, dot, length, directionSlerp, updateBasis, power0 } from "./native_math.ts";
+import { F, add, sub, mul, div, mix, dot, length, updateBasis, power0 } from "./native_math.ts";
 import { rotateY } from "../weapon/swerve.ts";
 import { advanceBoom, forwardCoefficient, collisionSpring, boomPosition } from "./boom.ts";
 import type { PadState } from "../input.ts";
 import { bias, clamp01, invLerp01 } from "./curves.ts";
 import { aimDirection, aimPitchDeg, pitchAngleToP, pitchMaxDeg } from "./pitch.ts";
 import { blendedRig, elevationDeg, rigPose, RIG, type RigValues } from "./rig.ts";
+import { cameraInputBlocked, cameraAutoPitch, cameraNormalTarget, cameraFollowNormal, cameraFirstQueryPoint, type CameraControlState, type CameraAutoPitchState } from "./state.ts";
+import { nativeAxisSnap, nativeLengthBias, nativeYawInput, nativePitchInput, nativePitchFollow, nativeVerticalDeadzone, type NativeAxisState } from "./stick.ts";
 
 /** 바닥 법선 한계(0x71058bc4e0)와 벽 쪽 한계(0x71058bc4e8). */
 const FLOOR_NY = F(0.64144969);
@@ -57,6 +59,10 @@ export interface CameraNativeInput {
   skipBoom?: boolean; // pipeline/a6d0+38
   minimumQueryOffset?: number; // rare state82..84 producer offS, default .8
   humanFov?: number; // B6dc producer
+  control?: CameraControlState; // complete 24c99f0 inputs; absent = ordinary web adapter
+  autoPitch?: CameraAutoPitchState; // separate reader and explicit native s9 producer
+  waterFrames?: number; // Bdf0, selected WaterFall timer
+  waterHeight?: number; // Bdf4, selected contact/latch, not an authored water plane
 }
 
 /** shared "camera" 에 쓰는 값. */
@@ -160,6 +166,9 @@ export class PlayerCamera {
   private hitN = v3(0, 0, 1);
   private spring = v3(); // C144; raw producer inputs remain explicit
   private forwardK = 0; // C14ec
+  private readonly stickAxis: NativeAxisState = { deltaX: 0, deltaY: 0, accumulator: 0 };
+  private stickYawVelocity = 0; // C14f8
+  private stickPitchVelocity = 0; // C1504
 
   private readonly rv: RigValues = { H: 0, F: 0, D: 0, S: 0 };
   private readonly rt: RigValues = { H: 0, F: 0, D: 0, S: 0 };
@@ -198,6 +207,8 @@ export class PlayerCamera {
     this.acc1558 = 0;
     this.spring.fill(0);
     this.forwardK = 0;
+    this.stickAxis.deltaX = this.stickAxis.deltaY = this.stickAxis.accumulator = 0;
+    this.stickYawVelocity = this.stickPitchVelocity = 0;
     this.rig(pl);
     this.rigAt.set(this.at0);
     this.rigCam.set(this.cam0);
@@ -233,14 +244,14 @@ export class PlayerCamera {
     this.trackPrev.set(this.track);
     const pos = pl?.pos ?? [0, 0, 0];
     this.track.set([pos[0], pos[1], pos[2]]);
-    const fn = pl?.floorNormal ?? [0, 1, 0];
-    this.followNormal(fn);
-
     const native = pl?.native;
+    const fn = pl?.floorNormal ?? [0, 1, 0];
+    this.followNormal(native?.waterFrames !== undefined && native.waterHeight !== undefined
+      ? cameraNormalTarget(fn, native.waterFrames, native.waterHeight, this.track[1]) : fn);
     collisionSpring(this.spring, this.track, native?.springDelta ?? [0, 0, 0],
       native?.bodyResidual ?? [0, 0, 0], pl?.finalVel ?? [0, 0, 0],
       o.aimForward, this.boomRatio, native?.springHold ?? 0);
-    this.input(pad);
+    this.input(pad, native);
 
     // 오징어 블렌드 가중치 +0x1764 (500~545행)
     const squid = !!pl?.squid;
@@ -276,12 +287,38 @@ export class PlayerCamera {
   }
 
   /** 입력 0x71024e0178 중 마우스로 대체되는 부분. docs/impl/camera.md "입력 이식 차이". */
-  private input(pad: PadState): void {
+  private input(pad: PadState, native?: CameraNativeInput): void {
     const o = this.out;
     const fr = div(o.fov, RIG.fov);
     const fovRatio = fr < 0 ? 0 : fr > 1 ? 1 : fr;
-    const yaw = mul(pad.lookYaw, fovRatio);
-    o.mouseLook = pad.lookMode === "mouse";
+    const blocked = native?.control ? cameraInputBlocked(native.control) : false;
+    const stick = pad.cameraStick;
+    let yaw = blocked ? 0 : mul(pad.lookYaw, fovRatio);
+    let s: number;
+    if (stick) {
+      this.pFollow = nativePitchFollow(this.pFollow, stick.axis.y);
+      const axis = nativeAxisSnap(this.stickAxis, { ...stick.axis,
+        y: nativeVerticalDeadzone(stick.axis.y, false, false, false), gyro: false });
+      const magnitude = nativeLengthBias(axis.yaw, axis.pitch, false);
+      const y = nativeYawInput({ ...stick.yaw, k: stick.sensitivity, gyro: false,
+        velocity: this.stickYawVelocity, yaw: blocked ? 0 : axis.yaw,
+        magnitude, fovRatio, squidBlend: this.squidW });
+      const p = nativePitchInput({ k: stick.sensitivity, gyroK: stick.gyroSensitivity,
+        gyro: false, velocity: this.stickPitchVelocity, angle: this.s,
+        pitch: blocked ? 0 : axis.pitch, magnitude, fovRatio,
+        limitBlend: stick.pitchLimitBlend, controllerMode: stick.controllerMode,
+        slot: 0, offsets: [0, 0, 0, 0] });
+      yaw = this.stickYawVelocity = y.velocity;
+      this.stickPitchVelocity = p.velocity;
+      s = p.angle;
+    } else {
+      const ds = blocked ? 0 : mul(mul(pad.lookPitch, 57.2957763671875), fovRatio);
+      const yEq = Math.min(Math.abs(ds) / pitchMaxDeg(0), 1);
+      this.pFollow = add(this.pFollow, mul(mul(sub(1, this.pFollow), yEq), .2));
+      s = add(this.s, ds);
+      s = s > 90 ? 90 : s < -90 ? -90 : s;
+    }
+    o.mouseLook = !stick && pad.lookMode === "mouse";
     o.mouseYawDelta = o.mouseLook ? yaw : 0;
     if (yaw !== 0) {
       const f = o.aimForward;
@@ -290,22 +327,19 @@ export class PlayerCamera {
       const l = length(rotated);
       f.set(l > 0 ? rotated.map(v => mul(v, div(1, l))) : rotated);
     }
-    const ds = mul(mul(pad.lookPitch, 57.29578), fovRatio);
-    const yEq = Math.min(Math.abs(ds) / pitchMaxDeg(0), 1);
-    this.pFollow = add(this.pFollow, mul(mul(sub(1, this.pFollow), yEq), .2));
-    let s = add(this.s, ds);
-    s = s > 90 ? 90 : s < -90 ? -90 : s;
-    const [pt, corr] = pitchAngleToP(s - 75, 0, false, 0, 0, true);
+    const [pt, corr] = pitchAngleToP(sub(s, 75), stick?.gyroSensitivity ?? 0,
+      stick?.controllerMode === 1, 0, 0, true);
     this.s = add(s, corr);
     // Mouse supplies displacement, not stick velocity: the native curve remains,
     // but its target must not keep chasing the last mouse sample after release.
-    this.p = o.mouseLook ? F(pt) : mix(this.p, pt, this.pFollow);
+    const automatic = native?.autoPitch ? cameraAutoPitch(this.p, native.autoPitch) : null;
+    this.p = automatic ?? (o.mouseLook ? F(pt) : mix(this.p, pt, this.pFollow));
     o.rigForward.set(o.aimForward);
   }
 
   /** 0x7101252ff0: sead table slerp with null opposite-direction axis. */
   private followNormal(fn: ArrayLike<number>): void {
-    this.normal.set(directionSlerp(F(.1), this.normal, fn));
+    this.normal.set(cameraFollowNormal(this.normal, fn));
   }
 
   private rig(pl: CameraPlayerInput | null): void {
@@ -429,7 +463,8 @@ export class PlayerCamera {
       if (hit) {
         // CollisionWorld.point is the surface contact. Native raw point adapters
         // convert pos+direction*depth before returning this common contract.
-        near = sub(1, clamp01(div(sub(length([0, 1, 2].map(i => sub(hit.point[i], pv[i]))), .6), .1)));
+        const point = cameraFirstQueryPoint(hit.point, hit.normal, hit.nativeEntryFlags, hit.nativeSeparation);
+        near = sub(1, clamp01(div(sub(length([0, 1, 2].map(i => sub(point[i], pv[i]))), .6), .1)));
       }
     }
     this.forwardK = forwardCoefficient(pl?.finalVel ?? [0, 0, 0], o.aimForward, !!pl?.squid, this.forwardK);
